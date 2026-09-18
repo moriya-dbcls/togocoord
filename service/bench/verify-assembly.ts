@@ -1,35 +1,44 @@
-// GRCh38 <-> GRCh37 through UCSC liftOver chains (spec-service §2.2).
-//   node service/bench/verify-assembly.ts MANE_SUMMARY GRCH38.fna GRCH37.fna SAMPLES SEED STORE.sqlite...
-// For random human MANE Select proteins and residues: protein -> genome on GRCh38, and on GRCh37 (through GRCh38 and a
-// chain). The two codons must encode the same amino acid (the assemblies rarely differ in coding sequence), and the
-// GRCh37 location must convert back to the same residue (GRCh37 -> chain -> GRCh38 -> CDS).
+// An older assembly of a species joined to the annotated one by liftOver chains (spec-service §2.2, §10), e.g.
+// GRCh38 <-> GRCh37 or GRCm39 <-> GRCm38.
+//   node service/bench/verify-assembly.ts PROTEINS NEW.fna OLD.fna OLD_ASSEMBLY SAMPLES SEED STORE.sqlite...
+// PROTEINS: a MANE summary (MANE Select RefSeq proteins) or a store (.sqlite) whose RefSeq NP_ proteins are sampled.
+// For random residues: protein -> genome on the annotated assembly, and on the older one (through a chain). The two
+// codons must encode the same amino acid (assemblies rarely differ in coding sequence), and the older location must
+// convert back to the same residue (older -> chain -> annotated -> CDS).
 import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { gunzipSync } from "node:zlib";
 import { parseLocationId } from "@togocoord/core";
 import { accessionRef, extract, FaiSequenceSource, translate } from "@togocoord/ingest";
 import { convert, DEFAULT_PREFER, StoreSet } from "../src/index.ts";
 
-const [summary, grch38Fna, grch37Fna, samplesArg, seedArg, ...paths] = process.argv.slice(2);
-if (!summary || !grch38Fna || !grch37Fna || !samplesArg || !seedArg || paths.length === 0) {
-  process.stderr.write("usage: verify-assembly.ts MANE_SUMMARY GRCH38.fna GRCH37.fna SAMPLES SEED STORE.sqlite...\n");
+const [summary, grch38Fna, grch37Fna, oldAssembly, samplesArg, seedArg, ...paths] = process.argv.slice(2);
+if (!summary || !grch38Fna || !grch37Fna || !oldAssembly || !samplesArg || !seedArg || paths.length === 0) {
+  process.stderr.write("usage: verify-assembly.ts PROTEINS NEW.fna OLD.fna OLD_ASSEMBLY SAMPLES SEED STORE.sqlite...\n");
   process.exit(1);
 }
-const bytes = readFileSync(summary);
-const genes = (summary.endsWith(".gz") ? gunzipSync(bytes) : bytes)
-  .toString("utf8")
-  .split("\n")
-  .filter((l) => l && !l.startsWith("#"))
-  .map((l) => l.split("\t"))
-  .filter((c) => c[9] === "MANE Select")
-  .map((c) => ({ symbol: c[3]!, np: `refseq:${c[6]}` }));
+const genes = summary.endsWith(".sqlite")
+  ? (new DatabaseSync(summary, { readOnly: true }).prepare("SELECT ref, gene FROM sequence WHERE ref LIKE 'refseq:NP\\_%' ESCAPE '\\' AND length > 0").all() as Array<{ ref: string; gene: string | null }>).map(
+      (r) => ({ symbol: r.gene ?? "", np: r.ref }),
+    )
+  : (() => {
+      const bytes = readFileSync(summary);
+      return (summary.endsWith(".gz") ? gunzipSync(bytes) : bytes)
+        .toString("utf8")
+        .split("\n")
+        .filter((l) => l && !l.startsWith("#"))
+        .map((l) => l.split("\t"))
+        .filter((c) => c[9] === "MANE Select")
+        .map((c) => ({ symbol: c[3]!, np: `refseq:${c[6]}` }));
+    })();
 
 const stores = new StoreSet(paths);
 const ctx = stores.context();
 const toRef = (id: string) => accessionRef(id, stores.registry);
 const grch38 = new FaiSequenceSource(grch38Fna, toRef);
 const grch37 = new FaiSequenceSource(grch37Fna, toRef);
-const GRCH37 = stores.assembly("GRCh37")?.name;
-if (!GRCH37) throw new Error("no GRCh37 assembly among the stores");
+const GRCH37 = stores.assembly(oldAssembly)?.name;
+if (!GRCH37) throw new Error(`no assembly ${oldAssembly} among the stores`);
 
 let seed = Number(seedArg) >>> 0 || 1;
 const random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
@@ -66,8 +75,8 @@ for (let i = 0; i < Number(samplesArg); i++) {
 const pct = (p: number) => [...ms].sort((a, b) => a - b)[Math.min(ms.length - 1, Math.floor((p / 100) * ms.length))]?.toFixed(1);
 const rate = (n: number, d: number) => `${n}/${d} (${d ? ((100 * n) / d).toFixed(1) : "-"}%)`;
 console.log(JSON.stringify(t));
-console.log(`protein residue -> GRCh37 codon: ${rate(t.grch37, t.samples)}`);
-console.log(`  same amino acid as the GRCh38 codon: ${rate(t.sameAminoAcid, t.grch37)}`);
-console.log(`  GRCh37 codon -> the same residue: ${rate(t.roundTrip, t.grch37)}`);
-console.log(`latency (protein -> GRCh37): p50 ${pct(50)} ms, p95 ${pct(95)} ms, p99 ${pct(99)} ms`);
+console.log(`protein residue -> ${GRCH37} codon: ${rate(t.grch37, t.samples)}`);
+console.log(`  same amino acid as on the annotated assembly: ${rate(t.sameAminoAcid, t.grch37)}`);
+console.log(`  ${GRCH37} codon -> the same residue: ${rate(t.roundTrip, t.grch37)}`);
+console.log(`latency (protein -> ${GRCH37}): p50 ${pct(50)} ms, p95 ${pct(95)} ms, p99 ${pct(99)} ms`);
 for (const e of examples) console.log(`  ${e}`);

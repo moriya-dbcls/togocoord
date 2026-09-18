@@ -460,6 +460,36 @@ describe("assemblies of one species (spec-service §2.2)", () => {
   });
 });
 
+describe("two species with two assemblies each: mm10 -> mm39 -> hg38 -> hg19", () => {
+  const dna = (ref: string, taxon: number) => ({ ref, moltype: "DNA" as const, unit: "nt" as const, length: 10_000, taxon, provenance: { adapter: "assembly-report" as const } });
+  const lift = (from: string, to: string): Edge => ({
+    kind: "liftover", directional: true, from, to, blocks: [{ srcRef: from, src: 0, tgtRef: to, tgt: 100, len: 5000, rev: false }],
+    attributes: {}, provenance: { adapter: "chain" }, validation: { status: "ok" },
+  });
+  const make = (name: string, meta: Record<string, string>, r: IngestResult) => {
+    const path = join(dir, `${name}.sqlite`);
+    const sink = new SqliteSink(path);
+    for (const x of r.sequences) sink.sequence(x);
+    for (const e of r.edges) sink.edge(e);
+    sink.close(meta);
+    return new TogoCoordStore(path);
+  };
+  const none = { annotations: [], warnings: [], edges: [] };
+  const [M38, M39, H38, H37] = ["refseq:NC_000191.6", "refseq:NC_000191.7", "refseq:NC_000193.12", "refseq:NC_000193.11"];
+  const stores = new StoreSet()
+    .add(make("m38", { assembly: "GRCm38.p6", taxon: "10090" }, { ...none, sequences: [dna(M38, 10090)] }))
+    .add(make("m39", { assembly: "GRCm39", taxon: "10090" }, { ...none, sequences: [dna(M39, 10090)] }))
+    .add(make("h38", { assembly: "GRCh38.p14", taxon: "9606" }, { ...none, sequences: [dna(H38, 9606)] }))
+    .add(make("h37", { assembly: "GRCh37.p13", taxon: "9606" }, { ...none, sequences: [dna(H37, 9606)] }))
+    .add(make("lifts", {}, { ...none, sequences: [], edges: [lift(M38, M39), lift(M39, H38), lift(H38, H37)] }));
+  const ctx = stores.context();
+
+  it("crosses the assemblies of each species once", () => {
+    const hits = convert(stores, parseLocationId(`${M38}:11..13`, ctx), { to: { category: "genome" }, taxon: 9606, assembly: "GRCh37.p13" }, ctx);
+    assert.deepEqual(hits.map((h) => [h.id, h.path.length]), [[`${H37}:311..313`, 3]]);
+  });
+});
+
 describe("assemblies without a chain: through identical proteins (MpTak v3.1 -> v7.1)", () => {
   const A = "insdc:KZ000001.1"; // older assembly
   const B = "insdc:AP000001.1"; // newer assembly

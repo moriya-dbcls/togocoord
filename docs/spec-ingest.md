@@ -200,6 +200,8 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 
 **ヒト GRCh37 ↔ GRCh38（2026-09-18）**: `grch37.sqlite`（GRCh37.p13 の assembly report と genomic.fna）、`chain_hg19ToHg38.sqlite`、`chain_hg38ToHg19.sqlite`（UCSC の `hg19ToHg38.over.chain.gz`、`hg38ToHg19.over.chain.gz`）。ほかに、以前に作った `human.sqlite` には配列名の記録がないので、GRCh38 の配列名だけの保存先 `grch38_names.sqlite` を assembly report から作った（705配列）。
 
+**マウス GRCm38 ↔ GRCm39（2026-09-18）**: `grcm38.sqlite`（GRCm38.p6 の assembly report と genomic.fna）、`grcm39_names.sqlite`（GRCm39 の配列名）、`chain_mm10ToMm39.sqlite`、`chain_mm39ToMm10.sqlite`（UCSC の `mm10ToMm39.over.chain.gz`、`mm39ToMm10.over.chain.gz`）。
+
 ## 16. PAF アダプタ（ゲノム全体のアライメント、T3、v0.5）
 
 - 入力: PAF（`*.paf(.gz)`）。minimap2 などのゲノム間アライメントの出力で、CIGAR（`cg:Z`。minimap2 の `-c`）が必須。query を変換元、target を変換先とする（`minimap2 -c 変換先.fa 変換元.fa`）。配列名の読み替えには chain と同じく `--from-report`（query のアセンブリ）と `--to-report`（target）を使い、両方のアセンブリの配列の記録も持つ。

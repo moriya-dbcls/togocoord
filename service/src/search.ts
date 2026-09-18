@@ -120,7 +120,7 @@ interface State {
   /** Species and genome assembly the path is in (undefined until known). */
   taxon: number | undefined;
   assembly: string | undefined;
-  /** The path has stepped into another species / another assembly of the species (each at most once). */
+  /** The path has stepped into another species (once) / another assembly of the current species (once per species). */
   crossedSpecies: boolean;
   crossedAssembly: boolean;
   /** Insertion order, for deterministic tie-breaking. */
@@ -300,7 +300,8 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     if (toTaxon !== undefined && state.taxon !== undefined && toTaxon !== state.taxon) {
       // Into another species: only into the requested one, once.
       if (!crossSpecies || state.crossedSpecies || toTaxon !== options.taxon) return undefined;
-      return { taxon: toTaxon, assembly, ...same, crossedSpecies: true };
+      // Each species may be crossed between its assemblies once: mm10 -> mm39 -> hg38 -> hg19.
+      return { taxon: toTaxon, assembly, crossedSpecies: true, crossedAssembly: false };
     }
     if (lift || (assembly !== undefined && state.assembly !== undefined && assembly !== state.assembly)) {
       // Into another assembly of the species: whenever a path needs it, once.

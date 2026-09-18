@@ -15,6 +15,7 @@ const EXAMPLES = [
   { label: "protein → hg19", loc: "uniprot:P15056:600", to: "genome", assembly: "GRCh37", needs: "GRCh37" },
   { label: "revised gene → UniProt (Marchantia v7.1 → v3.1)", loc: "insdc:BFI18695.1:200", to: "protein", db: "uniprot", needs: "MpTak_v7.1" },
   { label: "Marchantia v3.1 → v7.1", loc: "insdc:KZ772678.1:1969300..1969400", to: "genome", assembly: "MpTak_v7.1", needs: "MpTak_v7.1" },
+  { label: "mm10 → human hg19", loc: "mm10:chr9:108339451..108339453", to: "genome", taxon: "9606", assembly: "GRCh37", needs: "GRCm38" },
   { label: "human → mouse UniProt", loc: "uniprot:P07203:49", to: "protein", taxon: "10090", db: "uniprot" },
   { label: "mouse → human genome", loc: "refseq:NC_000075.7:106312500..106312550", to: "genome", taxon: "9606" },
 ];
