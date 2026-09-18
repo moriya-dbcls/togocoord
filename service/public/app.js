@@ -18,6 +18,7 @@ const EXAMPLES = [
   { label: "mm10 → human hg19", loc: "mm10:chr9:108339451..108339453", to: "genome", taxon: "9606", assembly: "GRCh37", needs: "GRCm38" },
   { label: "CRE (fanta.bio) → transcript", loc: "fanta:FCHS_301358", to: "transcript", db: "refseq", needs: "fanta" },
   { label: "mouse CRE on mm10 → mm39 protein", loc: "fanta:FCMM_194523", to: "protein", db: "uniprot", needs: "fanta" },
+  { label: "UniProt without an identical protein → genome", loc: "uniprot:P08556:168", to: "genome", needs: "GRCm39" },
   { label: "human → mouse UniProt", loc: "uniprot:P07203:49", to: "protein", taxon: "10090", db: "uniprot" },
   { label: "mouse → human genome", loc: "refseq:NC_000075.7:106312500..106312550", to: "genome", taxon: "9606" },
 ];
@@ -183,6 +184,9 @@ function renderResult(r) {
       r.assembly && multiAssembly.has(r.taxon) ? el("span", { class: "badge species", title: "genome assembly" }, r.assembly) : null,
       el("span", { class: "badge", title: "path cost" }, `cost ${r.cost}`),
       r.approximate ? el("span", { class: "badge warn", title: "the path uses an edge not verified against the sequences; positions may be shifted" }, "approximate") : null,
+      r.differences?.length
+        ? el("span", { class: "badge warn", title: `the residue differs between the input and the target (protein alignment): ${r.differences.join(", ")}` }, `residue differs: ${r.differences.slice(0, 3).join(", ")}`)
+        : null,
       r.orientation !== "forward" ? el("span", { class: "badge" }, r.orientation) : null,
       el("button", { type: "button", class: "small", onclick: () => toggleExtra(card, "faldo", r.location) }, "FALDO"),
       el("button", { type: "button", class: "small", onclick: () => toggleExtra(card, "annotations", r.location) }, "Annotations"),

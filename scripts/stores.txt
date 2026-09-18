@@ -43,5 +43,10 @@ chain_mm10ToMm39
 chain_mm39ToMm10
 mp_v31_to_v71
 mp_v71_to_v31
+
+# Protein alignments computed by TogoCoord (T2)
+human_uniprot_alignments
+mouse_uniprot_alignments
+arabidopsis_uniprot_alignments
 chain_tair10.1ToTair10
 tair10_to_tair10.1

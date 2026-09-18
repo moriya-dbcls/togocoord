@@ -47,3 +47,4 @@ export {
 } from "./sequence.ts";
 export { alignmentIdentity, inferAaLength, validateCds, validateTranscript } from "./validate.ts";
 export { ingestBedFile, type BedOptions, type BedStats } from "./adapter-bed.ts";
+export { alignProteins, ingestProteinAlignments, readIdMapping, type ProteinAlignment, type ProteinAlignOptions, type ProteinAlignStats } from "./adapter-protein-align.ts";

@@ -38,6 +38,7 @@ const ENSEMBL = "https://ftp.ensembl.org/pub/release-116";
 const MANE = "https://ftp.ncbi.nlm.nih.gov/refseq/MANE/MANE_human/release_1.5";
 const UCSC = "https://hgdownload.soe.ucsc.edu/goldenPath";
 const FANTA = "https://data.fanta.bio/cre/v1.2.1";
+const IDMAPPING = "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism";
 
 /** Downloaded files by local name (the upstream file name). */
 const RAW_FILES = new Map<string, string>();
@@ -102,6 +103,16 @@ const STORE_LIST: Store[] = [
   { name: "human_uniprot", group: "human", args: ["--label", "Human UniProt reference proteome (UP000005640)", ...upHuman] },
   { name: "human_mane", group: "human", args: ["--label", "MANE v1.5 (human)", "--taxon", "9606", "--organism", "Homo sapiens", raw(`${MANE}/MANE.GRCh38.v1.5.summary.txt.gz`), raw(`${MANE}/MANE.GRCh38.v1.5.refseq_rna.fna.gz`), raw(`${MANE}/MANE.GRCh38.v1.5.ensembl_rna.fna.gz`)] },
   { name: "grch38_names", group: "human", args: ["--label", "GRCh38.p14 sequence names (NCBI assembly report)", r38] },
+  // T2: UniProt entries without an identical annotated protein, aligned to the proteins their ID mapping names
+  {
+    name: "human_uniprot_alignments",
+    group: "human",
+    args: [
+      "--label", "UniProt to RefSeq / Ensembl protein alignments (human; entries without an identical protein)",
+      ...[...upHuman, ncbi(GRCH38, "protein.faa.gz"), raw(`${ENSEMBL}/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz`)].flatMap((f) => ["--fasta", f]),
+      raw(`${IDMAPPING}/HUMAN_9606_idmapping_selected.tab.gz`),
+    ],
+  },
   // Human, GRCh37 and UCSC chains to / from GRCh38
   { name: "grch37", group: "grch37", args: ["--label", "GRCh37.p13 genome (NCBI assembly report and sequences)", "--assembly-report", r37, r37, g37] },
   { name: "chain_hg19ToHg38", group: "grch37", args: ["--label", "UCSC liftOver chains hg19 → hg38 (GRCh37 to GRCh38)", "--from-report", r37, "--to-report", r38, "--fasta", g37, "--fasta", g38, raw(`${UCSC}/hg19/liftOver/hg19ToHg38.over.chain.gz`)] },
@@ -111,6 +122,15 @@ const STORE_LIST: Store[] = [
   { name: "mouse_rna", group: "mouse", args: ["--label", "Mouse RefSeq RNA", ncbi(GRCM39, "rna.gbff.gz")] },
   { name: "mouse_uniprot", group: "mouse", args: ["--label", "Mouse UniProt reference proteome (UP000000589)", ...upMouse] },
   { name: "grcm39_names", group: "mouse", args: ["--label", "GRCm39 sequence names (NCBI assembly report)", rm39] },
+  {
+    name: "mouse_uniprot_alignments",
+    group: "mouse",
+    args: [
+      "--label", "UniProt to RefSeq protein alignments (mouse; entries without an identical protein)",
+      ...[...upMouse, ncbi(GRCM39, "protein.faa.gz")].flatMap((f) => ["--fasta", f]),
+      raw(`${IDMAPPING}/MOUSE_10090_idmapping_selected.tab.gz`),
+    ],
+  },
   // Mouse, GRCm38 and UCSC chains to / from GRCm39
   { name: "grcm38", group: "grcm38", args: ["--label", "GRCm38.p6 genome (NCBI assembly report and sequences)", "--assembly-report", rm38, rm38, gm38] },
   { name: "chain_mm10ToMm39", group: "grcm38", args: ["--label", "UCSC liftOver chains mm10 → mm39 (GRCm38 to GRCm39)", "--from-report", rm38, "--to-report", rm39, "--fasta", gm38, "--fasta", gm39, raw(`${UCSC}/mm10/liftOver/mm10ToMm39.over.chain.gz`)] },
@@ -122,6 +142,15 @@ const STORE_LIST: Store[] = [
   { name: "arabidopsis", group: "arabidopsis", args: ["--label", "Arabidopsis RefSeq annotation (TAIR10.1)", "--assembly-report", rTair, "--fasta", gTair, "--fasta", ncbi(TAIR, "rna.fna.gz"), "--fasta", ncbi(TAIR, "protein.faa.gz"), ncbi(TAIR, "genomic.gff.gz")] },
   { name: "arabidopsis_rna", group: "arabidopsis", args: ["--label", "Arabidopsis RefSeq RNA", ncbi(TAIR, "rna.gbff.gz")] },
   { name: "arabidopsis_uniprot", group: "arabidopsis", args: ["--label", "Arabidopsis UniProt reference proteome (UP000006548)", ...upArab] },
+  {
+    name: "arabidopsis_uniprot_alignments",
+    group: "arabidopsis",
+    args: [
+      "--label", "UniProt to RefSeq protein alignments (Arabidopsis; entries without an identical protein)",
+      ...[...upArab, ncbi(TAIR, "protein.faa.gz")].flatMap((f) => ["--fasta", f]),
+      raw(`${IDMAPPING}/ARATH_3702_idmapping_selected.tab.gz`),
+    ],
+  },
   // Arabidopsis TAIR10 (the previous RefSeq version): the same nuclear chromosomes and chloroplast; another
   // mitochondrial genome. UCSC GenArk has a chain TAIR10.1 -> TAIR10 only; the other direction is aligned here.
   { name: "tair10", group: "tair10", args: ["--label", "TAIR10 genome (GCF_000001735.3; NCBI assembly report and sequences)", "--assembly-report", rTair10, rTair10, gTair10] },

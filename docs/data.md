@@ -34,12 +34,13 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | | `human_uniprot` | UniProt 参照プロテオーム UP000005640（current_release） | 57MB |
 | | `human_mane` | MANE v1.5 の summary と RNA 配列 | 23MB |
 | | `grch38_names` | GRCh38.p14 の assembly report（配列名） | 0.3MB |
+| | `human_uniprot_alignments` | 同一配列のない UniProt のエントリと、RefSeq・Ensembl のタンパク質のアライメント（T2。UniProt の `HUMAN_9606_idmapping_selected.tab.gz`） | 5MB |
 | grch37 | `grch37` | GRCh37.p13（GCF_000001405.25）の assembly report とゲノム配列 | 0.3MB |
 | | `chain_hg19ToHg38`、`chain_hg38ToHg19` | UCSC liftOver chain | 1MB、10MB |
-| mouse | `mouse`、`mouse_rna`、`mouse_uniprot`、`grcm39_names` | RefSeq GRCm39（GCF_000001635.27）、UniProt UP000000589 | 930MB、390MB、21MB、0.1MB |
+| mouse | `mouse`、`mouse_rna`、`mouse_uniprot`、`grcm39_names`、`mouse_uniprot_alignments` | RefSeq GRCm39（GCF_000001635.27）、UniProt UP000000589 | 930MB、390MB、21MB、0.1MB |
 | grcm38 | `grcm38`、`chain_mm10ToMm39`、`chain_mm39ToMm10` | GRCm38.p6（GCF_000001635.26）、UCSC liftOver chain | 0.2MB、0.3MB、0.5MB |
 | human_mouse | `chain_hg38ToMm39`、`chain_mm39ToHg38` | UCSC liftOver chain | 158MB、156MB |
-| arabidopsis | `arabidopsis`、`arabidopsis_rna`、`arabidopsis_uniprot` | RefSeq TAIR10.1（GCF_000001735.4）、UniProt UP000006548 | 300MB、174MB、14MB |
+| arabidopsis | `arabidopsis`、`arabidopsis_rna`、`arabidopsis_uniprot`、`arabidopsis_uniprot_alignments` | RefSeq TAIR10.1（GCF_000001735.4）、UniProt UP000006548 | 300MB、174MB、14MB |
 | tair10 | `tair10`、`chain_tair10.1ToTair10`、`tair10_to_tair10.1` | 一つ前の RefSeq の版 TAIR10（GCF_000001735.3）の assembly report とゲノム配列、UCSC GenArk の chain（TAIR10.1 → TAIR10 だけ）、逆向きは minimap2 のアライメント | 0.1MB、0.1MB、0.1MB |
 | marchantia | `marchantia_v71` | INSDC MpTak_v7.1（GCA_039105155.1）の GenBank | 72MB |
 | | `marchantia` | INSDC MpTak v3.1（GCA_003032435.1）の GenBank | 80MB |

@@ -30,6 +30,7 @@ import { ingestManeSummary } from "./adapter-mane.ts";
 import { ingestChainFile } from "./adapter-chain.ts";
 import { ingestPafFile } from "./adapter-paf.ts";
 import { ingestBedFile } from "./adapter-bed.ts";
+import { ingestProteinAlignments } from "./adapter-protein-align.ts";
 import { SqliteSink } from "./store.ts";
 import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 
@@ -37,7 +38,7 @@ const USAGE =
   "usage: togocoord-ingest [--db OUT.sqlite [--overwrite]] [--fasta FILE]... [--seqid-map ASSEMBLY_REPORT] [--assembly-report FILE]\n" +
   "                        [--label TEXT] [--species-taxon N] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations]\n" +
   "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain / .paf files)] [--method TEXT] FILE...\n" +
-  "FILE: .gbff/.gb/.gp, .gff3, .fa/.fna/.faa, SIFTS .tsv, MANE summary, UCSC .chain, PAF with cg:Z CIGAR, NCBI *_assembly_report.txt (optionally .gz)\n" +
+  "FILE: .gbff/.gb/.gp, .gff3, .fa/.fna/.faa, SIFTS .tsv, MANE summary, UCSC .chain, PAF with cg:Z CIGAR, UniProt *_idmapping_selected.tab (T2 protein alignments), NCBI *_assembly_report.txt (optionally .gz)\n" +
   "BED: [--bed-type TYPE] [--bed-columns NAME,...|attributes] [--id-namespace NS (IDs as input, e.g. fanta)] [--link URL_WITH_{id}]\n" +
   "--method: how an input was made (e.g. the aligner, its version and arguments), recorded for reproduction\n";
 const args = process.argv.slice(2);
@@ -216,6 +217,20 @@ for (const file of inputs) {
       `${file}: ${s.records} records, ${s.alignments} alignments kept, ${s.blocks} blocks, ${s.skipped} skipped ` +
         `(${s.shared ?? 0} shared by both assemblies, ${s.crossMolecule ?? 0} between nuclear and organelle genomes), ` +
         `${s.overlapBases} source bases covered by better alignments; sampled identity ${identity}%\n`,
+    );
+    continue;
+  }
+  if (/idmapping_selected\.tab$/i.test(name)) {
+    // T2: align UniProt entries without an identical protein to the proteins their ID mapping names (--fasta: both).
+    const s = await ingestProteinAlignments(file, sink, {
+      file: basename(file),
+      source,
+      refs: sources.flatMap((x) => [...(x.refs?.() ?? [])]),
+      resolveRef: (r) => versions.resolve(r),
+    });
+    process.stderr.write(
+      `${file}: ${s.entries} UniProt entries: ${s.identical} identical to an annotated protein, ${s.noCandidate} without a candidate, ` +
+        `${s.aligned} aligned (${s.ok} ok; ${s.viaGene} to a protein of the same gene, ${s.viaCluster} of the same UniRef90 cluster), ${s.unaligned} without an alignment\n`,
     );
     continue;
   }

@@ -463,6 +463,7 @@ function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: C
     ...(r.assembly && { assembly: r.assembly }),
     cost: r.cost,
     approximate: r.approximate,
+    ...(r.differences && { differences: r.differences }),
     orientation: r.orientation,
     path: r.path.map((s) => ({
       kind: s.kind,
@@ -475,6 +476,7 @@ function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: C
       attributes: s.attributes,
       validation: s.validation,
       ...(s.provenance && { provenance: s.provenance }),
+      ...(s.differences && { differences: s.differences }),
     })),
   };
 }

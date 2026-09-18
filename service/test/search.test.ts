@@ -526,6 +526,46 @@ describe("assemblies without a chain: through identical proteins (MpTak v3.1 -> 
   });
 });
 
+describe("protein alignments computed by TogoCoord (T2)", () => {
+  // UniProt U differs from RefSeq NP at residue 3 (L in U, M in NP); NP has a CDS on the genome G.
+  const U = "uniprot:Q00001";
+  const NP = "refseq:NP_000001.1";
+  const G = "refseq:NC_000001.11";
+  const seq = (ref: string, unit: "nt" | "aa", digest?: string) => ({
+    ref, moltype: unit === "nt" ? ("DNA" as const) : ("protein" as const), unit, length: unit === "nt" ? 10_000 : 10, taxon: 9606,
+    ...(digest && { digest }), provenance: { adapter: "fasta" as const },
+  });
+  const make = (name: string, r: IngestResult) => {
+    const path = join(dir, `${name}.sqlite`);
+    const sink = new SqliteSink(path);
+    for (const x of r.sequences) sink.sequence(x);
+    for (const e of r.edges) sink.edge(e);
+    sink.close();
+    return new TogoCoordStore(path);
+  };
+  const none = { annotations: [], warnings: [] };
+  const stores = new StoreSet()
+    .add(make("t2-genome", { ...none, sequences: [seq(G, "nt"), seq(NP, "aa", "SQ.np")], edges: [{
+      kind: "annotation", from: NP, to: G, blocks: [{ srcRef: NP, src: 0, tgtRef: G, tgt: 1000, len: 30, rev: false }],
+      attributes: {}, provenance: { adapter: "gff3" }, validation: { status: "ok" } }] }))
+    .add(make("t2-align", { ...none, sequences: [seq(U, "aa", "SQ.u")], edges: [{
+      kind: "alignment", from: U, to: NP, blocks: [{ srcRef: U, src: 0, tgtRef: NP, tgt: 0, len: 30, rev: false }],
+      attributes: { identity: "0.9000", substitutions: "3/3:L>M" }, provenance: { adapter: "protein-alignment" }, validation: { status: "ok", basis: "full" } }] }));
+  const ctx = stores.context();
+  const hits = (loc: string, o: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(loc, ctx), o, ctx);
+
+  it("reaches the genome through the alignment, dearer than an exact path", () => {
+    const [hit] = hits(`${U}:2`, { to: { category: "genome" } });
+    assert.deepEqual([hit!.id, hit!.cost, hit!.path.map((s) => s.kind), hit!.differences], [`${G}:1004..1006`, 4, ["alignment", "annotation"], undefined]);
+  });
+
+  it("marks residues that differ, as seen from each side", () => {
+    assert.deepEqual(hits(`${U}:3`, { to: { category: "genome" } })[0]!.differences, ["3 L>M"]);
+    const back = hits(`${NP}:3`, { to: { category: "protein" } }).find((h) => h.location.outer === U);
+    assert.deepEqual(back?.differences, ["3 M>L"]);
+  });
+});
+
 describe("species of infraspecific taxa (spec-service §2.2)", () => {
   const named = (name: string, meta: Record<string, string>) => {
     const path = join(dir, `${name}.sqlite`);

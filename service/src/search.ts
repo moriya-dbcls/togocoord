@@ -51,6 +51,8 @@ export interface Step {
   validation: StoredEdge["validation"];
   /** Where the edge came from (absent for identity steps). */
   provenance?: StoredEdge["provenance"];
+  /** Residues of the input that differ on the other side of an alignment (e.g. `168 L>M`), when any. */
+  differences?: string[];
 }
 
 export interface Conversion {
@@ -76,6 +78,8 @@ export interface Conversion {
    */
   orientation: "forward" | "reverse" | "mixed";
   path: Step[];
+  /** Residues that differ between the input and the target along the path (protein alignments). */
+  differences?: string[];
 }
 
 /**
@@ -95,8 +99,21 @@ export const LIFTOVER_COST = 2;
 export const EXCEPTION_PENALTY = 10;
 export const MISMATCH_PENALTY = 10;
 
-export function edgeCost(e: { kind?: StoredEdge["kind"]; attributes: Record<string, string>; validation: StoredEdge["validation"] }): number {
-  const base = e.kind === "liftover" ? LIFTOVER_COST : 1;
+/**
+ * Protein alignments TogoCoord computes itself (T2: a UniProt entry without an identical annotated protein, aligned to
+ * the proteins its ID mapping names): dearer than primary edges and identity, so exact paths win.
+ */
+export const OWN_ALIGNMENT_COST = 3;
+
+export function edgeCost(e: {
+  kind?: StoredEdge["kind"];
+  attributes: Record<string, string>;
+  validation: StoredEdge["validation"];
+  provenance?: StoredEdge["provenance"];
+  /** Residues of the input that differ on the other side of an alignment (e.g. `168 L>M`), when any. */
+  differences?: string[];
+}): number {
+  const base = e.kind === "liftover" ? LIFTOVER_COST : e.provenance?.adapter === "protein-alignment" ? OWN_ALIGNMENT_COST : 1;
   return isApproximate(e) ? base + (e.validation.status === "mismatch" ? MISMATCH_PENALTY : EXCEPTION_PENALTY) : base;
 }
 
@@ -244,6 +261,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         }),
         cost: state.cost,
         approximate: state.path.some(isApproximate),
+        ...(state.path.some((s) => s.differences) && { differences: state.path.flatMap((s) => s.differences ?? []) }),
         orientation: state.orientation,
         path: state.path,
       });
@@ -274,7 +292,10 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       if (turns > MAX_TURNS) continue; // rule 2
       const scope = nextScope(state, next);
       if (!scope) continue;
-      const identity = next.path.at(-1)!.kind === "identity";
+      // Identical records, and near-identical UniProt records joined by a protein alignment (T2: Swiss-Prot P08556
+      // next to TrEMBL A0A0G2JDN6, identical to RefSeq NP_035067), are other records of the same protein.
+      const last = next.path.at(-1)!;
+      const identity = last.kind === "identity" || last.provenance?.adapter === "protein-alignment";
       const crosses = (scope.crossedSpecies && !state.crossedSpecies) || (scope.crossedAssembly && !state.crossedAssembly);
       if (inScopeTarget && !(identity && scope.crossedSpecies === state.crossedSpecies)) continue;
       if (outOfScope && !identity && !crosses && !(dir === -1 && turns === state.turns)) continue;
@@ -384,7 +405,9 @@ function expand(
 ): Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossedSpecies" | "crossedAssembly">> {
   const loc = state.location;
   const byEdge = new Map<string, SetBlock[]>();
-  for (const seg of identityOnly ? [] : loc.segments) {
+  // Identity only: no edges, except, on a protein, the protein alignments to near-identical records (T2).
+  const protein = ctx.unitOf(loc.outer) === "aa";
+  for (const seg of identityOnly && !protein ? [] : loc.segments) {
     const [a, b] = seg.start === seg.end ? [seg.start - 1, seg.start + 1] : [seg.start, seg.end];
     for (const blk of stores.blocksAt(seg.ref, a, b)) {
       if (!allowed(blk.tgtRef)) continue; // blocks are oriented away from seg.ref
@@ -420,7 +443,10 @@ function expand(
   }
 
   const used = new Set(state.path.map((s) => s.edge));
-  const edges = [...byEdge.keys()].filter((k) => !used.has(k)).map((k) => ({ key: k, edge: stores.edge(k)! }));
+  const edges = [...byEdge.keys()]
+    .filter((k) => !used.has(k))
+    .map((k) => ({ key: k, edge: stores.edge(k)! }))
+    .filter((x) => !identityOnly || x.edge.provenance?.adapter === "protein-alignment");
 
   // Where an alignment connects the same two sequences (e.g. RefSeq transcript and genome via cDNA_match),
   // it describes the transcript's own sequence; the genome-model annotation edge does not.
@@ -445,6 +471,8 @@ function expand(
         provenance: edge.provenance,
       };
       if (edge.location !== undefined) step.edgeLocation = edge.location;
+      const differences = substituted(edge.attributes.substitutions, step.direction, loc);
+      if (differences.length) step.differences = differences;
       out.push({
         location: t.location,
         cost: state.cost + cost,
@@ -454,6 +482,23 @@ function expand(
         orientation: ctx.unitOf(loc.outer) === "aa" ? combine(state.orientation, t.orientation) : t.orientation,
       });
     }
+  }
+  return out;
+}
+
+/**
+ * Substitutions of a protein alignment (`from/to:X>Y;...`, 1-based residues) that fall in a location on the side the
+ * step leaves from, written as seen from there (`168 L>M`).
+ */
+function substituted(list: string | undefined, direction: Step["direction"], loc: Location): string[] {
+  if (!list) return [];
+  const out: string[] = [];
+  for (const item of list.split(";")) {
+    const m = /^(\d+)\/(\d+):(.)>(.)$/.exec(item);
+    if (!m) continue;
+    const [pos, from, to] = direction === "forward" ? [Number(m[1]), m[3]!, m[4]!] : [Number(m[2]), m[4]!, m[3]!];
+    const unit = 3 * (pos - 1);
+    if (loc.segments.some((s) => s.start < unit + 3 && unit < Math.max(s.end, s.start + 1))) out.push(`${pos} ${from}>${to}`);
   }
   return out;
 }

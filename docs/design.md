@@ -447,7 +447,7 @@ P  hapA  s1+,s2-,s3+  *
 | 1 | コアライブラリ（パーサ、正規化、ブロック演算、意味論）とオラクルテスト。**v0.1 完了（2026-09-18）**: `core/`（テスト104件） |
 | 2 | GBFF と GFF3 のアダプタ。汎用性を確かめるため、ヒト・マウスに加えて、性質の異なる種（環状ゲノムの細菌、シロイヌナズナなど）を最初から対象に含める。**v0.1 完了（2026-09-18）**: `ingest/`、[spec-ingest.md](spec-ingest.md)。ウイルス、ヒトのミトコンドリアゲノム、アデノウイルス、プラスミド、ヒト GRCh38 の cDNA_match の実データで検証。ヒトやマウスの全ゲノム規模の GFF3、シロイヌナズナ、Ensembl の seqid は未検証 |
 | 3 | REST API、経路探索、Web UI。T1 の Enrichment（SIFTS、cDNA_match、UCSC chain、MANE）。**3a・3b 完了（2026-09-18）**: `service/`（経路探索、複数の保存先）、[spec-service.md](spec-service.md)。**3c 完了**: REST API、FALDO JSON-LD、同一配列（ダイジェスト）による経路。**3e（SIFTS）完了**: Ensembl・UniProt・SIFTS の取り込みと、構造との往復の検証（spec-service §8）。**3d（Web UI）完了**: spec-service §6.1。**MANE 完了**: 配列のタグと、同じコストのときの優先（spec-service §2）。**UCSC chain 完了**: ヒト ↔ マウスの liftOver（spec-service §9、spec-ingest §14）。**フェーズ3 完了** |
-| 4 | T2（オンデマンドのアライメントとキャッシュ）、アノテーションの伝播（ポスターのユースケースの再現） |
+| 4 | T2（オンデマンドのアライメントとキャッシュ）、アノテーションの伝播（ポスターのユースケースの再現）。**T2 の一部（2026-09-18）**: 同一配列のない UniProt のエントリを、ID mapping で選んだ候補と取り込み時に並べる（spec-ingest §18、spec-service §13）。オンデマンドの計算と、アセンブリをまたいだ注釈の伝播は spec-service §6 |
 | 5 | T3（GFA と chain の持ち込み、ワークスペース）。需要に応じて、自前の計算も検討する。**一部着手（2026-09-18）**: PAF アダプタ（spec-ingest §16）と、minimap2 によるゼニゴケ v3.1 ↔ v7.1 のアライメント（spec-service §11）。GFA とワークスペースは未着手 |
 
 ---
