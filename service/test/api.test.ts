@@ -185,6 +185,9 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     }
     assert.deepEqual((await get(`/v1/convert?loc=${loc}&to=protein&taxon=10090`)).body.results, []); // no chain loaded
     assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&taxon=dog`)).status, 400);
+    const np = await get(`/v1/convert?loc=${loc}&to=protein&db=refseq`);
+    assert.ok(np.body.results.length > 0 && np.body.results.every((r: { sequence: string }) => r.sequence.startsWith("refseq:")));
+    assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&db=nowhere`)).status, 400);
     assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&assembly=CHM13`)).status, 400);
     const meta = await get("/v1/meta");
     assert.equal(meta.body.species[0].taxon, 9606);

@@ -9,6 +9,7 @@ import {
   LocationSyntaxError,
   locationIri,
   parseLocationId,
+  splitRef,
   toFaldo,
   type CodonMode,
   type CoordContext,
@@ -108,9 +109,17 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
   interface Scope {
     taxon?: number;
     assembly?: string;
+    /** Namespaces the results must be in (e.g. uniprot): a filter on the results, not a separate target. */
+    db?: string[];
   }
 
-  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode, tags: string[] = [], scope: Scope = {}) => {
+  const dbParam = (values: unknown[]): string[] | undefined => {
+    const list = values.flat().filter((v) => v !== undefined && v !== null && v !== "").map((v) => String(v).toLowerCase());
+    for (const v of list) if (!stores.registry.get(v)) throw new HttpError(400, `unknown database '${v}' (a namespace such as refseq, ensembl, uniprot, pdb)`);
+    return list.length ? list : undefined;
+  };
+
+  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode, tags: string[] = [], { db, ...scope }: Scope = {}) => {
     const loc = parse(text);
     const length = loc.segments.reduce((n, s) => n + (s.end - s.start) / (ctx.unitOf(s.ref) === "aa" ? 3 : 1), 0);
     if (length > maxInputLength) {
@@ -120,11 +129,14 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     const found = convert(
       stores,
       loc,
-      { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && { maxResults: maxResults + 1 }), ...scope },
+      { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && !db && { maxResults: maxResults + 1 }), ...scope },
       ctx,
     );
     // `tag` keeps only targets carrying one of the tags (e.g. tag=MANE Select).
-    const results = tags.length ? found.filter((r) => r.tags.some((x) => tags.includes(x))) : found;
+    // `db` keeps only targets in those namespaces (e.g. db=uniprot).
+    const results = found.filter(
+      (r) => (!tags.length || r.tags.some((x) => tags.includes(x))) && (!db || db.includes(splitRef(r.location.outer).namespace)),
+    );
     return {
       input: formatLocationId(loc, ctx, codon),
       ...(stores.taxonOf(loc.outer) !== undefined && { inputTaxon: stores.taxonOf(loc.outer) }),
@@ -142,13 +154,14 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         convertOne(q.get("loc") ?? "", q.getAll("to"), intParam(q, "maxHops"), codonParam(q), q.getAll("tag"), {
           taxon: taxonParam(q.get("taxon")),
           assembly: assemblyParam(q.get("assembly")),
+          db: dbParam(q.getAll("db")),
         }),
     ],
     [
       "POST",
       /^\/v1\/convert$/,
       (_m, q, body) => {
-        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown; tag?: unknown; taxon?: unknown; assembly?: unknown };
+        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown; tag?: unknown; taxon?: unknown; assembly?: unknown; db?: unknown };
         if (!Array.isArray(b.locations) || !b.locations.every((x) => typeof x === "string")) {
           throw new HttpError(400, "body must be {\"locations\": [\"<Location ID>\", ...], \"to\"?: string | string[]}");
         }
@@ -156,7 +169,11 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         const to = b.to === undefined ? [] : Array.isArray(b.to) ? b.to.map(String) : [String(b.to)];
         const codon: CodonMode = b.codon === "never" ? "never" : codonParam(q);
         const hops = typeof b.maxHops === "number" ? b.maxHops : intParam(q, "maxHops");
-        const scope = { taxon: taxonParam(b.taxon ?? q.get("taxon")), assembly: assemblyParam(b.assembly ?? q.get("assembly")) };
+        const scope = {
+          taxon: taxonParam(b.taxon ?? q.get("taxon")),
+          assembly: assemblyParam(b.assembly ?? q.get("assembly")),
+          db: dbParam(b.db !== undefined ? [b.db] : q.getAll("db")),
+        };
         return {
           results: (b.locations as string[]).map((text) => {
             try {

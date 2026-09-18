@@ -9,13 +9,14 @@ const EXAMPLES = [
   ["RefSeq protein", "refseq:NP_036366.3:20"],
   ["whole protein", "refseq:NP_000572.2"],
   ["overlapping genes (mtDNA)", "refseq:NC_012920.1:8527..8529"],
-  ["human → mouse UniProt", "uniprot:P07203:49", "uniprot", "10090"],
+  ["human → mouse UniProt", "uniprot:P07203:49", "protein", "10090", "uniprot"],
   ["mouse → human genome", "refseq:NC_000075.7:106312500..106312550", "genome", "9606"],
 ];
 
 const form = $("#query");
 const locInput = $("#loc");
 const toSelect = $("#to");
+const dbSelect = $("#db");
 const taxonSelect = $("#taxon");
 const assemblySelect = $("#assembly");
 const codonBox = $("#codon");
@@ -182,10 +183,7 @@ const speciesReady = api("/v1/meta").then(({ species = [] }) => {
   assemblySelect.hidden = !species.some((s) => s.assemblies.length > 1);
 }).catch(() => {});
 
-/** The target selectors' values; `to` must also be one of the options of the category selector ("" otherwise). */
-const current = () => [toSelect.value, taxonSelect.value, assemblySelect.value];
-
-async function run(loc, to, push = true, taxon = "", assembly = "") {
+async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
   loc = loc.trim();
   locInput.value = loc;
   if (![...toSelect.options].some((o) => o.value === (to ?? ""))) {
@@ -194,15 +192,16 @@ async function run(loc, to, push = true, taxon = "", assembly = "") {
   toSelect.value = to ?? "";
   taxonSelect.value = taxon;
   assemblySelect.value = assembly;
+  dbSelect.value = db;
   $("#error").hidden = true;
   if (!loc) return;
   const codon = codonBox.checked ? "" : "never";
   const tag = maneBox.checked ? "MANE Select" : "";
-  if (push) history.pushState(null, "", `?${qs({ loc, to, taxon, assembly, codon, tag })}`);
+  if (push) history.pushState(null, "", `?${qs({ loc, to, db, taxon, assembly, codon, tag })}`);
   try {
     const [info, conv] = await Promise.all([
       api(`/v1/location?${qs({ loc, codon })}`),
-      api(`/v1/convert?${qs({ loc, to, taxon, assembly, codon, tag })}`),
+      api(`/v1/convert?${qs({ loc, to, db, taxon, assembly, codon, tag })}`),
     ]);
     $("#input-id").textContent = info.id;
     $("#input-kind").textContent = `${info.unit === "aa" ? "protein" : "nucleotide"}${info.kind === "order" ? " · order" : ""}`;
@@ -214,7 +213,7 @@ async function run(loc, to, push = true, taxon = "", assembly = "") {
     $("#results").replaceChildren(...conv.results.map(renderResult));
     $("#count").textContent = conv.results.length
       ? `(${conv.results.length}${conv.truncated ? ", truncated — narrow the target or the input" : ""})`
-      : tag ? "— none with this tag" : taxon || assembly ? "— none reachable in the selected species / assembly" : "— none reachable";
+      : tag || db ? "— none matching the filters" : taxon || assembly ? "— none reachable in the selected species / assembly" : "— none reachable";
     $("#output").hidden = false;
   } catch (err) {
     $("#input").hidden = true;
@@ -225,10 +224,11 @@ async function run(loc, to, push = true, taxon = "", assembly = "") {
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
-  run(locInput.value, ...current());
+  run(locInput.value, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value);
 });
-for (const control of [toSelect, taxonSelect, assemblySelect, codonBox, maneBox]) {
-  control.addEventListener("change", () => locInput.value && run(locInput.value, ...current()));
+const rerun = () => run(locInput.value, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value);
+for (const control of [toSelect, dbSelect, taxonSelect, assemblySelect, codonBox, maneBox]) {
+  control.addEventListener("change", () => locInput.value && rerun());
 }
 $("#input .card").addEventListener("click", (e) => {
   const action = e.target.dataset?.action;
@@ -236,8 +236,13 @@ $("#input .card").addEventListener("click", (e) => {
 });
 $("#examples").append(
   "Examples: ",
-  ...EXAMPLES.map(([label, id, to, taxon]) =>
-    el("button", { type: "button", class: "small", title: id, onclick: () => (to ? run(id, to, true, taxon ?? "") : run(id, ...current())) }, label),
+  ...EXAMPLES.map(([label, id, to, taxon, db]) =>
+    el("button", {
+      type: "button",
+      class: "small",
+      title: id,
+      onclick: () => (to ? run(id, to, true, taxon ?? "", "", db ?? "") : run(id, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value)),
+    }, label),
   ),
 );
 
@@ -323,7 +328,7 @@ async function fromUrl(push = false) {
   codonBox.checked = p.get("codon") !== "never";
   maneBox.checked = p.get("tag") === "MANE Select";
   await speciesReady;
-  if (p.get("loc")) run(p.get("loc"), p.get("to") ?? "", push, p.get("taxon") ?? "", p.get("assembly") ?? "");
+  if (p.get("loc")) run(p.get("loc"), p.get("to") ?? "", push, p.get("taxon") ?? "", p.get("assembly") ?? "", p.get("db") ?? "");
 }
 window.addEventListener("popstate", () => fromUrl(false));
 fromUrl(false);

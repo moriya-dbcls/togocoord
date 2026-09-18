@@ -133,7 +133,7 @@ const CROSSING_KINDS = new Set<Step["kind"]>(["liftover"]);
 /**
  * Convert `input` to the requested targets along the cheapest chain of edges (Dijkstra over sequences).
  * Only edges whose blocks overlap the current location are followed, so the search stays local even in whole-genome
- * stores. Each sequence is reached once, by its cheapest path; a matching target is not expanded further.
+ * stores. Each sequence is reached once, by its cheapest path; a matching target leads on only to identical sequences.
  */
 export function convert(stores: StoreSet, input: Location, options: ConvertOptions = {}, ctx: CoordContext = stores.context()): Conversion[] {
   const targets = options.to === undefined ? undefined : Array.isArray(options.to) ? options.to : [options.to];
@@ -184,8 +184,9 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     const ref = state.location.outer;
     const recorded = best.get(key(state));
     if (recorded && (state.cost > recorded[0] || (state.cost === recorded[0] && state.detours > recorded[1]))) continue;
-    const target = state.path.length > 0 && matches(ref);
-    if (target && inScope(state)) {
+    const target = targets !== undefined && state.path.length > 0 && matches(ref);
+    const hit = state.path.length > 0 && matches(ref) && inScope(state);
+    if (hit) {
       if (reached.has(ref)) continue; // already returned through a cheaper state
       reached.add(ref);
       results.push({
@@ -200,16 +201,21 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         path: state.path,
       });
       if (options.maxResults !== undefined && results.length >= options.maxResults) break;
-      if (targets) continue; // a reached target is terminal
     }
     if (state.path.length >= maxHops) continue;
     if (!targets && state.crossed) continue; // landed in the other species (see CROSSING_HOPS)
-    // A target outside the requested scope (e.g. the human protein when mouse is asked for) only leads on by crossing.
-    const crossingOnly = target;
+    // A reached target leads on only to identical sequences: the records of the same residues in other databases
+    // (RefSeq, Ensembl, UniProt) are results too. A target outside the requested scope (e.g. the human protein when
+    // mouse is asked for) also leads on by crossing, or towards the genome where the crossing is (UniProt -> identical
+    // RefSeq protein -> genome -> chain), not sideways.
+    // Records identical to the input (reached by identity steps only) are the input itself: they lead on freely.
+    const asInput = state.path.every((s) => s.kind === "identity");
+    const inScopeTarget = target && hit && !asInput;
+    const outOfScope = target && !hit && !asInput;
 
     const here = layerOf(ref);
     const withinCap = (r: string) => (layerOf(r) ?? -Infinity) <= cap;
-    for (const next of expand(stores, state, ctx, withinCap)) {
+    for (const next of expand(stores, state, ctx, withinCap, inScopeTarget)) {
       const there = layerOf(next.location.outer);
       if (there !== undefined && there > cap) continue; // deeper than both ends (spec-service §2.1, rule 1)
       const dir = here === undefined || there === undefined ? 0 : Math.sign(there - here);
@@ -220,7 +226,10 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       }
       if (turns > MAX_TURNS) continue; // rule 2
       const scope = nextScope(state, next);
-      if (!scope || (crossingOnly && !(scope.crossed && !state.crossed))) continue;
+      if (!scope) continue;
+      const identity = next.path.at(-1)!.kind === "identity";
+      if (inScopeTarget && !(identity && scope.crossed === state.crossed)) continue;
+      if (outOfScope && !identity && !(scope.crossed && !state.crossed) && !(dir === -1 && turns === state.turns)) continue;
       // The sequence being left becomes an intermediate node of the path (the source is not counted).
       const detours = state.detours + (state.path.length > 0 && prefer.size > 0 && !preferred(ref) ? 1 : 0);
       const candidate = { ...next, ...scope, trend, turns, detours, seq: seq++ };
@@ -319,10 +328,11 @@ function expand(
   state: State,
   ctx: CoordContext,
   allowed: (ref: string) => boolean = () => true,
+  identityOnly = false,
 ): Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossed">> {
   const loc = state.location;
   const byEdge = new Map<string, SetBlock[]>();
-  for (const seg of loc.segments) {
+  for (const seg of identityOnly ? [] : loc.segments) {
     const [a, b] = seg.start === seg.end ? [seg.start - 1, seg.start + 1] : [seg.start, seg.end];
     for (const blk of stores.blocksAt(seg.ref, a, b)) {
       if (!allowed(blk.tgtRef)) continue; // blocks are oriented away from seg.ref

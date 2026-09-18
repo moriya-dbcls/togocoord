@@ -322,6 +322,7 @@ describe("species and assembly scope (spec-service §2.2)", () => {
   const PH = "refseq:NP_000091.1";
   const PM = "refseq:NP_000092.1";
   const UM = "uniprot:Q00092";
+  const UH = "uniprot:Q00091";
   const HX = "refseq:NP_000093.1";
   const MX = "refseq:NP_000094.1";
   const seq = (ref: string, taxon: number, unit: "nt" | "aa", digest?: string) => ({
@@ -354,14 +355,16 @@ describe("species and assembly scope (spec-service §2.2)", () => {
   };
   const none = { annotations: [], warnings: [] };
   const stores = new StoreSet()
-    .add(store("scope-human", { ...none, sequences: [seq(GH, 9606, "nt"), seq(PH, 9606, "aa"), seq(HX, 9606, "aa", "SQ.x")], edges: [cds(PH, GH, 100)] }))
+    .add(store("scope-human", { ...none, sequences: [seq(GH, 9606, "nt"), seq(PH, 9606, "aa", "SQ.h"), seq(UH, 9606, "aa", "SQ.h"), seq(HX, 9606, "aa", "SQ.x")], edges: [cds(PH, GH, 100)] }))
     .add(store("scope-mouse", { ...none, sequences: [seq(GM, 10090, "nt"), seq(PM, 10090, "aa", "SQ.m"), seq(UM, 10090, "aa", "SQ.m"), seq(MX, 10090, "aa", "SQ.x")], edges: [cds(PM, GM, 5100)] }))
     .add(store("scope-chain", { ...none, sequences: [], edges: [chain] }));
   const ctx = stores.context();
   const ids = (loc: string, options: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(loc, ctx), options, ctx).map((r) => r.id);
 
   it("stays in the input's species by default: no liftOver, no identical sequence of another species", () => {
-    assert.deepEqual(ids(`${PH}:2`, { to: { category: "protein" } }), []);
+    assert.deepEqual(ids(`${PH}:2`, { to: { category: "protein" } }), [`${UH}:2`]);
+    // A record identical to the input is the input itself, not a terminal target: UH -> PH -> GH is followed.
+    assert.deepEqual(ids(`${UH}:2`, { to: { category: "genome" } }), [`${GH}:104..106`]);
     assert.deepEqual(ids(`${GH}:101..103`, {}), [`${PH}:1`]);
     assert.deepEqual(ids(`${HX}:2`, { to: { category: "protein" } }), []);
   });
@@ -372,6 +375,9 @@ describe("species and assembly scope (spec-service §2.2)", () => {
     assert.equal(hit!.taxon, 10090);
     assert.deepEqual(hit!.path.map((s) => s.kind), ["annotation", "liftover", "annotation", "identity"]);
     assert.deepEqual(ids(`${HX}:2`, { to: { category: "protein" }, taxon: 10090 }), [`${MX}:2`]);
+    // Through a human protein that is itself a target kind (UniProt -> identical RefSeq -> genome -> chain); the
+    // protein layer includes the identical records of other databases (RefSeq and UniProt).
+    assert.deepEqual(ids(`${UH}:2`, { to: { category: "protein" }, taxon: 10090 }), [`${PM}:2`, `${UM}:2`]);
     assert.deepEqual(ids(`${GH}:101..103`, { taxon: 10090 }), [`${GM}:5101..5103`]);
   });
 
