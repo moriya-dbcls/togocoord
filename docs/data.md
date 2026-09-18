@@ -21,6 +21,7 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 - 名前は、保存先（`human_rna`）かグループ（`human`）。`build` は、必要なファイルがなければ先に取得する。
 - 置き場所は `$TOGOCOORD_DATA`（既定はリポジトリの `data/`）。`raw/` に取得したファイル（配布元のファイル名のまま）、`work/` に途中のファイル（アライメントの PAF）、`stores/` に保存先、`logs/` に構築のログ。
 - 大きな gzip の FASTA は、取り込み時に `raw/` の中に展開したファイルと `.fai` を作る（spec-ingest §8）。
+- すべてを作ると、取得済みのファイルからで約13分（8コアの Mac、最大メモリ約7GB）。取得は回線次第で、合計約6GB。
 - 例: ヒトだけを作って配信する。`node scripts/data.ts build human && node scripts/data.ts serve`（`stores.txt` にあってまだ作っていない保存先は飛ばす）。
 
 ## データセット
@@ -47,6 +48,8 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | fanta | `fanta_human_hg38`、`fanta_mouse_mm10` | fanta.bio CRE v1.2.1 の BED | 197MB、116MB |
 
 各グループの結果（件数、自己検証、変換の検証）は spec-ingest と spec-service にある。
+
+**2026-09-18 の作り直しの確認**: このスクリプトで全29の保存先を作り直し、以前の手作業の保存先と、配列・edge・注釈の数と自己検証の結果が一致することを確かめた。違いは chain の4つだけで、その後の改良による（両側のアセンブリの配列を記録する、パッチの UCSC 名を読み替えて取り込む chain が 5〜277 本増えた）。増えた chain のうち、RefSeq に収録されていない未配置 scaffold（`KI270752.1` など）に着くものは、RefSeq のゲノム配列で照合できないので自己検証が `skipped` になる。
 
 **版について**: NCBI のアセンブリ、Ensembl（release-116）、MANE（release_1.5）、fanta.bio（v1.2.1）は版を固定した URL から取る。UniProt（current_release）、SIFTS、PDB の配列は、配布元が同じ URL で更新するので、取得した時期によって中身が変わる。
 
