@@ -3,6 +3,7 @@ export { GenBankIngestor, ingestGenBank, ingestGenBankRecords } from "./adapter-
 export { Gff3Ingestor, ingestGff3, ingestGff3Document, type Gff3Options } from "./adapter-gff3.ts";
 export { accessionRef, assemblyReportSeqids, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, extent, VersionResolver, type AdapterOptions } from "./common.ts";
 export { ingestSiftsFile, type SiftsOptions } from "./adapter-sifts.ts";
+export { ingestManeSummary } from "./adapter-mane.ts";
 export { buildFai, FaiSequenceSource, loadOrBuildFai, readFai, writeFai, type FaiEntry } from "./fasta-index.ts";
 export { SqliteSink, STORE_SCHEMA_VERSION, TogoCoordStore, type SqliteSinkOptions, type StoreOptions, type StoredBlock, type StoredEdge } from "./store.ts";
 export { Lru } from "./lru.ts";

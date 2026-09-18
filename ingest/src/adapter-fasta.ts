@@ -56,9 +56,10 @@ export async function ingestFastaFile(path: string, sink: Sink, options: FastaOp
     } else {
       const residues = chunks.join("").toUpperCase();
       const unit = options.unit ?? registry.defaultUnit(ref) ?? "aa";
+      const transcript = /^(?:refseq:[NX][MR]_|ensembl:ENS[A-Z]*T\d)/.test(ref);
       const record: SequenceRecord = {
         ref: ownString(ref),
-        moltype: unit === "aa" ? "protein" : "DNA",
+        moltype: unit === "aa" ? "protein" : transcript ? "RNA" : "DNA",
         unit,
         length: residues.length,
         provenance: { ...provenance, record: ownString(ref) },

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
-import { ingestFastaFile, ingestGenBank, MemorySink, SqliteSink, TogoCoordStore, type IngestResult } from "@togocoord/ingest";
+import { ingestFastaFile, ingestGenBank, ingestManeSummary, MemorySink, SqliteSink, TogoCoordStore, type IngestResult } from "@togocoord/ingest";
 import { createApi, StoreSet } from "../src/index.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "togocoord-api-"));
@@ -27,7 +27,10 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
   before(async () => {
     const uniprot = new MemorySink();
     await ingestFastaFile(fixture("uniprot_P07203.fa"), uniprot);
+    const mane = new MemorySink();
+    await ingestManeSummary(fixture("MANE.GRCh38.v1.5.summary_GPX1_RYBP.txt"), mane);
     const stores = new StoreSet()
+      .add(store("mane", mane.result))
       .add(store("gpx1", ingestGenBank(readFileSync(fixture("NM_000581.4.gb"), "utf8"))))
       .add(store("uniprot", uniprot.result))
       .add(store("mt", ingestGenBank(readFileSync(fixture("NC_012920.1.gb"), "utf8"))));
@@ -116,6 +119,49 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     const inner = await get(`/v1/annotations?loc=${encodeURIComponent("refseq:NC_012920.1:10000")}`);
     assert.ok(!inner.body.annotations.some((a: { type: string }) => a.type === "D-loop"));
     assert.ok(inner.body.annotations.some((a: { type: string; location: string }) => a.type === "tRNA" && a.location === "refseq:NC_012920.1:9991..10058"));
+  });
+
+  it("expands namespace:accession to the whole sequence and reports the explicit range", async () => {
+    const { body } = await get(`/v1/convert?loc=${encodeURIComponent("uniprot:P07203")}&to=transcript`);
+    assert.equal(body.input, "uniprot:P07203:1..203");
+    assert.deepEqual(body.results.map((r: { location: string }) => r.location), ["refseq:NM_000581.4:76..684"]);
+    const loc = await get(`/v1/location?loc=${encodeURIComponent("refseq:NC_012920.1")}`);
+    assert.equal(loc.body.id, "refseq:NC_012920.1:1..16569");
+    assert.equal((await get("/v1/convert?loc=refseq:NC_012920.1:16560..16570")).status, 400); // beyond the recorded length
+  });
+
+  it("resolves a sequence IRI (no location) to the sequence, not to a range", async () => {
+    const json = await get("/refseq:NC_012920.1");
+    assert.deepEqual([json.status, json.location], [303, "/v1/sequences/refseq%3ANC_012920.1"]);
+    const html = await get("/refseq:NC_012920.1", "text/html");
+    assert.equal(html.location, "/?loc=refseq%3ANC_012920.1");
+  });
+
+  it("limits the input length and the number of results", async () => {
+    const stores = new StoreSet().add(new TogoCoordStore(join(dir, "mt.sqlite")));
+    const server = createApi(stores, { maxInputLength: 1000, maxResults: 1 });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      const whole = await fetch(`${url}/v1/convert?loc=refseq:NC_012920.1`);
+      assert.equal(whole.status, 413);
+      assert.match((await whole.json()).error, /16569 bases\/residues; at most 1000/);
+      const two = await (await fetch(`${url}/v1/convert?loc=${encodeURIComponent("refseq:NC_012920.1:8528")}`)).json();
+      assert.deepEqual([two.results.length, two.truncated], [1, true]);
+    } finally {
+      server.close();
+      stores.close();
+    }
+  });
+
+  it("reports tags and filters by tag", async () => {
+    const all = await get(`/v1/convert?loc=${encodeURIComponent("uniprot:P07203:49")}&to=protein`);
+    const np = all.body.results.find((r: { sequence: string }) => r.sequence === "refseq:NP_000572.2");
+    assert.deepEqual(np.tags, ["MANE Select"]);
+    const tagged = await get(`/v1/convert?loc=${encodeURIComponent("refseq:NM_000581.4:220..222")}&to=protein&tag=${encodeURIComponent("MANE Select")}`);
+    assert.deepEqual(tagged.body.results.map((r: { location: string }) => r.location), ["refseq:NP_000572.2:49"]);
+    const seq = await get("/v1/sequences/refseq%3ANM_000581.4");
+    assert.deepEqual([seq.body.length, seq.body.gene, seq.body.tags], [899, "GPX1", ["MANE Select"]]);
   });
 
   it("serves the web UI", async () => {

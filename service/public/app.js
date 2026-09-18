@@ -7,6 +7,7 @@ const EXAMPLES = [
   ["structure residue", "pdb:2F8A.A:59"],
   ["Ensembl protein range", "ensembl:ENSP00000407375.1:40..60"],
   ["RefSeq protein", "refseq:NP_036366.3:20"],
+  ["whole protein", "refseq:NP_000572.2"],
   ["overlapping genes (mtDNA)", "refseq:NC_012920.1:8527..8529"],
 ];
 
@@ -14,6 +15,7 @@ const form = $("#query");
 const locInput = $("#loc");
 const toSelect = $("#to");
 const codonBox = $("#codon");
+const maneBox = $("#mane");
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -140,6 +142,7 @@ function renderResult(r) {
     ...[el("div", { class: "id-row" },
       locationLink(r.location),
       el("span", { class: "badge" }, r.category),
+      ...(r.tags ?? []).map((t) => el("span", { class: "badge tag", title: "curated tag of the target sequence" }, t)),
       el("span", { class: "badge", title: "path cost" }, `cost ${r.cost}`),
       r.approximate ? el("span", { class: "badge warn", title: "the path uses an edge not verified against the sequences; positions may be shifted" }, "approximate") : null,
       r.orientation !== "forward" ? el("span", { class: "badge" }, r.orientation) : null,
@@ -159,12 +162,13 @@ async function run(loc, to, push = true) {
   toSelect.value = to ?? "";
   $("#error").hidden = true;
   if (!loc) return;
-  if (push) history.pushState(null, "", `?${qs({ loc, to, codon: codonBox.checked ? "" : "never" })}`);
   const codon = codonBox.checked ? "" : "never";
+  const tag = maneBox.checked ? "MANE Select" : "";
+  if (push) history.pushState(null, "", `?${qs({ loc, to, codon, tag })}`);
   try {
     const [info, conv] = await Promise.all([
       api(`/v1/location?${qs({ loc, codon })}`),
-      api(`/v1/convert?${qs({ loc, to, codon })}`),
+      api(`/v1/convert?${qs({ loc, to, codon, tag })}`),
     ]);
     $("#input-id").textContent = info.id;
     $("#input-kind").textContent = `${info.unit === "aa" ? "protein" : "nucleotide"}${info.kind === "order" ? " · order" : ""}`;
@@ -173,7 +177,9 @@ async function run(loc, to, push = true) {
     $(".extra", inputCard).hidden = true;
     $("#input").hidden = false;
     $("#results").replaceChildren(...conv.results.map(renderResult));
-    $("#count").textContent = conv.results.length ? `(${conv.results.length})` : "— none reachable";
+    $("#count").textContent = conv.results.length
+      ? `(${conv.results.length}${conv.truncated ? ", truncated — narrow the target or the input" : ""})`
+      : tag ? "— none with this tag" : "— none reachable";
     $("#output").hidden = false;
   } catch (err) {
     $("#input").hidden = true;
@@ -188,6 +194,7 @@ form.addEventListener("submit", (e) => {
 });
 toSelect.addEventListener("change", () => locInput.value && run(locInput.value, toSelect.value));
 codonBox.addEventListener("change", () => locInput.value && run(locInput.value, toSelect.value));
+maneBox.addEventListener("change", () => locInput.value && run(locInput.value, toSelect.value));
 $("#input .card").addEventListener("click", (e) => {
   const action = e.target.dataset?.action;
   if (action) toggleExtra($("#input .card"), action, $("#input-id").textContent);
@@ -200,6 +207,7 @@ $("#examples").append(
 function fromUrl(push = false) {
   const p = new URLSearchParams(location.search);
   codonBox.checked = p.get("codon") !== "never";
+  maneBox.checked = p.get("tag") === "MANE Select";
   if (p.get("loc")) run(p.get("loc"), p.get("to") ?? "", push);
 }
 window.addEventListener("popstate", () => fromUrl(false));

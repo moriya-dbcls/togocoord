@@ -68,7 +68,20 @@ export function splitLocationId(text: string): { namespace: string; accession: s
   return { namespace: s.slice(0, i), accession: s.slice(i + 1, j), locationText: s.slice(j + 1) };
 }
 
-export function parseLocationId(text: string, ctx: CoordContext): Location {
+export interface ParseOptions {
+  /**
+   * Accept `namespace:accession` without a location as the whole sequence (1..length), using ctx.lengthOf.
+   * Input shorthand only: formatting always writes the explicit range (spec-core §3.1).
+   */
+  wholeSequence?: boolean;
+}
+
+export function parseLocationId(text: string, ctx: CoordContext, options: ParseOptions = {}): Location {
+  if (options.wholeSequence) {
+    const s = text.replace(/\s+/g, "");
+    const i = s.indexOf(":");
+    if (i > 0 && s.indexOf(":", i + 1) < 0) return wholeSequence(s.slice(0, i), s.slice(i + 1), ctx);
+  }
   const { namespace, accession, locationText } = splitLocationId(text);
   const outer = ctx.registry.refKey(namespace, accession);
   const ast = parseLocationText(locationText);
@@ -80,6 +93,16 @@ export function parseLocationId(text: string, ctx: CoordContext): Location {
     }
   }
   return { outer, kind: state.order ? "order" : "join", segments };
+}
+
+function wholeSequence(namespace: string, accession: string, ctx: CoordContext): Location {
+  const outer = ctx.registry.refKey(namespace, accession);
+  const length = ctx.lengthOf(outer);
+  if (!length || length < 1) {
+    throw new LocationSemanticError(`the length of '${outer}' is unknown; give an explicit location (namespace:accession:location)`);
+  }
+  const units = ctx.unitOf(outer) === "aa" ? 3 : 1;
+  return { outer, kind: "join", segments: [{ ref: outer, start: 0, end: length * units, strand: 1 }] };
 }
 
 function build(

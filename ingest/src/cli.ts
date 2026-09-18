@@ -14,6 +14,7 @@ import { FaiSequenceSource } from "./fasta-index.ts";
 import { MemorySequenceSource, type SequenceSource } from "./sequence.ts";
 import { defaultFastaRef, ingestFastaFile } from "./adapter-fasta.ts";
 import { ingestSiftsFile } from "./adapter-sifts.ts";
+import { ingestManeSummary } from "./adapter-mane.ts";
 import { SqliteSink } from "./store.ts";
 import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 
@@ -93,6 +94,11 @@ for (const file of inputs) {
     ...(seqids && { seqidToRef: (seqid: string) => seqids!.get(seqid) ?? accessionRef(seqid, registry) }),
   };
   const name = file.replace(/\.gz$/, "");
+  if (/MANE.*summary\.txt$/i.test(name)) {
+    const s = await ingestManeSummary(file, sink, { file: basename(file), registry });
+    process.stderr.write(`${file}: ${s.genes} MANE genes, ${s.sequences} tagged sequences\n`);
+    continue;
+  }
   if (/(?:sifts|uniprot_segments).*\.tsv$/i.test(name)) {
     const accept = siftsKnownOnly ? (acc: string) => source.length(`uniprot:${acc}`) !== undefined : undefined;
     const s = await ingestSiftsFile(file, sink, { file: basename(file), registry, source, ...(accept && { accept }) });

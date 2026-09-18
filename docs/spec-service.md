@@ -10,6 +10,8 @@
 - ブロックは、すべての保存先から、R*Tree を使って**変換中の location に重なるものだけ**取り出す。edge は `<保存先の番号>:<edge の ID>` で識別する。
 - 保存先ごとのキャッシュ（参照キーと ID の対応、単位、edge）は、上限付きの LRU とする（既定では5万件）。SQLite のページキャッシュは既定で 8MB とし、それを超える読み込みは OS のファイルキャッシュに任せる。
 - 保存先には、スキーマのバージョン（`meta.schema`）が一致するものだけを開く。
+- 配列の情報は、保存先をまたいでまとめる。項目ごとに最初に見つかった値を採り、長さ0は「不明」として後の値で置き換え、タグは和集合にする。まとめた結果と同一配列の一覧は、上限付きのキャッシュに置く。
+- コンテキストの配列長は、保存先の長さ（0は不明）を使う。そのため、配列長を超える入力は誤りになる。
 
 ## 2. 変換（`convert`）
 
@@ -21,6 +23,8 @@
 | `{ category }` | `genome` / `gene_region` / `transcript` / `protein` / `structure`（accession の規則と分子種から判定する。PDB の鎖は `structure`） |
 | `{ namespace }` | 名前空間（例: `uniprot`） |
 | 省略 | `maxHops`（既定1）以内にあるすべての配列 |
+
+`prefer`（タグの一覧。API の既定は `MANE Select` と `MANE Plus Clinical`）: 同じコストの経路のうち、タグの付いた配列を経由する経路を選ぶ（経由した、タグのない中間の配列の数を、コストの次の比較の鍵にする）。同じコストの結果は、タグの付いた変換先を先に並べる。コストの値そのものは変えない。例: GPX1 のゲノム上のコドンから PDB へは、UniProt と同一の Ensembl タンパク質が複数あるが、MANE Select の ENSP00000407375.1 を経由する経路が選ばれる。
 
 **探索**: 配列を節点、edge を辺とするコスト付きの最短経路探索（Dijkstra 法）を行う。
 - 状態は「配列と、その上の location」の組とする。展開では、location に重なるブロックを持つ edge だけをたどり、その edge のブロックでコアの `mapLocation` を行う。
@@ -141,7 +145,7 @@
 
 | メソッド | パス | 内容 |
 |---|---|---|
-| GET | `/v1/convert?loc=&to=&maxHops=&codon=never` | 変換。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す |
+| GET | `/v1/convert?loc=&to=&maxHops=&codon=never&tag=` | 変換。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す。`tag`（例: `MANE Select`）を指定すると、そのタグを持つ変換先だけを返す。結果には、変換先のタグ（`tags`）が付く |
 | POST | `/v1/convert` | 一括変換。`{"locations": [...], "to": ..., "maxHops": ..., "codon": ...}`。最大1000件。個々の入力の誤りは、その要素に `error` として返す |
 | GET | `/v1/location?loc=` | 正規形の ID、IRI、セグメント（1始まり。タンパク質は残基番号とコドン内の位置） |
 | GET | `/v1/location/faldo?loc=` | FALDO JSON-LD（`application/ld+json`） |
@@ -151,6 +155,10 @@
 | GET | `/v1/meta` | 保存先の一覧とメタデータ |
 | GET | `/<namespace>:<accession>:<location>` | IRI の解決（identifiers.org 風）。`Accept` に応じて、ブラウザには Web UI（`/?loc=`）への 303、JSON-LD の要求には FALDO JSON-LD、JSON の要求には `/v1/location` への 303 を返す |
 | GET | `/`、`/ui/*` | Web UI（§6.1） |
+
+- `loc` は `namespace:accession` だけでもよく、配列全体（`1..長さ`）として扱う。応答の `input` には、明示した範囲を返す。
+- 上限: 入力の区間長は合計500万塩基（または残基）まで（超えると413）。結果は1件の変換につき1000件まで（超えると `truncated: true`）。
+- location のない IRI（`/refseq:NC_000001.11`）は、範囲ではなく配列そのものを表す。JSON の要求には `/v1/sequences/{ref}` への 303 を、ブラウザには UI への 303 を返す。
 
 誤りは `{"error": ..., "position"?: ...}` で返す（400: 構文や意味の誤り、404、405、413）。
 
@@ -164,6 +172,7 @@
 - 結果の ID をクリックすると、その位置から「直接つながる配列」を調べ直す（コンセプト版の、変換を続けていく操作に相当）。
 - アノテーションは、配列全体を覆う feature（chromosome、region など）を除き、狭い範囲のものから順に並べる。
 - 入力の誤りは、該当する文字の位置に `^` を付けて示す。
+- 変換先のタグ（MANE Select など）を印で示し、「MANE Select only」で絞り込める。
 - ヒト全体の保存先（RefSeq、RefSeq RNA、Ensembl、UniProt、SIFTS）で、Chrome を使って表示と操作を確認した。
 
 ## 7. FALDO JSON-LD

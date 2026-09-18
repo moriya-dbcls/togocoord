@@ -20,7 +20,7 @@
       <form id="query">
         <label for="loc" class="visually-hidden">Location ID</label>
         <input id="loc" name="loc" type="text" autocomplete="off" spellcheck="false"
-               placeholder="namespace:accession:location, e.g. uniprot:P07203:49" />
+               placeholder="namespace:accession[:location], e.g. uniprot:P07203:49 or uniprot:P07203 (whole)" />
         <label for="to" class="visually-hidden">Convert to</label>
         <select id="to" name="to">
           <option value="">directly connected</option>
@@ -32,6 +32,7 @@
         </select>
         <button type="submit">Convert</button>
         <label class="option"><input id="codon" type="checkbox" checked /> codon positions</label>
+        <label class="option"><input id="mane" type="checkbox" /> MANE Select only</label>
       </form>
       <div id="examples" aria-label="Examples"></div>
 

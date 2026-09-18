@@ -24,7 +24,15 @@ export interface ApiOptions {
   base?: string;
   /** Maximum number of locations in one POST /v1/convert (default 1000). */
   maxBatch?: number;
+  /** Maximum total length of an input location, in bases or residues (default 5,000,000). */
+  maxInputLength?: number;
+  /** Maximum number of results per conversion (default 1000); `truncated` reports a cut. */
+  maxResults?: number;
+  /** Tags of preferred sequences for equal-cost choices (default: MANE Select, MANE Plus Clinical). */
+  prefer?: string[];
 }
+
+export const DEFAULT_PREFER = ["MANE Select", "MANE Plus Clinical"];
 
 /** Web UI files (service/public), served at `/` and `/ui/<file>`. */
 const UI_FILES: Record<string, { type: string; path: URL }> = {
@@ -46,12 +54,16 @@ class HttpError extends Error {
 export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
   const base = options.base ?? DEFAULT_BASE;
   const maxBatch = options.maxBatch ?? 1000;
+  const maxInputLength = options.maxInputLength ?? 5_000_000;
+  const maxResults = options.maxResults ?? 1000;
+  const prefer = options.prefer ?? DEFAULT_PREFER;
   const ctx = stores.context();
 
+  /** Location IDs; `namespace:accession` alone means the whole sequence (1..length). */
   const parse = (text: string | null | undefined): Location => {
     if (!text) throw new HttpError(400, "missing parameter 'loc'");
     try {
-      return parseLocationId(text, ctx);
+      return parseLocationId(text, ctx, { wholeSequence: true });
     } catch (e) {
       if (e instanceof LocationSyntaxError) throw new HttpError(400, e.message, { position: e.position });
       if (e instanceof LocationSemanticError) throw new HttpError(400, e.message);
@@ -69,11 +81,21 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     });
   };
 
-  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode) => {
+  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode, tags: string[] = []) => {
     const loc = parse(text);
+    const length = loc.segments.reduce((n, s) => n + (s.end - s.start) / (ctx.unitOf(s.ref) === "aa" ? 3 : 1), 0);
+    if (length > maxInputLength) {
+      throw new HttpError(413, `input location spans ${length} bases/residues; at most ${maxInputLength} are converted per request`);
+    }
     const t = targets(to);
-    const results = convert(stores, loc, { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }) }, ctx);
-    return { input: formatLocationId(loc, ctx, codon), results: results.map((r) => conversionJson(r, ctx, base, codon)) };
+    const found = convert(stores, loc, { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && { maxResults: maxResults + 1 }) }, ctx);
+    // `tag` keeps only targets carrying one of the tags (e.g. tag=MANE Select).
+    const results = tags.length ? found.filter((r) => r.tags.some((x) => tags.includes(x))) : found;
+    return {
+      input: formatLocationId(loc, ctx, codon),
+      results: results.slice(0, maxResults).map((r) => conversionJson(r, ctx, base, codon)),
+      ...(results.length > maxResults && { truncated: true }),
+    };
   };
 
   const routes: Array<[string, RegExp, (m: RegExpMatchArray, q: URLSearchParams, body: unknown, req: IncomingMessage) => unknown]> = [
@@ -81,13 +103,13 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     [
       "GET",
       /^\/v1\/convert$/,
-      (_m, q) => convertOne(q.get("loc") ?? "", q.getAll("to"), intParam(q, "maxHops"), codonParam(q)),
+      (_m, q) => convertOne(q.get("loc") ?? "", q.getAll("to"), intParam(q, "maxHops"), codonParam(q), q.getAll("tag")),
     ],
     [
       "POST",
       /^\/v1\/convert$/,
       (_m, q, body) => {
-        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown };
+        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown; tag?: unknown };
         if (!Array.isArray(b.locations) || !b.locations.every((x) => typeof x === "string")) {
           throw new HttpError(400, "body must be {\"locations\": [\"<Location ID>\", ...], \"to\"?: string | string[]}");
         }
@@ -98,7 +120,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         return {
           results: (b.locations as string[]).map((text) => {
             try {
-              return convertOne(text, to, hops, codon);
+              return convertOne(text, to, hops, codon, b.tag === undefined ? [] : [b.tag].flat().map(String));
             } catch (e) {
               if (e instanceof HttpError) return { input: text, error: e.message, ...e.extra };
               throw e;
@@ -188,6 +210,20 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         if (!file) throw new HttpError(404, `no such UI file ${url.pathname}`);
         res.writeHead(200, { "Content-Type": file.type, "Cache-Control": "no-cache" });
         return void res.end(readFileSync(file.path));
+      }
+      // identifiers.org-style IRI of a sequence (no location): the sequence itself, not a range on it.
+      if (req.method === "GET" && /^\/[A-Za-z][\w.-]*:[^/:]+$/.test(url.pathname)) {
+        const text = decodeLocationId(url.pathname.slice(1));
+        const accept = req.headers.accept ?? "";
+        let ref: string;
+        try {
+          const i = text.indexOf(":");
+          ref = ctx.registry.refKey(text.slice(0, i), text.slice(i + 1));
+        } catch (e) {
+          throw new HttpError(400, (e as Error).message);
+        }
+        res.setHeader("Location", accept.includes("text/html") ? `/?loc=${encodeURIComponent(ref)}` : `/v1/sequences/${encodeURIComponent(ref)}`);
+        return send(res, 303, undefined);
       }
       // identifiers.org-style resolution: /<namespace>:<accession>:<location>
       if (req.method === "GET" && /^\/[A-Za-z][\w.-]*:[^/]+:/.test(url.pathname)) {
@@ -285,6 +321,7 @@ function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: C
     iri: locationIri(r.location, ctx, base),
     sequence: r.location.outer,
     category: r.category,
+    ...(r.tags.length && { tags: r.tags }),
     cost: r.cost,
     approximate: r.approximate,
     orientation: r.orientation,

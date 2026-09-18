@@ -2,7 +2,7 @@
 import { Mapping, type Block, type Unit } from "@togocoord/core";
 
 export interface Provenance {
-  adapter: "gbff" | "gff3" | "fasta" | "sifts";
+  adapter: "gbff" | "gff3" | "fasta" | "sifts" | "mane";
   /** Source file or stream label. */
   file?: string;
   /** Record accession.version (GBFF) or seqid (GFF3). */
@@ -32,6 +32,10 @@ export interface SequenceRecord {
   digest?: string;
   /** Lower-case hex MD5 of the upper-case residues (as used by UniParc and refget v1), for joining external data. */
   md5?: string;
+  /** Curated labels, e.g. "MANE Select"; merged (union) across records and stores. */
+  tags?: string[];
+  /** Gene symbol, for display. */
+  gene?: string;
   provenance: Provenance;
 }
 

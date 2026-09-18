@@ -12,6 +12,7 @@ export {
   type ContextOptions,
   type CoordContext,
   type Location,
+  type ParseOptions,
   type Segment,
 } from "./location.ts";
 export {

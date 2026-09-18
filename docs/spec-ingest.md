@@ -155,3 +155,9 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 - 同じ（UniProt, 鎖）の連続する行を1つの edge にまとめる。UniProt 側と SEQRES 側で長さが違う行は、1対1にできないので読み飛ばす（ヒトで867行、0.06%）。
 - 自己検証: UniProt と `pdb_seqres.txt` の配列で、一致する残基の数を数える。5割未満なら mismatch（人工的な変異は多くても数残基なので、座標のずれだけを検出する）。ヒトでは24万 edge のうち、mismatch は137件（いずれも短い区間）。
 - CLI: ファイル名に `sifts` か `uniprot_segments` を含む `.tsv(.gz)` を、このアダプタで取り込む。`--sifts-known-only` を付けると、`--fasta` で与えた UniProt 配列にある accession の行だけを取り込む。
+
+## 11. 配列のタグと MANE（v0.4）
+
+- SequenceRecord に `tags`（文字列の一覧。例: `MANE Select`）と `gene`（遺伝子名）を追加した。保存先のスキーマはバージョン4。同じ保存先の中では、空の項目だけを後のレコードで埋める。保存先をまたぐとタグは和集合にする（spec-service §1）。
+- MANE アダプタ（`ingestManeSummary`）: NCBI の `MANE.GRCh38.*.summary.txt(.gz)` を読み、各遺伝子の RefSeq の NM・NP と、Ensembl の ENST・ENSP に、`MANE Select` または `MANE Plus Clinical` のタグと遺伝子名を付けた SequenceRecord を出力する。長さは0（不明）とし、ほかの保存先の値を使う。CLI は、ファイル名が `MANE…summary.txt` のものをこのアダプタで取り込む。
+- MANE の RNA 配列（`refseq_rna.fna`、`ensembl_rna.fna`）を FASTA アダプタで取り込むと、ダイジェストの一致によって、MANE の NM と ENST を同一配列として行き来できるようになる（例: NM_000581.4 と ENST00000419783.3 は899塩基が完全に一致する）。FASTA アダプタは、転写産物の accession（NM・NR・XM・XR、ENST）の分子種を RNA とする。

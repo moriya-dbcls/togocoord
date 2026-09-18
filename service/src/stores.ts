@@ -35,9 +35,16 @@ export class StoreSet {
     return undefined;
   }
 
-  /** Units from the stores, then namespace defaults. */
+  /** Units and lengths from the stores (a recorded length of 0 means unknown), then namespace defaults. */
   context(): CoordContext {
-    return createContext({ registry: this.registry, units: (ref) => this.unitOf(ref) });
+    return createContext({
+      registry: this.registry,
+      units: (ref) => this.unitOf(ref),
+      lengths: (ref) => {
+        const n = this.sequence(ref)?.length;
+        return n && n > 0 ? n : undefined;
+      },
+    });
   }
 
   /**
@@ -51,10 +58,24 @@ export class StoreSet {
     for (const s of this.stores) {
       const r = s.sequence(ref);
       if (!r) continue;
-      merged = { ...r, ...merged };
+      if (!merged) {
+        merged = { ...r };
+        continue;
+      }
+      // First known value per field; a length of 0 means unknown (e.g. MANE records); tags are united.
+      const m = merged as Record<string, unknown>;
+      for (const [k, v] of Object.entries(r)) {
+        if (k === "tags") continue;
+        if (m[k] === undefined || m[k] === null || (k === "length" && m[k] === 0)) m[k] = v;
+      }
+      if (r.tags?.length) merged.tags = [...new Set([...(merged.tags ?? []), ...r.tags])];
     }
     this.#sequences.set(ref, merged ?? null);
     return merged;
+  }
+
+  tags(ref: string): string[] {
+    return this.sequence(ref)?.tags ?? [];
   }
 
   category(ref: string): Category {

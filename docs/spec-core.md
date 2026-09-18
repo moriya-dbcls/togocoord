@@ -33,6 +33,7 @@
 - 最初の `:` までが namespace、次の `:` までが accession、残りが location。accession に `:` は含まれない。
 - 配列の内部キーは `<namespace>:<accession>`（例: `refseq:NC_045512.2`、`pdb:4HHB.A`）とする。
 - 空白は、パースの前にすべて取り除く。
+- **配列全体の省略形**（v0.1.3）: `parseLocationId(text, ctx, { wholeSequence: true })` は、location を省いた `namespace:accession` を、`ctx.lengthOf` で得た長さを使って `1..L` として読む。入力の省略形としてだけ認めるもので、出力は常に明示した範囲（例: `uniprot:P07203:1..203`）にする。バージョンなしで扱う配列（UniProt など）は、更新で長さが変わりうるため、そのときの長さを明示して返すほうが再現性を保てる。長さが分からなければ誤りとする。
 
 ### 3.2 location の文法
 

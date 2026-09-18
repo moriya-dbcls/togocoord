@@ -19,7 +19,7 @@ import {
   type Edge,
   type IngestResult,
 } from "@togocoord/ingest";
-import { ingestFastaFile, MemorySink } from "@togocoord/ingest";
+import { ingestFastaFile, ingestManeSummary, MemorySink } from "@togocoord/ingest";
 import { fileURLToPath } from "node:url";
 import { categoryOf, convert, StoreSet } from "../src/index.ts";
 
@@ -209,12 +209,15 @@ describe("genome -> PDB structure: Ensembl CDS, identical UniProt protein, SIFTS
   const seqids = assemblyReportSeqids(await read("GRCh38.p14_assembly_report_chr3.txt"));
   const uniprot = new MemorySink();
   await ingestFastaFile(fileURLToPath(fixture("uniprot_P07203.fa")), uniprot);
+  const mane = new MemorySink();
+  await ingestManeSummary(fileURLToPath(fixture("MANE.GRCh38.v1.5.summary_GPX1_RYBP.txt")), mane);
   const sifts = new MemorySink();
   await ingestSiftsFile(fileURLToPath(fixture("sifts_P07203.tsv")), sifts, { source: residues });
   const stores = new StoreSet()
     .add(store("ensembl_gpx1", ingestGff3(await read("ensembl_GRCh38.116_GPX1.gff3"), { source: residues, seqidToRef: (id) => seqids.get(id) })))
     .add(store("uniprot_gpx1", uniprot.result))
-    .add(store("sifts_gpx1", sifts.result));
+    .add(store("sifts_gpx1", sifts.result))
+    .add(store("mane_gpx1", mane.result));
   const ctx = stores.context();
 
   it("maps the selenocysteine codon to residue 59 of both 2F8A chains (the U49G mutant)", () => {
@@ -233,6 +236,10 @@ describe("genome -> PDB structure: Ensembl CDS, identical UniProt protein, SIFTS
     // Several Ensembl proteins of GPX1 are identical to P07203; any of them gives the same, exact path.
     assert.match(path[0]!.from, /^ensembl:ENSP\d{11}\.\d+$/);
     assert.ok(stores.identical("uniprot:P07203").includes(path[0]!.from));
+    // Preferring MANE picks the MANE Select protein among them, at the same cost.
+    const [mane] = convert(stores, codon!.location, { to: { ref: "pdb:2F8A.A" }, prefer: ["MANE Select"] }, ctx);
+    assert.equal(mane!.path[0]!.from, "ensembl:ENSP00000407375.1");
+    assert.equal(mane!.cost, hits[0]!.cost);
     assert.deepEqual([hits[0]!.cost, hits[0]!.approximate], [2, false]);
   });
 
@@ -245,6 +252,13 @@ describe("genome -> PDB structure: Ensembl CDS, identical UniProt protein, SIFTS
     assert.deepEqual(hits.map((h) => h.id), ["refseq:NC_000003.12:complement(49358132..49358134)"]);
     assert.ok(visited.length > 0 && visited.every((r) => !r.startsWith("pdb:")), visited.join(" "));
     assert.deepEqual(convert(stores, parseLocationId("uniprot:P07203:49", ctx), { to: { category: "structure" } }, ctx).map((h) => h.id).sort(), ["pdb:2F8A.A:59", "pdb:2F8A.B:59"]);
+  });
+
+  it("lists the MANE Select protein first among equal-cost results and reports its tags", () => {
+    const proteins = convert(stores, parseLocationId("refseq:NC_000003.12:complement(49358132..49358134)", ctx), { to: { category: "protein" }, prefer: ["MANE Select"] }, ctx);
+    assert.equal(proteins[0]!.location.outer, "ensembl:ENSP00000407375.1");
+    assert.deepEqual(proteins[0]!.tags, ["MANE Select"]);
+    assert.ok(proteins.length > 5 && proteins.slice(1).every((p) => p.tags.length === 0 || p.location.outer === "uniprot:P07203"));
   });
 
   it("maps a single base inside a codon to a codon position on the structure", () => {
@@ -273,6 +287,29 @@ describe("layer rules (spec-service §2.1)", () => {
     const ids = (to: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(`${A}:2`, ctx), to, ctx).map((r) => r.id);
     assert.deepEqual(ids({ to: { category: "protein" } }), [`${B}:2`]); // A -> G1 -> B: one U-turn
     assert.deepEqual(ids({ to: { category: "genome" } }), [`${G1}:104..106`]); // A -> G1 -> B -> G2 would turn twice
+  });
+});
+
+describe("MANE transcripts: RefSeq NM and Ensembl ENST are identical sequences (GPX1, real data)", async () => {
+  const mane = new MemorySink();
+  await ingestManeSummary(fileURLToPath(fixture("MANE.GRCh38.v1.5.summary_GPX1_RYBP.txt")), mane);
+  const rna = new MemorySink();
+  await ingestFastaFile(fileURLToPath(fixture("MANE_ensembl_rna_ENST00000419783.3.fa")), rna);
+  await ingestFastaFile(fileURLToPath(fixture("NM_000581.4.fa")), rna);
+  const stores = new StoreSet()
+    .add(store("gpx1_mane", mane.result))
+    .add(store("gpx1_mane_rna", rna.result))
+    .add(store("gpx1_nm", ingestGenBank(await read("NM_000581.4.gb"))));
+  const ctx = stores.context();
+
+  it("tags both pairs, keeps the real lengths and converts NM <-> ENST by identity", () => {
+    assert.deepEqual(stores.sequence("ensembl:ENST00000419783.3")?.tags, ["MANE Select"]);
+    assert.equal(stores.sequence("refseq:NM_000581.4")?.length, 899); // MANE's unknown length (0) does not win
+    assert.equal(stores.sequence("refseq:NM_000581.4")?.gene, "GPX1");
+    const [hit] = convert(stores, parseLocationId("refseq:NP_000572.2:49", ctx), { to: { ref: "ensembl:ENST00000419783.3" } }, ctx);
+    assert.equal(hit!.id, "ensembl:ENST00000419783.3:220..222");
+    assert.deepEqual(hit!.path.map((s) => s.kind), ["annotation", "identity"]);
+    assert.deepEqual(hit!.tags, ["MANE Select"]);
   });
 });
 

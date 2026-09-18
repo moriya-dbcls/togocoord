@@ -13,6 +13,11 @@ export interface ConvertOptions {
   maxHops?: number;
   /** Stop after this many results (default: unlimited). */
   maxResults?: number;
+  /**
+   * Tags of preferred sequences (e.g. "MANE Select"). Among paths of equal cost, those through preferred
+   * intermediate sequences win; among results of equal cost, preferred targets come first. Costs are unchanged.
+   */
+  prefer?: string[];
 }
 
 export interface Step {
@@ -41,6 +46,8 @@ export interface Conversion {
   /** Canonical Location ID of `location`. */
   id: string;
   category: Category;
+  /** Tags of the target sequence (e.g. "MANE Select"). */
+  tags: string[];
   cost: number;
   /**
    * The path uses an edge that failed self-validation or that NCBI flags with /exception without full verification:
@@ -84,6 +91,8 @@ interface State {
   trend: -1 | 0 | 1;
   /** Direction changes so far (at most one U-turn is allowed). */
   turns: number;
+  /** Intermediate sequences without a preferred tag (secondary key after cost). */
+  detours: number;
   /** Insertion order, for deterministic tie-breaking. */
   seq: number;
 }
@@ -106,9 +115,12 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
   const cap = depthCap(stores, input.outer, targets, layerOf);
   // A sequence may be worth reaching in several layer states (trend, turns); keep the cheapest per state.
   const key = (s: Pick<State, "location" | "trend" | "turns">) => `${s.location.outer}|${s.trend}|${s.turns}`;
-  const start: State = { location: input, cost: 0, path: [], orientation: "forward", trend: 0, turns: 0, seq: 0 };
-  const best = new Map<string, number>([[key(start), 0]]);
-  const queue = new MinHeap<State>((a, b) => a.cost - b.cost || a.seq - b.seq);
+  const prefer = new Set(options.prefer ?? []);
+  const preferred = (ref: string) => prefer.size > 0 && stores.tags(ref).some((t) => prefer.has(t));
+  const start: State = { location: input, cost: 0, path: [], orientation: "forward", trend: 0, turns: 0, detours: 0, seq: 0 };
+  const best = new Map<string, [number, number]>([[key(start), [0, 0]]]);
+  const better = (s: State, b: [number, number] | undefined) => !b || s.cost < b[0] || (s.cost === b[0] && s.detours < b[1]);
+  const queue = new MinHeap<State>((a, b) => a.cost - b.cost || a.detours - b.detours || a.seq - b.seq);
   let seq = 1;
   queue.push(start);
   const results: Conversion[] = [];
@@ -117,7 +129,8 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
   while (queue.size) {
     const state = queue.pop()!;
     const ref = state.location.outer;
-    if (state.cost > (best.get(key(state)) ?? Infinity)) continue;
+    const recorded = best.get(key(state));
+    if (recorded && (state.cost > recorded[0] || (state.cost === recorded[0] && state.detours > recorded[1]))) continue;
     if (state.path.length > 0 && matches(ref)) {
       if (reached.has(ref)) continue; // already returned through a cheaper state
       reached.add(ref);
@@ -125,6 +138,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         location: state.location,
         id: formatLocationId(state.location, ctx),
         category: stores.category(ref),
+        tags: stores.tags(ref),
         cost: state.cost,
         approximate: state.path.some(isApproximate),
         orientation: state.orientation,
@@ -147,14 +161,18 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         trend = dir as -1 | 1;
       }
       if (turns > MAX_TURNS) continue; // rule 2
-      const candidate = { ...next, trend, turns, seq: seq++ };
+      // The sequence being left becomes an intermediate node of the path (the source is not counted).
+      const detours = state.detours + (state.path.length > 0 && prefer.size > 0 && !preferred(ref) ? 1 : 0);
+      const candidate = { ...next, trend, turns, detours, seq: seq++ };
       const k = key(candidate);
-      if (candidate.cost < (best.get(k) ?? Infinity)) {
-        best.set(k, candidate.cost);
+      if (better(candidate, best.get(k))) {
+        best.set(k, [candidate.cost, candidate.detours]);
         queue.push(candidate);
       }
     }
   }
+  // Equal-cost results: preferred targets first (stable otherwise).
+  if (prefer.size > 0) results.sort((a, b) => a.cost - b.cost || Number(preferred(b.location.outer)) - Number(preferred(a.location.outer)));
   return results;
 }
 
@@ -222,7 +240,7 @@ function expand(
   state: State,
   ctx: CoordContext,
   allowed: (ref: string) => boolean = () => true,
-): Array<Omit<State, "seq" | "trend" | "turns">> {
+): Array<Omit<State, "seq" | "trend" | "turns" | "detours">> {
   const loc = state.location;
   const byEdge = new Map<string, SetBlock[]>();
   for (const seg of loc.segments) {
@@ -235,7 +253,7 @@ function expand(
       } else byEdge.set(blk.key, [blk]);
     }
   }
-  const out: Array<Omit<State, "seq" | "trend" | "turns">> = [];
+  const out: Array<Omit<State, "seq" | "trend" | "turns" | "detours">> = [];
   const inputId = formatLocationId(loc, ctx);
 
   // Identity: the same coordinates on every sequence with identical residues.

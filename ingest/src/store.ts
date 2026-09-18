@@ -16,13 +16,13 @@ import { ownString } from "./common.ts";
 import { Lru } from "./lru.ts";
 import type { Annotation, Edge, Provenance, SequenceRecord, Sink, Validation } from "./model.ts";
 
-export const STORE_SCHEMA_VERSION = "3";
+export const STORE_SCHEMA_VERSION = "4";
 
 const SCHEMA = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE sequence(
   id INTEGER PRIMARY KEY, ref TEXT UNIQUE NOT NULL, moltype TEXT, unit TEXT, length INTEGER,
-  topology TEXT, taxon INTEGER, organism TEXT, digest TEXT, md5 TEXT, provenance TEXT);
+  topology TEXT, taxon INTEGER, organism TEXT, digest TEXT, md5 TEXT, tags TEXT, gene TEXT, provenance TEXT);
 CREATE TABLE edge(
   id INTEGER PRIMARY KEY, kind TEXT NOT NULL, from_seq INTEGER NOT NULL, to_seq INTEGER NOT NULL,
   location TEXT, attributes TEXT, provenance TEXT, status TEXT, detail TEXT, basis TEXT);
@@ -83,7 +83,8 @@ export class SqliteSink implements Sink {
       fillSeq: this.#db.prepare(
         // Later records fill only missing fields (e.g. a FASTA record adds the checksums of a protein first seen in a GFF3).
         "UPDATE sequence SET moltype=COALESCE(moltype,?), unit=COALESCE(unit,?), length=COALESCE(length,?), topology=COALESCE(topology,?), " +
-          "taxon=COALESCE(taxon,?), organism=COALESCE(organism,?), digest=COALESCE(digest,?), md5=COALESCE(md5,?), provenance=COALESCE(provenance,?) WHERE id=?",
+          "taxon=COALESCE(taxon,?), organism=COALESCE(organism,?), digest=COALESCE(digest,?), md5=COALESCE(md5,?), " +
+          "tags=COALESCE(tags,?), gene=COALESCE(gene,?), provenance=COALESCE(provenance,?) WHERE id=?",
       ),
       edge: this.#db.prepare(
         "INSERT INTO edge(kind, from_seq, to_seq, location, attributes, provenance, status, detail, basis) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
@@ -116,6 +117,7 @@ export class SqliteSink implements Sink {
     this.counts.sequence++;
     this.#s.fillSeq.run(
       r.moltype, r.unit, r.length, r.topology ?? null, r.taxon ?? null, r.organism ?? null, r.digest ?? null, r.md5 ?? null,
+      r.tags?.length ? JSON.stringify(r.tags) : null, r.gene ?? null,
       JSON.stringify(r.provenance), this.#seq(r.ref),
     );
     this.#tick();
@@ -266,9 +268,10 @@ export class TogoCoordStore {
     const row = this.#s.seq!.get(ref) as Record<string, unknown> | undefined;
     if (!row) return undefined;
     const out: Partial<SequenceRecord> & { ref: string } = { ref };
-    for (const k of ["moltype", "unit", "length", "topology", "taxon", "organism", "digest", "md5"] as const) {
+    for (const k of ["moltype", "unit", "length", "topology", "taxon", "organism", "digest", "md5", "gene"] as const) {
       if (row[k] !== null) (out as Record<string, unknown>)[k] = row[k];
     }
+    if (typeof row.tags === "string") out.tags = JSON.parse(row.tags);
     if (typeof row.provenance === "string") out.provenance = JSON.parse(row.provenance);
     return out;
   }

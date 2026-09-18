@@ -209,3 +209,16 @@ describe("cdsMapping with a leading partial codon (Ensembl X)", () => {
   });
 });
 
+describe("whole-sequence shorthand (namespace:accession)", () => {
+  const sized = testContext({ units: { "test:P": "aa" }, lengths: { "test:A": 120, "test:P": 40 } });
+  it("expands to 1..length when allowed and a length is known; formats explicitly", () => {
+    assert.equal(formatLocationId(parseLocationId("test:A", sized, { wholeSequence: true }), sized), "test:A:1..120");
+    assert.equal(formatLocationId(parseLocationId("test:P", sized, { wholeSequence: true }), sized), "test:P:1..40");
+  });
+  it("is rejected without the option or without a length", () => {
+    assert.throws(() => parseLocationId("test:A", sized), LocationSyntaxError);
+    assert.throws(() => parseLocationId("test:B", sized, { wholeSequence: true }), /length of 'test:B' is unknown/);
+    assert.equal(formatLocationId(parseLocationId("test:A:5", sized, { wholeSequence: true }), sized), "test:A:5");
+  });
+});
+
