@@ -134,7 +134,7 @@ export async function ingestChainFile(path: string, sink: Sink, options: ChainOp
       blocks,
       attributes: { chain: c.id, score: String(c.score), qStrand: c.qStrand },
       provenance: { ...provenance, record: `chain ${c.id}` },
-      validation: validateChain(blocks, options.source, sample, minIdentity, stats),
+      validation: validateAlignedBlocks(blocks, options.source, sample, minIdentity, stats),
     };
     sink.edge(edge);
     stats.chains++;
@@ -143,8 +143,17 @@ export async function ingestChainFile(path: string, sink: Sink, options: ChainOp
   return stats;
 }
 
-/** Identity over up to `sample` evenly spaced blocks: aligned orthologous DNA ~0.6-0.9, misplaced coordinates ~0.25. */
-function validateChain(blocks: Block[], source: SequenceSource | undefined, sample: number, minIdentity: number, stats: ChainStats): Edge["validation"] {
+/**
+ * Identity over up to `sample` evenly spaced blocks of a genome alignment (chain, PAF): aligned orthologous DNA
+ * ~0.6-0.9, the same genome ~1.0, misplaced coordinates ~0.25.
+ */
+export function validateAlignedBlocks(
+  blocks: Block[],
+  source: SequenceSource | undefined,
+  sample: number,
+  minIdentity: number,
+  stats: Pick<ChainStats, "sampledBases" | "identicalBases">,
+): Edge["validation"] {
   if (!source) return { status: "skipped", detail: "genome sequences not available" };
   const step = Math.max(1, Math.floor(blocks.length / sample));
   let same = 0;

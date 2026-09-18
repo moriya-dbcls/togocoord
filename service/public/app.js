@@ -13,6 +13,7 @@ const EXAMPLES = [
   { label: "hg19 → GRCh38 (BRAF V600E)", loc: "hg19:chr7:140453136", to: "genome", assembly: "GRCh38", needs: "GRCh37" },
   { label: "hg19 → protein", loc: "hg19:chr7:complement(140453135..140453137)", to: "protein", db: "refseq", needs: "GRCh37" },
   { label: "protein → hg19", loc: "uniprot:P15056:600", to: "genome", assembly: "GRCh37", needs: "GRCh37" },
+  { label: "Marchantia v3.1 → v7.1", loc: "insdc:KZ772678.1:1969300..1969400", to: "genome", assembly: "MpTak_v7.1", needs: "MpTak_v7.1" },
   { label: "human → mouse UniProt", loc: "uniprot:P07203:49", to: "protein", taxon: "10090", db: "uniprot" },
   { label: "mouse → human genome", loc: "refseq:NC_000075.7:106312500..106312550", to: "genome", taxon: "9606" },
 ];
@@ -367,14 +368,40 @@ function storeOrganism(s) {
   return t ? { name: t.organism ?? `taxon ${t.taxon}`, taxon: t.taxon } : { name: "Cross-species / structures", taxon: undefined };
 }
 
+/** Input files with their MD5 (recorded since v0.5), for reproduction. */
+function inputs(s) {
+  const md5 = (() => {
+    try {
+      return JSON.parse(s.inputs_md5 ?? "{}");
+    } catch {
+      return {};
+    }
+  })();
+  return (s.inputs ?? "").split(",").filter(Boolean).map((f) =>
+    el("div", {}, el("code", {}, f), md5[f] ? el("span", { class: "muted md5" }, ` md5 ${md5[f]}`) : null));
+}
+
+/** Sequence files used for validation (e.g. the genomes an alignment was computed from), with their MD5. */
+function sequenceFiles(s) {
+  let md5 = {};
+  try {
+    md5 = JSON.parse(s.sequences_md5 ?? "{}");
+  } catch {}
+  return Object.entries(md5).map(([f, h]) => el("div", {}, el("code", {}, f), el("span", { class: "muted md5" }, ` md5 ${h}`)));
+}
+
 async function showData() {
   $("#convert-view").hidden = true;
   $("#data").hidden = false;
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("current", a.dataset.view === "data"));
-  const { stores } = await api("/v1/meta");
+  const { stores, species = [] } = await api("/v1/meta");
+  // Subspecies and strains are grouped with their species (spec-service §2.2), under the species' name.
+  const speciesOf = new Map(species.flatMap((x) => [[x.taxon, x], ...(x.taxa ?? []).map((t) => [t, x])]));
   const groups = new Map();
   for (const s of stores) {
-    const o = storeOrganism(s);
+    let o = storeOrganism(s);
+    const sp = o.taxon !== undefined ? speciesOf.get(Number(o.taxon)) : undefined;
+    if (sp) o = { name: sp.organism ?? o.name, taxon: sp.taxon };
     const key = o.taxon !== undefined ? String(o.taxon) : o.name; // "Homo sapiens" and "Homo sapiens (human)" are one group
     if (!groups.has(key)) groups.set(key, { ...o, stores: [] });
     groups.get(key).stores.push(s);
@@ -389,11 +416,17 @@ async function showData() {
             el("div", { class: "label" }, s.label ?? s.file),
             el("dl", {},
               s.assembly ? [el("dt", {}, "assembly"), el("dd", {}, `${s.assembly}${s.accession ? ` (${s.accession})` : ""}`)] : null,
-              el("dt", {}, "inputs"), el("dd", {}, el("code", {}, (s.inputs ?? "").split(",").join(", "))),
+              // A subspecies or strain folded into its species: show what the store itself records.
+              s.taxon && speciesOf.get(Number(s.taxon))?.taxon !== Number(s.taxon)
+                ? [el("dt", {}, "taxon"), el("dd", {}, `${s.organism ?? ""} · taxon ${s.taxon}`)]
+                : null,
+              el("dt", {}, "inputs"), el("dd", {}, ...inputs(s)),
+              s.method ? [el("dt", {}, "method"), el("dd", {}, el("code", {}, s.method))] : null,
+              s.sequences_md5 ? [el("dt", {}, "sequence files"), el("dd", {}, ...sequenceFiles(s))] : null,
               el("dt", {}, "sequences"), el("dd", {}, counts(s.summary?.sequences)),
               el("dt", {}, "edges"), el("dd", {}, `${counts(s.summary?.edges)}${s.summary?.blocks ? ` (${fmt(s.summary.blocks)} blocks)` : ""}`),
               s.summary?.annotations ? [el("dt", {}, "annotations"), el("dd", {}, fmt(s.summary.annotations))] : null,
-              el("dt", {}, "built"), el("dd", {}, `${(s.created ?? "").slice(0, 10)} · ${s.file} · schema ${s.schema}`),
+              el("dt", {}, "built"), el("dd", {}, `${(s.created ?? "").slice(0, 10)} · ${s.file} · schema ${s.schema}${s.togocoord ? ` · TogoCoord ${s.togocoord}` : ""}`),
               s.summary?.examples?.length
                 ? [el("dt", {}, "try"), el("dd", {}, ...s.summary.examples.map((id) =>
                     el("button", { type: "button", class: "small", title: "convert this location", onclick: () => { showConvert(); run(id, ""); } }, id)))]

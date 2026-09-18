@@ -5,7 +5,8 @@
 // Without --db, writes JSON Lines to stdout ({"record":"sequence"|"edge"|"annotation"|"warning", ...}).
 // Large or indexed FASTA (--fasta) is read on demand through a .fai index (built next to the file when missing).
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync, existsSync } from "node:fs";
+import { createReadStream, readFileSync, statSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { NamespaceRegistry } from "@togocoord/core";
@@ -25,14 +26,16 @@ import { defaultFastaRef, ingestFastaFile } from "./adapter-fasta.ts";
 import { ingestSiftsFile } from "./adapter-sifts.ts";
 import { ingestManeSummary } from "./adapter-mane.ts";
 import { ingestChainFile } from "./adapter-chain.ts";
+import { ingestPafFile } from "./adapter-paf.ts";
 import { SqliteSink } from "./store.ts";
 import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 
 const USAGE =
   "usage: togocoord-ingest [--db OUT.sqlite [--overwrite]] [--fasta FILE]... [--seqid-map ASSEMBLY_REPORT] [--assembly-report FILE]\n" +
   "                        [--label TEXT] [--species-taxon N] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations]\n" +
-  "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain files)] FILE...\n" +
-  "FILE: .gbff/.gb/.gp, .gff3, .fa/.fna/.faa, SIFTS .tsv, MANE summary, UCSC .chain, NCBI *_assembly_report.txt (optionally .gz)\n";
+  "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain / .paf files)] [--method TEXT] FILE...\n" +
+  "FILE: .gbff/.gb/.gp, .gff3, .fa/.fna/.faa, SIFTS .tsv, MANE summary, UCSC .chain, PAF with cg:Z CIGAR, NCBI *_assembly_report.txt (optionally .gz)\n" +
+  "--method: how an input was made (e.g. the aligner, its version and arguments), recorded for reproduction\n";
 const args = process.argv.slice(2);
 if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
   process.stderr.write(USAGE);
@@ -61,6 +64,8 @@ let siftsKnownOnly = false;
 let seqids: Map<string, string> | undefined;
 /** Store metadata shown by the service (label, organism, assembly). */
 const meta: Record<string, string> = {};
+/** Sequence files given with --fasta (for validation; their MD5 is recorded, e.g. the genomes an alignment used). */
+const fastaFiles: string[] = [];
 /** Sequence names of the two assemblies of a liftOver chain file. */
 let fromNames: Map<string, string> | undefined;
 let toNames: Map<string, string> | undefined;
@@ -87,8 +92,11 @@ for (let i = 0; i < args.length; i++) {
     chainReports.push(text);
     if (a === "--from-report") fromNames = names;
     else toNames = names;
-  } else if (["--label", "--taxon", "--organism", "--assembly", "--species-taxon"].includes(a)) meta[a.slice(2).replace("-", "_")] = args[++i]!;
-  else if (a === "--fasta") sources.push(openFasta(args[++i]));
+  } else if (["--label", "--taxon", "--organism", "--assembly", "--species-taxon", "--method"].includes(a)) meta[a.slice(2).replace("-", "_")] = args[++i]!;
+  else if (a === "--fasta") {
+    fastaFiles.push(args[i + 1]!);
+    sources.push(openFasta(args[++i]));
+  }
   else if (a.startsWith("--")) {
     process.stderr.write(`unknown option ${a}\n${USAGE}`);
     process.exit(1);
@@ -160,6 +168,17 @@ for (const file of inputs) {
     process.stderr.write(`${file}: ${records.length} sequences of ${info.assembly ?? "the assembly"}\n`);
     continue;
   }
+  if (/\.paf$/i.test(name)) {
+    if (!fromNames || !toNames) throw new Error(`${file}: PAF files need --from-report (query assembly) and --to-report (target assembly)`);
+    for (const text of chainReports) for (const r of assemblyReportSequences(text, basename(file))) sink.sequence(r);
+    const s = await ingestPafFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => fromNames!.get(n), toRef: (n) => toNames!.get(n) });
+    const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(2) : "-";
+    process.stderr.write(
+      `${file}: ${s.records} records, ${s.alignments} alignments kept, ${s.blocks} blocks, ${s.skipped} skipped, ` +
+        `${s.overlapBases} source bases covered by better alignments; sampled identity ${identity}%\n`,
+    );
+    continue;
+  }
   if (/MANE.*summary\.txt$/i.test(name)) {
     const s = await ingestManeSummary(file, sink, { file: basename(file), registry });
     process.stderr.write(`${file}: ${s.genes} MANE genes, ${s.sequences} tagged sequences\n`);
@@ -184,7 +203,34 @@ for (const file of inputs) {
   if (!stats) throw new Error(`${file}: unknown format (expected .gb/.gbff/.gp/.gff3/.fa, optionally .gz)`);
   process.stderr.write(`${file}: ${stats.lines} lines, ${stats.features} features\n`);
 }
-if (sink instanceof SqliteSink) sink.close({ ...meta, inputs: inputs.map((f) => basename(f)).join(",") });
+/** Provenance for reproduction: MD5 of every input and the TogoCoord commit that built the store. */
+async function md5(file: string): Promise<string> {
+  const hash = createHash("md5");
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+function commit(): string | undefined {
+  try {
+    const dir = new URL("../..", import.meta.url).pathname; // the repository
+    const id = execFileSync("git", ["-C", dir, "rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+    const dirty = execFileSync("git", ["-C", dir, "status", "--porcelain", "--", "."], { encoding: "utf8" }).trim() !== "";
+    return `${id}${dirty ? "+local changes" : ""}`;
+  } catch {
+    return undefined;
+  }
+}
+if (sink instanceof SqliteSink) {
+  const checksums = Object.fromEntries(await Promise.all(inputs.map(async (f) => [basename(f), await md5(f)])));
+  const built = commit();
+  const sequences = Object.fromEntries(await Promise.all(fastaFiles.map(async (f) => [basename(f), await md5(f)])));
+  sink.close({
+    ...meta,
+    inputs: inputs.map((f) => basename(f)).join(","),
+    inputs_md5: JSON.stringify(checksums),
+    ...(fastaFiles.length && { sequences_md5: JSON.stringify(sequences) }),
+    ...(built && { togocoord: built }),
+  });
+}
 else sink.flush();
 
 const seconds = ((performance.now() - started) / 1000).toFixed(1);

@@ -199,3 +199,22 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 - `--species-taxon N`: 保存先の taxon が属する種を明示する（亜種や株の taxon を種にまとめる規則で決まらないとき）。
 
 **ヒト GRCh37 ↔ GRCh38（2026-09-18）**: `grch37.sqlite`（GRCh37.p13 の assembly report と genomic.fna）、`chain_hg19ToHg38.sqlite`、`chain_hg38ToHg19.sqlite`（UCSC の `hg19ToHg38.over.chain.gz`、`hg38ToHg19.over.chain.gz`）。ほかに、以前に作った `human.sqlite` には配列名の記録がないので、GRCh38 の配列名だけの保存先 `grch38_names.sqlite` を assembly report から作った（705配列）。
+
+## 16. PAF アダプタ（ゲノム全体のアライメント、T3、v0.5）
+
+- 入力: PAF（`*.paf(.gz)`）。minimap2 などのゲノム間アライメントの出力で、CIGAR（`cg:Z`。minimap2 の `-c`）が必須。query を変換元、target を変換先とする（`minimap2 -c 変換先.fa 変換元.fa`）。配列名の読み替えには chain と同じく `--from-report`（query のアセンブリ）と `--to-report`（target）を使い、両方のアセンブリの配列の記録も持つ。
+- CIGAR から、隣り合う一致をまとめたブロック列を作る（`=`、`X`、`M` は両方を、`I` は query を、`D`、`N` は target を進める）。`-` 鎖では、target を順方向に、query を逆向きにたどる。
+- **1対1に絞る**: PAF は、反復配列やパラログに対して複数の対応を出す。UCSC の liftOver chain と同じく、変換元（query）の各塩基には1つの対応だけを残す。secondary（`tp:A:S`）と、query 上で 1kb 未満のアライメントを除き、スコア（`AS:i`、なければ一致塩基数）の高い順に採る。既に覆われた query の範囲は、後のアライメントから切り取る。target 側の重なりは許す。1本のアライメントを、向きのある `liftover` edge 1本にする（chain と同じ圧縮した保存）。
+- 自己検証は chain と同じ（標本のブロックの一致率が0.5以上なら ok）。
+- **再現のための記録**（すべての保存先）: 入力ファイルの MD5（`meta.inputs_md5`）、`--fasta` の配列ファイルの MD5（`meta.sequences_md5`。アライメントの元になったゲノム）、TogoCoord の commit（`meta.togocoord`。未 commit の変更があれば `+local changes`）、`--method TEXT`（入力の作り方。アライナーの版と引数、絞り方）。Loaded data に表示する。
+
+**ゼニゴケ v3.1 ↔ v7.1（2026-09-18）**
+
+| | v3.1 → v7.1 | v7.1 → v3.1 |
+|---|---|---|
+| minimap2 2.31-r1302 `-c --eqx -x asm5 -t 8` | 27秒、4.3GB | 56秒、5.3GB |
+| PAF の行 | 6,372 | 7,150 |
+| 残したアライメント（1対1） | 4,343（15,175ブロック） | 5,858（28,766ブロック） |
+| よりよいアライメントに覆われて除いた query の塩基 | 55,948 | 1,781,960 |
+| 標本の一致率 | 99.53% | 98.51% |
+| 保存先 | `mp_v31_to_v71.sqlite` 2.7MB | `mp_v71_to_v31.sqlite` 3.4MB |

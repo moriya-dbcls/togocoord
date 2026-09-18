@@ -190,9 +190,13 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     crossedAssembly: false,
     seq: 0,
   };
-  const best = new Map<string, [number, number]>([[key(start), [0, 0]]]);
-  const better = (s: State, b: [number, number] | undefined) => !b || s.cost < b[0] || (s.cost === b[0] && s.detours < b[1]);
-  const queue = new MinHeap<State>((a, b) => a.cost - b.cost || a.detours - b.detours || a.seq - b.seq);
+  // Order: cost, then fewer non-preferred intermediates, then fewer steps (a genome alignment between two assemblies
+  // follows the position; a route through identical proteins may land on another copy of a duplicated gene).
+  const rank = (s: Pick<State, "cost" | "detours" | "path">): [number, number, number] => [s.cost, s.detours, s.path.length];
+  const cmp = (a: [number, number, number], b: [number, number, number]) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+  const best = new Map<string, [number, number, number]>([[key(start), [0, 0, 0]]]);
+  const better = (s: State, b: [number, number, number] | undefined) => !b || cmp(rank(s), b) < 0;
+  const queue = new MinHeap<State>((a, b) => cmp(rank(a), rank(b)) || a.seq - b.seq);
   let seq = 1;
   queue.push(start);
   const results: Conversion[] = [];
@@ -217,7 +221,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     const state = queue.pop()!;
     const ref = state.location.outer;
     const recorded = best.get(key(state));
-    if (recorded && (state.cost > recorded[0] || (state.cost === recorded[0] && state.detours > recorded[1]))) continue;
+    if (recorded && cmp(rank(state), recorded) > 0) continue;
     const target = targets !== undefined && state.path.length > 0 && matches(ref);
     const hit = state.path.length > 0 && matches(ref) && inScope(state);
     if (hit) {
@@ -273,7 +277,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       const candidate = { ...next, ...scope, trend, turns, detours, seq: seq++ };
       const k = key(candidate);
       if (better(candidate, best.get(k))) {
-        best.set(k, [candidate.cost, candidate.detours]);
+        best.set(k, rank(candidate));
         queue.push(candidate);
       }
     }

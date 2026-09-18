@@ -104,3 +104,4 @@ nav a.current { background: var(--paper); font-weight: 600; }
 /* Selectors that do not apply to the current target / species (reason in the tooltip). */
 select:disabled, .option.unusable { opacity: 0.45; cursor: not-allowed; }
 .option.unusable input { cursor: not-allowed; }
+.store .md5 { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
