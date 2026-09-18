@@ -108,7 +108,7 @@ const STORE_LIST: Store[] = [
     name: "human_uniprot_alignments",
     group: "human",
     args: [
-      "--label", "UniProt to RefSeq / Ensembl protein alignments (human; entries without an identical protein)",
+      "--label", "UniProt to RefSeq / Ensembl protein alignments (human; entries without an identical protein)", "--taxon", "9606", "--organism", "Homo sapiens",
       ...[...upHuman, ncbi(GRCH38, "protein.faa.gz"), raw(`${ENSEMBL}/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz`)].flatMap((f) => ["--fasta", f]),
       raw(`${IDMAPPING}/HUMAN_9606_idmapping_selected.tab.gz`),
     ],
@@ -126,7 +126,7 @@ const STORE_LIST: Store[] = [
     name: "mouse_uniprot_alignments",
     group: "mouse",
     args: [
-      "--label", "UniProt to RefSeq protein alignments (mouse; entries without an identical protein)",
+      "--label", "UniProt to RefSeq protein alignments (mouse; entries without an identical protein)", "--taxon", "10090", "--organism", "Mus musculus",
       ...[...upMouse, ncbi(GRCM39, "protein.faa.gz")].flatMap((f) => ["--fasta", f]),
       raw(`${IDMAPPING}/MOUSE_10090_idmapping_selected.tab.gz`),
     ],
@@ -146,7 +146,7 @@ const STORE_LIST: Store[] = [
     name: "arabidopsis_uniprot_alignments",
     group: "arabidopsis",
     args: [
-      "--label", "UniProt to RefSeq protein alignments (Arabidopsis; entries without an identical protein)",
+      "--label", "UniProt to RefSeq protein alignments (Arabidopsis; entries without an identical protein)", "--taxon", "3702", "--organism", "Arabidopsis thaliana",
       ...[...upArab, ncbi(TAIR, "protein.faa.gz")].flatMap((f) => ["--fasta", f]),
       raw(`${IDMAPPING}/ARATH_3702_idmapping_selected.tab.gz`),
     ],
