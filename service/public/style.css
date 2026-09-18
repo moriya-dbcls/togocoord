@@ -25,9 +25,10 @@ header .accent { color: var(--accent); }
 
 main { max-width: 960px; margin: 0 auto; padding: 16px; }
 
+/* Row 1: the Location ID; row 2: target selectors of equal width and the button; row 3: options. */
 form#query { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
 #loc {
-  flex: 1 1 420px; min-width: 0; font: inherit; font-size: 17px; padding: 12px 18px;
+  flex: 1 1 100%; min-width: 0; font: inherit; font-size: 17px; padding: 12px 18px;
   border: none; border-radius: 14px; background: var(--paper); outline: none;
 }
 #loc:focus { box-shadow: 0 0 0 3px var(--accent-light); }
@@ -39,6 +40,11 @@ button { border: 2px solid var(--accent-dark); background: linear-gradient(180de
 button.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; background: var(--paper); color: var(--accent-dark); border-width: 1px; }
 button.small:hover { background: var(--accent-light); color: #fff; }
 .option { color: var(--muted); font-size: 14px; }
+form#query .targets {
+  flex: 1 1 0; min-width: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+form#query .targets select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+form#query .options { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: center; }
 
 #examples { text-align: center; margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
 #examples button { margin: 2px; }
@@ -91,3 +97,7 @@ nav a.current { background: var(--paper); font-weight: 600; }
 .store dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0 0; font-size: 13px; }
 .store dt { color: var(--muted); }
 .store dd { margin: 0; word-break: break-word; }
+@media (max-width: 560px) {
+  form#query .targets { flex-basis: 100%; }
+  form#query button[type="submit"] { flex: 1 1 100%; }
+}
