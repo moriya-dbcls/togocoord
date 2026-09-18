@@ -1,0 +1,41 @@
+# Assembly name:  MpTak_v7.1
+# Description:    Tak-1 strain male assembly with chrU from Tak-2 strain female assembly
+# Organism name:  Marchantia polymorpha subsp. ruderalis (common liverwort)
+# Infraspecific name:  strain=Takaragaike-1
+# Sex:  male
+# Taxid:          1480154
+# BioSample:      SAMD00647143
+# BioProject:     PRJDB16711
+# Submitter:      National Institute of Genetics
+# Date:           2024-03-27
+# Assembly type:  haploid
+# Release type:   major
+# Assembly level: Chromosome
+# Genome representation: full
+# Assembly method: Hifiasm v. 0.19.5
+# Genome coverage: 160x
+# Sequencing technology: PacBio Sequel II
+# GenBank assembly accession: GCA_039105155.1
+#
+## Assembly-Unit names:
+## Primary Assembly
+## non-nuclear
+#
+# Ordered by chromosome/plasmid; the chromosomes/plasmids are followed by
+# unlocalized scaffolds.
+# Unplaced scaffolds are listed at the end.
+# RefSeq is equal or derived from GenBank object.
+#
+# Sequence-Name	Sequence-Role	Assigned-Molecule	Assigned-Molecule-Location/Type	GenBank-Accn	Relationship	RefSeq-Accn	Assembly-Unit	Sequence-Length	UCSC-style-name
+U	assembled-molecule	U	Chromosome	AP031359.1	<>	na	Primary Assembly	5591195	na
+1	assembled-molecule	1	Chromosome	AP031342.1	<>	na	Primary Assembly	31851985	na
+2	assembled-molecule	2	Chromosome	AP031343.1	<>	na	Primary Assembly	33167028	na
+3	assembled-molecule	3	Chromosome	AP031344.1	<>	na	Primary Assembly	29030296	na
+4	assembled-molecule	4	Chromosome	AP031345.1	<>	na	Primary Assembly	31916942	na
+5	assembled-molecule	5	Chromosome	AP031346.1	<>	na	Primary Assembly	31378154	na
+V	assembled-molecule	V	Chromosome	AP031350.1	<>	na	Primary Assembly	7728976	na
+6	assembled-molecule	6	Chromosome	AP031347.1	<>	na	Primary Assembly	27946994	na
+7	assembled-molecule	7	Chromosome	AP031348.1	<>	na	Primary Assembly	24717246	na
+8	assembled-molecule	8	Chromosome	AP031349.1	<>	na	Primary Assembly	24713864	na
+MT	assembled-molecule	MT	Mitochondrion	AP025456.1	<>	na	non-nuclear	186197	na
+CP	assembled-molecule	CP	Chloroplast	AP025455.1	<>	na	non-nuclear	120306	na

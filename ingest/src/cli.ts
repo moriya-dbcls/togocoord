@@ -30,7 +30,7 @@ import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 
 const USAGE =
   "usage: togocoord-ingest [--db OUT.sqlite [--overwrite]] [--fasta FILE]... [--seqid-map ASSEMBLY_REPORT] [--assembly-report FILE]\n" +
-  "                        [--label TEXT] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations]\n" +
+  "                        [--label TEXT] [--species-taxon N] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations]\n" +
   "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain files)] FILE...\n" +
   "FILE: .gbff/.gb/.gp, .gff3, .fa/.fna/.faa, SIFTS .tsv, MANE summary, UCSC .chain, NCBI *_assembly_report.txt (optionally .gz)\n";
 const args = process.argv.slice(2);
@@ -87,7 +87,7 @@ for (let i = 0; i < args.length; i++) {
     chainReports.push(text);
     if (a === "--from-report") fromNames = names;
     else toNames = names;
-  } else if (["--label", "--taxon", "--organism", "--assembly"].includes(a)) meta[a.slice(2)] = args[++i]!;
+  } else if (["--label", "--taxon", "--organism", "--assembly", "--species-taxon"].includes(a)) meta[a.slice(2).replace("-", "_")] = args[++i]!;
   else if (a === "--fasta") sources.push(openFasta(args[++i]));
   else if (a.startsWith("--")) {
     process.stderr.write(`unknown option ${a}\n${USAGE}`);

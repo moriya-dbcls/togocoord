@@ -194,5 +194,8 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 - `--assembly-report FILE` を指定すると、保存先の `meta` に、アセンブリの配列名（Sequence-Name、UCSC 名、GenBank の accession）から RefSeq の accession への対応（`aliases`、JSON）と、UCSC のデータベース名（`ucsc`。GRC のアセンブリは assembly report に載っていないので、組み込みの表 `UCSC_DATABASES` から決める。GRCh38 → hg38、GRCh37 → hg19、GRCm39 → mm39、GRCm38 → mm10）も記録する。サービスはこれを使い、`hg19:chr7:140453136` のような入力を読み替える（spec-service §2.2）。
 - NCBI の assembly report（`*_assembly_report.txt`）そのものも入力にできる。各配列を、RefSeq の accession、長さ、生物種、DNA（ミトコンドリアと葉緑体は環状）の SequenceRecord にする。アノテーションのないアセンブリ（例: GRCh37）を、ゲノムの FASTA（ダイジェスト用）と一緒に1つの保存先にする。
 - chain の保存先は、`--from-report` と `--to-report` の両方のアセンブリの配列の記録（種と長さ）も持つ。
+- RefSeq の番号のない（INSDC だけの）アセンブリでは、配列を GenBank の accession（`insdc:AP031342.1`）で表す。配列名の対応の値は、名前空間付きの配列の鍵にした（`refseq:NC_000007.13`、`insdc:AP031342.1`。以前の保存先の名前空間なしの値は、サービスが `refseq:` とみなす）。
+- assembly report の公開日（`# Date`）を `meta.released` に記録する。既定のアセンブリの選択に使う（spec-service §2.2）。
+- `--species-taxon N`: 保存先の taxon が属する種を明示する（亜種や株の taxon を種にまとめる規則で決まらないとき）。
 
 **ヒト GRCh37 ↔ GRCh38（2026-09-18）**: `grch37.sqlite`（GRCh37.p13 の assembly report と genomic.fna）、`chain_hg19ToHg38.sqlite`、`chain_hg38ToHg19.sqlite`（UCSC の `hg19ToHg38.over.chain.gz`、`hg38ToHg19.over.chain.gz`）。ほかに、以前に作った `human.sqlite` には配列名の記録がないので、GRCh38 の配列名だけの保存先 `grch38_names.sqlite` を assembly report から作った（705配列）。

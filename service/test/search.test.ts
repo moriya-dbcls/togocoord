@@ -456,7 +456,66 @@ describe("assemblies of one species (spec-service §2.2)", () => {
     assert.ok(ids(`${G38}:1001..1003`, {}).includes(`${G37}:601..603`));
     assert.deepEqual(stores.species().find((s) => s.taxon === 9606)?.defaultAssembly, "GRCh38.p14");
     assert.equal(stores.assembly("hg19")?.name, "GRCh37.p13");
-    assert.equal(stores.assembly("GRCh37")?.aliases.chr95, "NC_000095.1");
+    assert.equal(stores.assembly("GRCh37")?.aliases.chr95, "refseq:NC_000095.1"); // bare accessions of older stores
+  });
+});
+
+describe("assemblies without a chain: through identical proteins (MpTak v3.1 -> v7.1)", () => {
+  const A = "insdc:KZ000001.1"; // older assembly
+  const B = "insdc:AP000001.1"; // newer assembly
+  const PA = "insdc:PTQ00001.1";
+  const PB = "insdc:BFI00001.1"; // identical to PA
+  const seq = (ref: string, unit: "nt" | "aa") => ({
+    ref, moltype: unit === "nt" ? ("DNA" as const) : ("protein" as const), unit, length: unit === "nt" ? 10_000 : 30, taxon: 3197,
+    ...(unit === "aa" && { digest: "SQ.same" }), provenance: { adapter: "gbff" as const },
+  });
+  const cds = (from: string, to: string, tgt: number): Edge => ({
+    kind: "annotation", from, to, blocks: [{ srcRef: from, src: 0, tgtRef: to, tgt, len: 90, rev: false }],
+    attributes: {}, provenance: { adapter: "gbff" }, validation: { status: "ok" },
+  });
+  const withMeta = (name: string, meta: Record<string, string>, r: IngestResult) => {
+    const path = join(dir, `${name}.sqlite`);
+    const sink = new SqliteSink(path);
+    for (const x of r.sequences) sink.sequence(x);
+    for (const e of r.edges) sink.edge(e);
+    sink.close(meta);
+    return new TogoCoordStore(path);
+  };
+  const none = { annotations: [], warnings: [] };
+  const stores = new StoreSet()
+    .add(withMeta("mpA", { assembly: "v3.1", taxon: "3197", released: "2018-01-10" }, { ...none, sequences: [seq(A, "nt"), seq(PA, "aa")], edges: [cds(PA, A, 1000)] }))
+    .add(withMeta("mpB", { assembly: "v7.1", taxon: "3197", released: "2024-03-27" }, { ...none, sequences: [seq(B, "nt"), seq(PB, "aa")], edges: [cds(PB, B, 5000)] }));
+  const ctx = stores.context();
+
+  it("converts a coding position to the other assembly, and defaults to the newest annotated one", () => {
+    const ids = (loc: string, o: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(loc, ctx), o, ctx).map((r) => r.id);
+    assert.deepEqual(ids(`${A}:1004..1006`, { to: { category: "genome" }, assembly: "v7.1" }), [`${B}:5004..5006`]);
+    assert.deepEqual(ids(`${PA}:2`, { to: { category: "genome" } }), [`${B}:5004..5006`]);
+  });
+});
+
+describe("species of infraspecific taxa (spec-service §2.2)", () => {
+  const named = (name: string, meta: Record<string, string>) => {
+    const path = join(dir, `${name}.sqlite`);
+    new SqliteSink(path).close(meta);
+    return new TogoCoordStore(path);
+  };
+  const stores = new StoreSet()
+    .add(named("mp31", { taxon: "3197", organism: "Marchantia polymorpha (common liverwort)", assembly: "Marchanta_polymorpha_v1" }))
+    .add(named("mp71", { taxon: "1480154", organism: "Marchantia polymorpha subsp. ruderalis (common liverwort)", assembly: "MpTak_v7.1", released: "2024-03-27" }))
+    .add(named("hiv1", { taxon: "11676", organism: "Human immunodeficiency virus 1" }))
+    .add(named("hiv2", { taxon: "11709", organism: "Human immunodeficiency virus 2" }))
+    .add(named("strain", { taxon: "999001", organism: "Examplea imaginaria strain X", species_taxon: "999000" }));
+
+  it("folds a subspecies into its loaded species, making its assembly another assembly of the species", () => {
+    assert.equal(stores.speciesTaxon(1480154), 3197);
+    const mp = stores.species().find((s) => s.taxon === 3197)!;
+    assert.deepEqual([mp.assemblies.sort(), mp.taxa], [["Marchanta_polymorpha_v1", "MpTak_v7.1"], [1480154]]);
+  });
+
+  it("does not fold on shared words alone, but follows --species-taxon", () => {
+    assert.deepEqual([stores.speciesTaxon(11676), stores.speciesTaxon(11709)], [11676, 11709]);
+    assert.equal(stores.speciesTaxon(999001), 999000);
   });
 });
 

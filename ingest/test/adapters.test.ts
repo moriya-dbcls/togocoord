@@ -7,7 +7,7 @@ import { edgeMapping, type Edge, type IngestResult } from "../src/model.ts";
 import { extract, MemorySequenceSource, translate, type SequenceSource } from "../src/sequence.ts";
 import { validateTranscript } from "../src/validate.ts";
 import { parseFasta, parseFastaHeaders } from "../src/fasta.ts";
-import { assemblyReportAliases, assemblyReportSeqids, assemblyReportSequences } from "../src/common.ts";
+import { assemblyReportAliases, assemblyReportInfo, assemblyReportSeqids, assemblyReportSequences } from "../src/common.ts";
 import { chr3Source, fixture, genbankSource } from "./helpers.ts";
 
 const GENOMES = ["NC_045512.2", "NC_012920.1", "NC_001405.1"];
@@ -336,6 +336,13 @@ describe("assembly report as sequences and names (GRCh38.p14 chr13 rows, real da
   });
   it("maps the assembly's own names to RefSeq accessions", () => {
     const aliases = assemblyReportAliases(text);
-    assert.deepEqual([aliases["13"], aliases["chr13"], aliases["CM000675.2"]], ["NC_000013.11", "NC_000013.11", "NC_000013.11"]);
+    assert.deepEqual([aliases["13"], aliases["chr13"], aliases["CM000675.2"]], ["refseq:NC_000013.11", "refseq:NC_000013.11", "refseq:NC_000013.11"]);
+  });
+  it("uses GenBank accessions for an INSDC-only assembly (MpTak_v7.1, real data)", () => {
+    const report = fixture("MpTak_v7.1_assembly_report.txt");
+    assert.deepEqual([assemblyReportAliases(report)["1"], assemblyReportAliases(report)["MT"]], ["insdc:AP031342.1", "insdc:AP025456.1"]);
+    const seqs = assemblyReportSequences(report);
+    assert.deepEqual([seqs.length, seqs.find((r) => r.ref === "insdc:AP025455.1")?.topology, seqs[0]!.taxon], [12, "circular", 1480154]);
+    assert.equal(assemblyReportInfo(report).released, "2024-03-27");
   });
 });

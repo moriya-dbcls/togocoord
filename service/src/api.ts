@@ -70,13 +70,13 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     const assembly = stores.assembly(m[1]!);
     if (!assembly) return { text };
     const name = m[2]!;
-    const accession =
+    const ref =
       assembly.aliases[name] ??
       assembly.aliases[name.replace(/^chr/i, "")] ??
       assembly.aliases[`chr${name}`] ??
-      (Object.values(assembly.aliases).includes(name) ? name : undefined);
-    if (!accession) throw new HttpError(400, `no sequence '${name}' in ${assembly.name} (use a name such as chr1, 1 or a RefSeq accession)`);
-    return { text: `refseq:${accession}${m[3] ?? ""}`, assembly: assembly.name, name };
+      [...assembly.refs].find((r) => r.slice(r.indexOf(":") + 1) === name);
+    if (!ref) throw new HttpError(400, `no sequence '${name}' in ${assembly.name} (use a name such as chr1, 1 or an accession)`);
+    return { text: `${ref}${m[3] ?? ""}`, assembly: assembly.name, name };
   };
 
   /** Location IDs; `namespace:accession` alone means the whole sequence (1..length). */
@@ -106,7 +106,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     if (v === undefined || v === null || v === "") return undefined;
     const text = String(v).trim();
     const id = /^(?:taxon:|ncbitaxon:)?(\d+)$/i.exec(text);
-    if (id) return Number(id[1]);
+    if (id) return stores.speciesTaxon(Number(id[1]));
     const name = text.toLowerCase();
     // Scientific name, or the common name in parentheses ("Mus musculus (house mouse)": "house mouse", "mouse").
     const named = (n: string) => {
@@ -172,7 +172,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
       () => ({
         stores: stores.meta(),
         species: stores.species(),
-        assemblies: stores.assemblies().map(({ aliases: _aliases, accessions: _accessions, ...a }) => a),
+        assemblies: stores.assemblies().map(({ aliases: _aliases, refs: _refs, ...a }) => a),
         crossings: stores.crossings(),
         tags: stores.tagSpecies(),
         base,

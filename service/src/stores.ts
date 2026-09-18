@@ -8,6 +8,8 @@ export interface Species {
   organism?: string;
   /** Names as recorded, e.g. "Mus musculus" and "Mus musculus (house mouse)". */
   names: string[];
+  /** Taxa folded into this species (subspecies, strains; see speciesTaxon). */
+  taxa?: number[];
   assemblies: string[];
   /** Assembly of genome targets when none is requested and the input is not on a genome of the species. */
   defaultAssembly?: string;
@@ -19,10 +21,12 @@ export interface Assembly {
   /** UCSC database name, e.g. hg19. */
   ucsc?: string;
   accession?: string;
-  /** Sequence names (chr7, 7, CM000669.1) -> RefSeq accession. */
+  /** Sequence names (chr7, 7, CM000669.1) -> sequence key (refseq:NC_000007.13, insdc:AP031342.1). */
   aliases: Record<string, string>;
-  /** RefSeq accessions of its sequences. */
-  accessions: Set<string>;
+  /** Sequence keys of its sequences. */
+  refs: Set<string>;
+  /** Release date (YYYY-MM-DD, from the assembly report). */
+  released?: string;
   /** Annotation edges in the stores of this assembly. */
   annotated: number;
 }
@@ -44,6 +48,7 @@ export class StoreSet {
   #assemblies: Assembly[] | undefined;
   #crossings: ReturnType<StoreSet["crossings"]> | undefined;
   #tagSpecies: ReturnType<StoreSet["tagSpecies"]> | undefined;
+  #speciesOf: Map<number, number> | undefined;
 
   constructor(paths: string[] = [], options: StoreOptions & { registry?: NamespaceRegistry } = {}) {
     this.registry = options.registry ?? new NamespaceRegistry();
@@ -60,6 +65,7 @@ export class StoreSet {
     this.#assemblies = undefined;
     this.#crossings = undefined;
     this.#tagSpecies = undefined;
+    this.#speciesOf = undefined;
     return this;
   }
 
@@ -190,14 +196,54 @@ export class StoreSet {
 
   #taxon(ref: string): number | undefined {
     const own = this.sequence(ref)?.taxon;
-    if (own !== undefined && own !== null) return Number(own);
+    if (own !== undefined && own !== null) return this.speciesTaxon(Number(own));
     const meta = this.meta();
     for (const [i, s] of this.stores.entries()) {
       const t = meta[i]!.taxon;
-      if (t && s.sequence(ref)) return Number(t);
+      if (t && s.sequence(ref)) return this.speciesTaxon(Number(t));
     }
-    const taxa = new Set(this.identical(ref).map((r) => this.sequence(r)?.taxon).filter((t) => t !== undefined && t !== null));
-    return taxa.size === 1 ? Number([...taxa][0]) : undefined;
+    const taxa = new Set(
+      this.identical(ref)
+        .map((r) => this.sequence(r)?.taxon)
+        .filter((t) => t !== undefined && t !== null)
+        .map((t) => this.speciesTaxon(Number(t))),
+    );
+    return taxa.size === 1 ? [...taxa][0] : undefined;
+  }
+
+  /**
+   * The species a taxon belongs to (spec-service §2.2): assemblies of subspecies, varieties and strains are assemblies
+   * of their species, as are several individuals of one species. A taxon is folded into a species only when that is
+   * explicit: the store says so (`--species-taxon`), or the NCBI name marks an infraspecific rank after the binomial
+   * ("Marchantia polymorpha subsp. ruderalis" -> the loaded "Marchantia polymorpha"). Names alone are not enough
+   * ("Human immunodeficiency virus 1" and "... 2" are two species).
+   */
+  speciesTaxon(taxon: number): number {
+    if (!this.#speciesOf) {
+      const map = new Map<number, number>();
+      const names = new Map<number, Set<string>>();
+      for (const m of this.meta()) {
+        if (m.taxon && m.species_taxon) map.set(Number(m.taxon), Number(m.species_taxon));
+        const entries: Array<{ taxon: number; organism?: string }> = [
+          ...(m.taxon ? [{ taxon: Number(m.taxon), organism: m.organism as string | undefined }] : []),
+          ...((m.summary as { taxa?: Array<{ taxon: number; organism?: string }> } | undefined)?.taxa ?? []),
+        ];
+        for (const e of entries) if (e.organism) (names.get(e.taxon) ?? names.set(e.taxon, new Set()).get(e.taxon)!).add(e.organism);
+      }
+      const plain = (n: string) => n.replace(/\s*\(.*\)\s*$/, "").trim();
+      const byName = new Map<string, number>();
+      for (const [t, ns] of names) for (const n of ns) if (/^[A-Z][a-z]+ [a-z][a-z-]+$/.test(plain(n))) byName.set(plain(n), t);
+      for (const [t, ns] of names) {
+        if (map.has(t)) continue;
+        for (const n of ns) {
+          const m = /^([A-Z][a-z]+ [a-z][a-z-]+) (?:subsp\.|var\.|f\.|str\.|strain|substr\.|serovar|biovar|pv\.|cv\.)/.exec(plain(n));
+          const species = m ? byName.get(m[1]!) : undefined;
+          if (species !== undefined && species !== t) map.set(t, species);
+        }
+      }
+      this.#speciesOf = map;
+    }
+    return this.#speciesOf.get(taxon) ?? taxon;
   }
 
   #assembly(ref: string): string | undefined {
@@ -208,8 +254,7 @@ export class StoreSet {
       if (typeof a === "string" && s.sequence(ref)) return a;
     }
     // A sequence the assembly names (its report), though no store of that assembly holds a record of it.
-    const accession = ref.startsWith("refseq:") ? ref.slice("refseq:".length) : undefined;
-    return accession ? this.assemblies().find((x) => x.accessions.has(accession))?.name : undefined;
+    return this.assemblies().find((x) => x.refs.has(ref))?.name;
   }
 
   /** Loaded species with their names and genome assemblies (from store metadata and content summaries). */
@@ -217,8 +262,10 @@ export class StoreSet {
     if (this.#species) return this.#species;
     const out = new Map<number, Species>();
     // Names as recorded ("Mus musculus", "Mus musculus (house mouse)"); the shortest is shown.
-    const add = (taxon: number, organism?: string, assembly?: string) => {
+    const add = (raw: number, organism?: string, assembly?: string) => {
+      const taxon = this.speciesTaxon(raw);
       const e = out.get(taxon) ?? { taxon, names: [], assemblies: [] };
+      if (raw !== taxon && !(e.taxa ??= []).includes(raw)) e.taxa.push(raw);
       if (organism && !e.names.includes(organism)) e.names.push(organism);
       if (organism && (!e.organism || organism.length < e.organism.length)) e.organism = organism;
       if (assembly && !e.assemblies.includes(assembly)) e.assemblies.push(assembly);
@@ -229,10 +276,13 @@ export class StoreSet {
       const taxa = (m.summary as { taxa?: Array<{ taxon: number; organism?: string }> } | undefined)?.taxa ?? [];
       for (const t of taxa) add(t.taxon, t.organism);
     }
-    // The default genome assembly of a species: the one with the most annotation (where transcripts and proteins are).
+    // The default genome assembly of a species: an annotated one (where transcripts and proteins are), the newest
+    // release first (MpTak_v7.1 over Marchanta_polymorpha_v1), then the most annotated (GRCh38 over GRCh37).
     for (const e of out.values()) {
-      const annotated = this.assemblies().filter((a) => a.taxon === e.taxon).sort((a, b) => b.annotated - a.annotated)[0];
-      if (annotated) e.defaultAssembly = annotated.name;
+      const [best] = this.assemblies()
+        .filter((a) => a.taxon === e.taxon)
+        .sort((a, b) => Number(b.annotated > 0) - Number(a.annotated > 0) || (b.released ?? "").localeCompare(a.released ?? "") || b.annotated - a.annotated);
+      if (best) e.defaultAssembly = best.name;
     }
     this.#species = [...out.values()];
     return this.#species;
@@ -245,13 +295,18 @@ export class StoreSet {
     for (const s of this.stores) {
       const m = s.meta();
       if (!m.assembly) continue;
-      const a = out.get(m.assembly) ?? { name: m.assembly, aliases: {}, accessions: new Set<string>(), annotated: 0 };
-      if (m.taxon) a.taxon = Number(m.taxon);
+      const a = out.get(m.assembly) ?? { name: m.assembly, aliases: {}, refs: new Set<string>(), annotated: 0 };
+      if (m.taxon) a.taxon = this.speciesTaxon(Number(m.taxon));
+      if (m.released) a.released = m.released;
       if (m.ucsc) a.ucsc = m.ucsc;
       if (m.accession) a.accession = m.accession;
       if (m.aliases) {
-        Object.assign(a.aliases, JSON.parse(m.aliases));
-        for (const acc of Object.values(a.aliases)) a.accessions.add(acc);
+        // Stores built before INSDC-only assemblies recorded bare RefSeq accessions.
+        for (const [name, v] of Object.entries(JSON.parse(m.aliases) as Record<string, string>)) {
+          const ref = v.includes(":") ? v : `refseq:${v}`;
+          a.aliases[name] ??= ref;
+          a.refs.add(ref);
+        }
       }
       const edges = (s.summary() as { edges?: Record<string, number> }).edges ?? {};
       a.annotated += edges.annotation ?? 0;
@@ -275,8 +330,7 @@ export class StoreSet {
    */
   inAssembly(ref: string, name: string): boolean {
     if (this.assemblyOf(ref) === name) return true;
-    const accession = ref.startsWith("refseq:") ? ref.slice("refseq:".length) : undefined;
-    return accession !== undefined && (this.assemblies().find((a) => a.name === name)?.accessions.has(accession) ?? false);
+    return this.assemblies().find((a) => a.name === name)?.refs.has(ref) ?? false;
   }
 
   /**

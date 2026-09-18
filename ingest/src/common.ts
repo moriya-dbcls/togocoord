@@ -105,8 +105,8 @@ export function assemblyReportSeqids(text: string): Map<string, string> {
     if (!line || line.startsWith("#")) continue;
     const cols = line.split("\t");
     const [name, , , , genbank, , refseq, , , ucsc] = cols;
-    if (!refseq || refseq === "na") continue;
-    const key = `refseq:${refseq}`;
+    const key = reportRef(refseq, genbank);
+    if (!key) continue;
     for (const alias of [name, genbank, refseq, ucsc]) if (alias && alias !== "na") out.set(alias, key);
   }
   return out;
@@ -123,31 +123,41 @@ export function assemblyBaseName(name: string): string {
   return name.replace(/\.p\d+$/i, "");
 }
 
+/** Sequence key of an assembly report row: the RefSeq accession, else (INSDC-only assemblies) the GenBank one. */
+function reportRef(refseq: string | undefined, genbank: string | undefined): string | undefined {
+  if (refseq && refseq !== "na") return `refseq:${refseq}`;
+  if (genbank && genbank !== "na") return `insdc:${genbank}`;
+  return undefined;
+}
+
 /**
- * Sequence names of an assembly (Sequence-Name `7`, UCSC `chr7`, GenBank `CM000669.1`) -> RefSeq accession
- * (`NC_000007.13`), for input written with an assembly's own names.
+ * Sequence names of an assembly (Sequence-Name `7`, UCSC `chr7`, GenBank `CM000669.1`) -> sequence key
+ * (`refseq:NC_000007.13`, or `insdc:AP031342.1` for an INSDC-only assembly), for input written with an assembly's own
+ * names.
  */
 export function assemblyReportAliases(text: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of text.split(/\r?\n/)) {
     if (!line || line.startsWith("#")) continue;
     const [name, , , , genbank, , refseq, , , ucsc] = line.split("\t");
-    if (!refseq || refseq === "na") continue;
-    for (const alias of [name, ucsc, genbank]) if (alias && alias !== "na" && out[alias] === undefined) out[alias] = refseq;
+    const key = reportRef(refseq, genbank);
+    if (!key) continue;
+    for (const alias of [name, ucsc, genbank]) if (alias && alias !== "na" && out[alias] === undefined) out[alias] = key;
   }
   return out;
 }
 
-/** The sequences of an assembly as records (RefSeq accession, length, species), from its NCBI assembly report. */
+/** The sequences of an assembly as records (RefSeq or GenBank accession, length, species), from its NCBI assembly report. */
 export function assemblyReportSequences(text: string, file?: string): SequenceRecord[] {
   const info = assemblyReportInfo(text);
   const out: SequenceRecord[] = [];
   for (const line of text.split(/\r?\n/)) {
     if (!line || line.startsWith("#")) continue;
-    const [name, , , type, , , refseq, , length] = line.split("\t");
-    if (!refseq || refseq === "na" || !length || !/^\d+$/.test(length)) continue;
+    const [name, , , type, genbank, , refseq, , length] = line.split("\t");
+    const ref = reportRef(refseq, genbank);
+    if (!ref || !length || !/^\d+$/.test(length)) continue;
     out.push({
-      ref: `refseq:${refseq}`,
+      ref,
       moltype: "DNA",
       unit: "nt",
       length: Number(length),
@@ -160,17 +170,22 @@ export function assemblyReportSequences(text: string, file?: string): SequenceRe
   return out;
 }
 
-/** Header of an NCBI assembly report: organism, taxon and assembly name. */
-export function assemblyReportInfo(text: string): { organism?: string; taxon?: string; assembly?: string; accession?: string } {
-  const field = (name: string) => new RegExp(`^# ${name}:\\s*(.+?)\\s*$`, "m").exec(text)?.[1];
-  const out: { organism?: string; taxon?: string; assembly?: string; accession?: string } = {};
+/** Header of an NCBI assembly report: organism, taxon, assembly name and accession, release date. */
+export function assemblyReportInfo(text: string): { organism?: string; taxon?: string; assembly?: string; accession?: string; released?: string } {
+  const field = (name: string) => {
+    const v = new RegExp(`^# ${name}:\\s*(.+?)\\s*$`, "m").exec(text)?.[1];
+    return v && v !== "n/a" ? v : undefined;
+  };
+  const out: { organism?: string; taxon?: string; assembly?: string; accession?: string; released?: string } = {};
   const organism = field("Organism name");
   const taxon = field("Taxid");
   const assembly = field("Assembly name");
   const accession = field("RefSeq assembly accession") ?? field("GenBank assembly accession");
+  const released = field("Date");
   if (organism) out.organism = organism;
   if (taxon) out.taxon = taxon;
   if (assembly) out.assembly = assembly;
-  if (accession && accession !== "n/a") out.accession = accession.split(/\s/)[0]!;
+  if (accession) out.accession = accession.split(/\s/)[0]!;
+  if (released && /^\d{4}-\d{2}-\d{2}$/.test(released)) out.released = released;
   return out;
 }

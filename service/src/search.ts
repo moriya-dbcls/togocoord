@@ -167,7 +167,10 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     );
 
   const layerOf = (ref: string) => LAYER[stores.category(ref)];
-  const cap = depthCap(stores, input.outer, targets, layerOf);
+  // Between genomes of different assemblies or species without a chain, the way is through identical proteins
+  // (genome -> CDS -> identical protein -> CDS -> genome): allow the protein layer then (exception to rule 1).
+  const across = crossSpecies || (targetAssembly !== undefined && inputAssembly !== undefined && targetAssembly !== inputAssembly);
+  const cap = Math.max(depthCap(stores, input.outer, targets, layerOf), across ? (LAYER.protein ?? Infinity) : -Infinity);
   // A sequence may be worth reaching in several layer states (trend, turns); keep the cheapest per state.
   const key = (s: Pick<State, "location" | "trend" | "turns" | "crossedSpecies" | "crossedAssembly">) =>
     `${s.location.outer}|${s.trend}|${s.turns}|${s.crossedSpecies}|${s.crossedAssembly}`;
