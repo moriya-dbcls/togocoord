@@ -21,7 +21,7 @@ import { convert, type Conversion, type Target } from "./search.ts";
 import type { StoreSet, StoredAnnotation } from "./stores.ts";
 
 export interface ApiOptions {
-  /** Base of location IRIs (default https://togocoord.example.org/). */
+  /** Base of location IRIs (default https://togocoord.dbcls.jp/). */
   base?: string;
   /** Maximum number of locations in one POST /v1/convert (default 1000). */
   maxBatch?: number;

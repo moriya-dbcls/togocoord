@@ -221,7 +221,7 @@ FALDO の定義（`faldo.ttl`）で確認した語彙だけを使う。コンセ
 - 最上位のノードは location そのもの（`@id` は location の IRI）。IRI では `<`、`>`、`^` だけを % エンコードする。
 - 配列は `https://identifiers.org/<namespace>:<accession>` で参照する。
 - jsonld.js で RDF に展開し、正しいトリプルになることを確認した。
-- 既定の基底 IRI は `https://togocoord.example.org/`（ドメインは未定。`--base` で指定する）。
+- 既定の基底 IRI は `https://togocoord.dbcls.jp/`（仮。2026-09-19 に `togocoord.example.org` から変更。`--base` で上書きできる）。語彙（`tgc:`）は `https://togocoord.dbcls.jp/ontology#`。
 
 ---
 

@@ -14,8 +14,8 @@ export interface FaldoOptions {
   vocabulary?: string;
 }
 
-export const DEFAULT_BASE = "https://togocoord.example.org/";
-export const DEFAULT_VOCABULARY = "https://togocoord.example.org/ontology#";
+export const DEFAULT_BASE = "https://togocoord.dbcls.jp/";
+export const DEFAULT_VOCABULARY = "https://togocoord.dbcls.jp/ontology#";
 
 /** Percent-encode the characters of a Location ID that may not appear in an IRI path (`<`, `>`, `^`). */
 export function encodeLocationId(id: string): string {
