@@ -1,47 +1,49 @@
-# togocoord
-(BH26 project)
+# TogoCoord
 
-TogoCoord は、ゲノム・転写産物・タンパク質・立体構造など、生命科学の異なるレイヤーの配列座標を相互に変換する仕組みです。位置は INSDC の location 記法に基づく **Location ID**（例: `refseq:NC_000003.12:complement(49358132..49358134)`、`uniprot:P07203:49`）で表し、FALDO JSON-LD としても出力します。
+English | [日本語](README.ja.md)
 
-- 一次リポジトリ（GenBank / GFF3 + FASTA）を基盤にして、全生物種に一般化する。ヒトやマウスの豊富なリソース（Ensembl、UniProt、SIFTS、MANE など）は拡張として加える。
-- 座標の対応は「location = 写像」として、ブロック列の演算（写像・反転・合成）で扱う。
-- 配列が完全に一致するもの（refget ダイジェスト）は同じものとみなし、完全一致の経路を優先する。
-- すべての対応は、取り込み時に実際の配列で自己検証する。
+TogoCoord converts sequence coordinates between the layers of life-science data: genomes, transcripts, proteins and 3D structures. A position is written as a **Location ID** based on the INSDC location syntax (e.g. `refseq:NC_000003.12:complement(49358132..49358134)`, `uniprot:P07203:49`) and is also available as FALDO JSON-LD.
 
-## 構成
+- Built on primary repositories (GenBank / GFF3 + FASTA) so that it works for any species; rich resources for human and mouse (Ensembl, UniProt, SIFTS, MANE, ...) are added as extensions.
+- A correspondence is a mapping ("location = mapping"), handled as operations on block lists (map, invert, compose).
+- Sequences with identical residues (refget digest) are treated as the same, and exact paths are preferred.
+- Assemblies of one species (e.g. GRCh37 ↔ GRCh38) are crossed automatically when needed; other species are reached only when requested.
+- Every correspondence is validated against the actual sequences at ingest time.
 
-| ディレクトリ | 内容 |
+## Layout
+
+| Directory | Contents |
 |---|---|
-| `core/` | Location ID のパース・正規形・FALDO JSON-LD、ブロック列による写像（依存なし） |
-| `ingest/` | GenBank / GFF3 / FASTA / SIFTS / MANE / UCSC chain のアダプタ、自己検証、SQLite（R*Tree）の保存先、CLI `togocoord-ingest` |
-| `service/` | 複数の保存先をまたぐ経路探索、REST API、Web UI（`togocoord-serve`） |
-| `docs/` | 設計書と仕様（[design.md](docs/design.md)、[spec-core.md](docs/spec-core.md)、[spec-ingest.md](docs/spec-ingest.md)、[spec-service.md](docs/spec-service.md)、[scaling.md](docs/scaling.md)） |
-| `poc/` | コンセプト検証版の実装（Web UI と SPARQList。参考） |
+| `core/` | Location ID parsing, canonical form and FALDO JSON-LD; mappings as block lists (no dependencies) |
+| `ingest/` | Adapters for GenBank / GFF3 / FASTA / SIFTS / MANE / UCSC chain / PAF / BED / NCBI assembly reports, self-validation, SQLite (R*Tree) stores, CLI `togocoord-ingest` |
+| `service/` | Path search across stores, REST API and web UI (`togocoord-serve`) |
+| `docs/` | Design and specifications, in Japanese ([design.md](docs/design.md), [spec-core.md](docs/spec-core.md), [spec-ingest.md](docs/spec-ingest.md), [spec-service.md](docs/spec-service.md), [scaling.md](docs/scaling.md)) |
+| `poc/` | Proof-of-concept implementation (web UI and SPARQList; for reference) |
 
-## 使い方
+## Usage
 
-Node.js 23.6 以上（TypeScript を型の除去だけで直接実行します）。
+Node.js 23.6 or later (TypeScript runs directly through type stripping).
 
 ```sh
 npm install
-npm test            # core / ingest / service のテスト
+npm test            # tests of core / ingest / service
 
-# 保存先を作る（データはリポジトリに含めていません。NCBI などから取得してください）
+# Build stores (data is not in the repository; get it from NCBI and other sources)
 node ingest/src/cli.ts --db human.sqlite --assembly-report GRCh38.p14_assembly_report.txt \
   --fasta GRCh38.p14_genomic.fna --fasta GRCh38.p14_protein.faa.gz GRCh38.p14_genomic.gff.gz
 node ingest/src/cli.ts --db human_uniprot.sqlite UP000005640_9606.fasta.gz
 
-# REST API と Web UI
+# REST API and web UI
 node service/src/serve.ts --port 8080 human.sqlite human_uniprot.sqlite
 # http://127.0.0.1:8080/  ·  /v1/convert?loc=uniprot:P07203:49&to=genome
-# 種をまたぐ（UCSC chain を読み込んだとき）: /v1/convert?loc=uniprot:P07203:49&to=protein&db=uniprot&taxon=10090
-# アセンブリの配列名で入力（GRCh37 と chain を読み込んだとき）: /v1/convert?loc=hg19:chr7:140453136&to=genome&assembly=GRCh38
+# Across species (with UCSC chains loaded): /v1/convert?loc=uniprot:P07203:49&to=protein&db=uniprot&taxon=10090
+# Assembly sequence names as input (with GRCh37 and chains loaded): /v1/convert?loc=hg19:chr7:140453136&to=genome&assembly=GRCh38
 ```
 
-リバースプロキシでサブディレクトリに置く場合は、[spec-service §6](docs/spec-service.md) を参照してください。
+To serve it under a subdirectory behind a reverse proxy, see [spec-service §6](docs/spec-service.md).
 
-取り込める入力と CLI のオプションは [ingest/README.md](ingest/README.md)、API は [docs/spec-service.md](docs/spec-service.md) を参照してください。
+Inputs and CLI options: [ingest/README.md](ingest/README.md). API: [docs/spec-service.md](docs/spec-service.md).
 
-## ライセンス
+## License
 
-MIT（[LICENSE](LICENSE)）。
+MIT ([LICENSE](LICENSE)).
