@@ -202,7 +202,13 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
   const results: Conversion[] = [];
   const reached = new Set<string>([input.outer]);
   // A sequence shared by the assemblies (e.g. chrM in GRCh37.p13 and GRCh38) is its own answer in the other one.
-  if (targetAssembly !== undefined && targetAssembly !== inputAssembly && matches(input.outer) && inScope(start)) {
+  if (
+    targetAssembly !== undefined &&
+    inputAssembly !== undefined &&
+    targetAssembly !== inputAssembly &&
+    matches(input.outer) &&
+    stores.inAssembly(input.outer, targetAssembly)
+  ) {
     results.push({
       location: input,
       id: formatLocationId(input, ctx),

@@ -491,6 +491,8 @@ describe("assemblies without a chain: through identical proteins (MpTak v3.1 -> 
     const ids = (loc: string, o: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(loc, ctx), o, ctx).map((r) => r.id);
     assert.deepEqual(ids(`${A}:1004..1006`, { to: { category: "genome" }, assembly: "v7.1" }), [`${B}:5004..5006`]);
     assert.deepEqual(ids(`${PA}:2`, { to: { category: "genome" } }), [`${B}:5004..5006`]);
+    // A protein input is not "shared by both assemblies": it is not returned as its own result.
+    assert.ok(!ids(`${PA}:2`, { to: { category: "protein" } }).includes(`${PA}:2`));
   });
 });
 
