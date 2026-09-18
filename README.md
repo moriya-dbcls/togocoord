@@ -35,6 +35,7 @@ node ingest/src/cli.ts --db human_uniprot.sqlite UP000005640_9606.fasta.gz
 node service/src/serve.ts --port 8080 human.sqlite human_uniprot.sqlite
 # http://127.0.0.1:8080/  ·  /v1/convert?loc=uniprot:P07203:49&to=genome
 # 種をまたぐ（UCSC chain を読み込んだとき）: /v1/convert?loc=uniprot:P07203:49&to=protein&db=uniprot&taxon=10090
+# アセンブリの配列名で入力（GRCh37 と chain を読み込んだとき）: /v1/convert?loc=hg19:chr7:140453136&to=genome&assembly=GRCh38
 ```
 
 リバースプロキシでサブディレクトリに置く場合は、[spec-service §6](docs/spec-service.md) を参照してください。

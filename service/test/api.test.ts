@@ -21,6 +21,13 @@ function store(name: string, r: IngestResult): TogoCoordStore {
   return new TogoCoordStore(path);
 }
 
+/** A store that only names an assembly and its sequences (as `--assembly-report` records them). */
+function assemblyNames(assembly: string, ucsc: string, aliases: Record<string, string>): TogoCoordStore {
+  const path = join(dir, `${ucsc}.sqlite`);
+  new SqliteSink(path).close({ assembly, ucsc, taxon: "9606", aliases: JSON.stringify(aliases) });
+  return new TogoCoordStore(path);
+}
+
 describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () => {
   let base = "";
   let close = () => {};
@@ -33,7 +40,8 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
       .add(store("mane", mane.result))
       .add(store("gpx1", ingestGenBank(readFileSync(fixture("NM_000581.4.gb"), "utf8"))))
       .add(store("uniprot", uniprot.result))
-      .add(store("mt", ingestGenBank(readFileSync(fixture("NC_012920.1.gb"), "utf8"))));
+      .add(store("mt", ingestGenBank(readFileSync(fixture("NC_012920.1.gb"), "utf8"))))
+      .add(assemblyNames("GRCh38.p14", "hg38", { chrM: "NC_012920.1", MT: "NC_012920.1" }));
     const server = createApi(stores, { base: "https://t/" });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -191,6 +199,19 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&assembly=CHM13`)).status, 400);
     const meta = await get("/v1/meta");
     assert.equal(meta.body.species[0].taxon, 9606);
+  });
+
+  it("accepts a location written with an assembly's own sequence names (hg38:chrM:...)", async () => {
+    for (const written of ["hg38:chrM:8527..8529", "GRCh38:MT:8527..8529", "grch38.p14:chrM:8527..8529"]) {
+      const { body } = await get(`/v1/location?loc=${encodeURIComponent(written)}`);
+      assert.equal(body.id, "refseq:NC_012920.1:8527..8529", written);
+    }
+    const { body } = await get(`/v1/location?loc=${encodeURIComponent("hg38:chrM:8527")}`);
+    assert.deepEqual([body.assembly, body.written], ["GRCh38.p14", { assembly: "GRCh38.p14", name: "chrM" }]);
+    assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("hg38:chrM:8527..8529")}&to=protein`)).body.results.length, 2);
+    assert.equal((await get(`/v1/location?loc=${encodeURIComponent("hg38:chrZ:1")}`)).status, 400);
+    assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("hg38:chrM:8527")}&to=genome&assembly=hg38`)).status, 200);
+    assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("hg38:chrM:8527")}&to=genome&assembly=hg19`)).status, 400);
   });
 
   it("serves the web UI", async () => {

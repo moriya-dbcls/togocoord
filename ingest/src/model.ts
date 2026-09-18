@@ -2,7 +2,7 @@
 import { Mapping, type Block, type Unit } from "@togocoord/core";
 
 export interface Provenance {
-  adapter: "gbff" | "gff3" | "fasta" | "sifts" | "mane" | "chain";
+  adapter: "gbff" | "gff3" | "fasta" | "sifts" | "mane" | "chain" | "assembly-report";
   /** Source file or stream label. */
   file?: string;
   /** Record accession.version (GBFF) or seqid (GFF3). */

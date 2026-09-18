@@ -3,6 +3,30 @@ import { createContext, NamespaceRegistry, type CoordContext, type Unit } from "
 import { Lru, TogoCoordStore, type StoreOptions, type StoredBlock, type StoredEdge } from "@togocoord/ingest";
 import { categoryOf, type Category } from "./category.ts";
 
+export interface Species {
+  taxon: number;
+  organism?: string;
+  /** Names as recorded, e.g. "Mus musculus" and "Mus musculus (house mouse)". */
+  names: string[];
+  assemblies: string[];
+  /** Assembly of genome targets when none is requested and the input is not on a genome of the species. */
+  defaultAssembly?: string;
+}
+
+export interface Assembly {
+  name: string;
+  taxon?: number;
+  /** UCSC database name, e.g. hg19. */
+  ucsc?: string;
+  accession?: string;
+  /** Sequence names (chr7, 7, CM000669.1) -> RefSeq accession. */
+  aliases: Record<string, string>;
+  /** RefSeq accessions of its sequences. */
+  accessions: Set<string>;
+  /** Annotation edges in the stores of this assembly. */
+  annotated: number;
+}
+
 /** A block with a globally unique edge key `<store>:<edge id>`. */
 export interface SetBlock extends StoredBlock {
   key: string;
@@ -16,7 +40,8 @@ export class StoreSet {
   readonly #identical = new Lru<string, string[]>(100_000);
   readonly #scope = new Lru<string, { taxon: number | null; assembly: string | null }>(100_000);
   #meta: Array<Record<string, unknown>> | undefined;
-  #species: Array<{ taxon: number; organism?: string; names: string[]; assemblies: string[] }> | undefined;
+  #species: Species[] | undefined;
+  #assemblies: Assembly[] | undefined;
 
   constructor(paths: string[] = [], options: StoreOptions & { registry?: NamespaceRegistry } = {}) {
     this.registry = options.registry ?? new NamespaceRegistry();
@@ -30,6 +55,7 @@ export class StoreSet {
     this.#scope.clear();
     this.#meta = undefined;
     this.#species = undefined;
+    this.#assemblies = undefined;
     return this;
   }
 
@@ -130,7 +156,7 @@ export class StoreSet {
   /** Per store: file name, recorded metadata (label, organism, assembly, inputs, ...) and content summary. */
   meta(): Array<Record<string, unknown>> {
     this.#meta ??= this.stores.map((s) => {
-      const { summary: _recorded, ...meta } = s.meta();
+      const { summary: _recorded, aliases: _aliases, ...meta } = s.meta();
       return { file: s.path.split(/[\\/]/).pop()!, ...meta, summary: s.summary() };
     });
     return this.#meta;
@@ -177,13 +203,15 @@ export class StoreSet {
       const a = meta[i]!.assembly;
       if (typeof a === "string" && s.sequence(ref)) return a;
     }
-    return undefined;
+    // A sequence the assembly names (its report), though no store of that assembly holds a record of it.
+    const accession = ref.startsWith("refseq:") ? ref.slice("refseq:".length) : undefined;
+    return accession ? this.assemblies().find((x) => x.accessions.has(accession))?.name : undefined;
   }
 
   /** Loaded species with their names and genome assemblies (from store metadata and content summaries). */
-  species(): Array<{ taxon: number; organism?: string; names: string[]; assemblies: string[] }> {
+  species(): Species[] {
     if (this.#species) return this.#species;
-    const out = new Map<number, { taxon: number; organism?: string; names: string[]; assemblies: string[] }>();
+    const out = new Map<number, Species>();
     // Names as recorded ("Mus musculus", "Mus musculus (house mouse)"); the shortest is shown.
     const add = (taxon: number, organism?: string, assembly?: string) => {
       const e = out.get(taxon) ?? { taxon, names: [], assemblies: [] };
@@ -197,8 +225,58 @@ export class StoreSet {
       const taxa = (m.summary as { taxa?: Array<{ taxon: number; organism?: string }> } | undefined)?.taxa ?? [];
       for (const t of taxa) add(t.taxon, t.organism);
     }
+    // The default genome assembly of a species: the one with the most annotation (where transcripts and proteins are).
+    for (const e of out.values()) {
+      const annotated = this.assemblies().filter((a) => a.taxon === e.taxon).sort((a, b) => b.annotated - a.annotated)[0];
+      if (annotated) e.defaultAssembly = annotated.name;
+    }
     this.#species = [...out.values()];
     return this.#species;
+  }
+
+  /** Genome assemblies of the stores (from --assembly-report): names, UCSC database name and sequence names. */
+  assemblies(): Assembly[] {
+    if (this.#assemblies) return this.#assemblies;
+    const out = new Map<string, Assembly>();
+    for (const s of this.stores) {
+      const m = s.meta();
+      if (!m.assembly) continue;
+      const a = out.get(m.assembly) ?? { name: m.assembly, aliases: {}, accessions: new Set<string>(), annotated: 0 };
+      if (m.taxon) a.taxon = Number(m.taxon);
+      if (m.ucsc) a.ucsc = m.ucsc;
+      if (m.accession) a.accession = m.accession;
+      if (m.aliases) {
+        Object.assign(a.aliases, JSON.parse(m.aliases));
+        for (const acc of Object.values(a.aliases)) a.accessions.add(acc);
+      }
+      const edges = (s.summary() as { edges?: Record<string, number> }).edges ?? {};
+      a.annotated += edges.annotation ?? 0;
+      out.set(m.assembly, a);
+    }
+    this.#assemblies = [...out.values()];
+    return this.#assemblies;
+  }
+
+  /** An assembly by name (`GRCh37.p13`, `GRCh37`, `grch37`), UCSC database name (`hg19`) or accession. */
+  assembly(name: string): Assembly | undefined {
+    const n = name.toLowerCase();
+    return this.assemblies().find(
+      (a) => a.name.toLowerCase() === n || a.name.toLowerCase().replace(/\.p\d+$/, "") === n || a.ucsc === n || a.accession?.toLowerCase() === n,
+    );
+  }
+
+  /**
+   * Whether a genome sequence belongs to an assembly: its store's assembly, or named in the assembly's report. A
+   * sequence can belong to several (the mitochondrial NC_012920.1 is in GRCh37.p13 and GRCh38).
+   */
+  inAssembly(ref: string, name: string): boolean {
+    if (this.assemblyOf(ref) === name) return true;
+    const accession = ref.startsWith("refseq:") ? ref.slice("refseq:".length) : undefined;
+    return accession !== undefined && (this.assemblies().find((a) => a.name === name)?.accessions.has(accession) ?? false);
+  }
+
+  defaultAssembly(taxon: number | undefined): string | undefined {
+    return taxon === undefined ? undefined : this.species().find((s) => s.taxon === taxon)?.defaultAssembly;
   }
 
   organismName(taxon: number): string | undefined {

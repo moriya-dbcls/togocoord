@@ -52,8 +52,8 @@
             <option value="">same species</option>
           </select>
           <label for="assembly" class="visually-hidden">Assembly</label>
-          <select id="assembly" name="assembly" title="genome assembly of the targets" hidden>
-            <option value="">same assembly</option>
+          <select id="assembly" name="assembly" title="assembly of genome results; by default the input's assembly, or the annotated one (e.g. GRCh38) for other inputs. Assemblies are crossed through liftOver chains as needed." hidden>
+            <option value="">default assembly</option>
           </select>
         </div>
         <button type="submit">Convert</button>
@@ -72,6 +72,7 @@
           <div class="id-row">
             <code id="input-id"></code>
             <span id="input-kind" class="badge"></span>
+            <span id="input-scope" class="badge species" hidden></span>
             <button type="button" class="small" data-action="faldo">FALDO JSON-LD</button>
             <button type="button" class="small" data-action="annotations">Annotations</button>
           </div>

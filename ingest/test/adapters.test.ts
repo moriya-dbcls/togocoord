@@ -7,7 +7,7 @@ import { edgeMapping, type Edge, type IngestResult } from "../src/model.ts";
 import { extract, MemorySequenceSource, translate, type SequenceSource } from "../src/sequence.ts";
 import { validateTranscript } from "../src/validate.ts";
 import { parseFasta, parseFastaHeaders } from "../src/fasta.ts";
-import { assemblyReportSeqids } from "../src/common.ts";
+import { assemblyReportAliases, assemblyReportSeqids, assemblyReportSequences } from "../src/common.ts";
 import { chr3Source, fixture, genbankSource } from "./helpers.ts";
 
 const GENOMES = ["NC_045512.2", "NC_012920.1", "NC_001405.1"];
@@ -327,3 +327,15 @@ function genbankProteins(): Map<string, string> {
   }
   return out;
 }
+
+describe("assembly report as sequences and names (GRCh38.p14 chr13 rows, real data)", () => {
+  const text = fixture("GRCh38.p14_assembly_report_chr13.txt");
+  it("lists the sequences with length and species", () => {
+    const [chr13] = assemblyReportSequences(text, "report.txt").filter((r) => r.ref === "refseq:NC_000013.11");
+    assert.deepEqual([chr13!.length, chr13!.moltype, chr13!.taxon, chr13!.provenance.adapter], [114364328, "DNA", 9606, "assembly-report"]);
+  });
+  it("maps the assembly's own names to RefSeq accessions", () => {
+    const aliases = assemblyReportAliases(text);
+    assert.deepEqual([aliases["13"], aliases["chr13"], aliases["CM000675.2"]], ["NC_000013.11", "NC_000013.11", "NC_000013.11"]);
+  });
+});

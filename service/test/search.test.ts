@@ -396,6 +396,70 @@ describe("species and assembly scope (spec-service §2.2)", () => {
   });
 });
 
+describe("assemblies of one species (spec-service §2.2)", () => {
+  // GRCh38 chromosome G38 carries the CDS of P; GRCh37 chromosome G37 has no annotation; liftOver chains both ways.
+  const G38 = "refseq:NC_000095.2";
+  const G37 = "refseq:NC_000095.1";
+  const P = "refseq:NP_000095.1";
+  const MT = "refseq:NC_000096.1"; // in both assemblies, like the mitochondrial genome in GRCh37.p13 and GRCh38
+  const dna = (ref: string) => ({ ref, moltype: "DNA" as const, unit: "nt" as const, length: 100_000, taxon: 9606, provenance: { adapter: "assembly-report" as const } });
+  const edge = (kind: Edge["kind"], from: string, to: string, src: number, tgt: number, len: number): Edge => ({
+    kind,
+    ...(kind === "liftover" && { directional: true }),
+    from,
+    to,
+    blocks: [{ srcRef: from, src, tgtRef: to, tgt, len, rev: false }],
+    attributes: {},
+    provenance: { adapter: kind === "liftover" ? "chain" : "gff3" },
+    validation: { status: "ok" },
+  });
+  const withMeta = (name: string, meta: Record<string, string>, r: IngestResult) => {
+    const path = join(dir, `${name}.sqlite`);
+    const sink = new SqliteSink(path);
+    for (const x of r.sequences) sink.sequence(x);
+    for (const e of r.edges) sink.edge(e);
+    sink.close(meta);
+    return new TogoCoordStore(path);
+  };
+  const none = { annotations: [], warnings: [] };
+  const stores = new StoreSet()
+    .add(withMeta("asm38", { assembly: "GRCh38.p14", taxon: "9606", ucsc: "hg38", aliases: JSON.stringify({ chr95: "NC_000095.2", chrM: "NC_000096.1" }) }, {
+      ...none,
+      sequences: [dna(MT), dna(G38), { ...dna(P), ref: P, moltype: "protein", unit: "aa", length: 30 }],
+      edges: [edge("annotation", P, G38, 0, 1000, 90)],
+    }))
+    .add(withMeta("asm37", { assembly: "GRCh37.p13", taxon: "9606", ucsc: "hg19", aliases: JSON.stringify({ chr95: "NC_000095.1", MT: "NC_000096.1" }) }, { ...none, sequences: [dna(G37)], edges: [] }))
+    .add(withMeta("chains", {}, { ...none, sequences: [], edges: [edge("liftover", G37, G38, 500, 900, 2000), edge("liftover", G38, G37, 900, 500, 2000)] }));
+  const ctx = stores.context();
+  const ids = (loc: string, options: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(loc, ctx), options, ctx).map((r) => r.id);
+
+  it("reaches the annotation of another assembly without being asked (GRCh37 -> GRCh38 -> protein)", () => {
+    assert.deepEqual(ids(`${G37}:601..603`, { to: { category: "protein" } }), [`${P}:1`]);
+  });
+
+  it("puts genome results on the input's assembly, or on the requested one", () => {
+    assert.deepEqual(ids(`${G37}:601..603`, { to: { category: "genome" } }), []);
+    assert.deepEqual(ids(`${G37}:601..603`, { to: { category: "genome" }, assembly: "GRCh38.p14" }), [`${G38}:1001..1003`]);
+  });
+
+  it("puts genome results of a protein on the annotated assembly unless another is requested", () => {
+    assert.deepEqual(ids(`${P}:1`, { to: { category: "genome" } }), [`${G38}:1001..1003`]);
+    assert.deepEqual(ids(`${P}:1`, { to: { category: "genome" }, assembly: "GRCh37.p13" }), [`${G37}:601..603`]);
+  });
+
+  it("answers a sequence shared by both assemblies with itself", () => {
+    const [hit] = convert(stores, parseLocationId(`${MT}:5`, ctx), { to: { category: "genome" }, assembly: "GRCh37.p13" }, ctx);
+    assert.deepEqual([hit!.id, hit!.assembly, hit!.path.length], [`${MT}:5`, "GRCh37.p13", 0]);
+  });
+
+  it("lists the other assembly among directly connected sequences, and knows the assemblies", () => {
+    assert.ok(ids(`${G38}:1001..1003`, {}).includes(`${G37}:601..603`));
+    assert.deepEqual(stores.species().find((s) => s.taxon === 9606)?.defaultAssembly, "GRCh38.p14");
+    assert.equal(stores.assembly("hg19")?.name, "GRCh37.p13");
+    assert.equal(stores.assembly("GRCh37")?.aliases.chr95, "NC_000095.1");
+  });
+});
+
 describe("MANE transcripts: RefSeq NM and Ensembl ENST are identical sequences (GPX1, real data)", async () => {
   const mane = new MemorySink();
   await ingestManeSummary(fileURLToPath(fixture("MANE.GRCh38.v1.5.summary_GPX1_RYBP.txt")), mane);

@@ -1,5 +1,6 @@
 // Shared adapter plumbing.
 import { createContext, NamespaceRegistry, type CoordContext, type Location, type Unit } from "@togocoord/core";
+import type { SequenceRecord } from "./model.ts";
 import type { SequenceSource } from "./sequence.ts";
 
 export interface AdapterOptions {
@@ -107,6 +108,54 @@ export function assemblyReportSeqids(text: string): Map<string, string> {
     if (!refseq || refseq === "na") continue;
     const key = `refseq:${refseq}`;
     for (const alias of [name, genbank, refseq, ucsc]) if (alias && alias !== "na") out.set(alias, key);
+  }
+  return out;
+}
+
+/**
+ * UCSC database names of GRC assemblies (the assembly report does not carry them), so that input such as
+ * `hg19:chr7:140453136` can name the assembly.
+ */
+export const UCSC_DATABASES: Record<string, string> = { GRCh38: "hg38", GRCh37: "hg19", GRCm39: "mm39", GRCm38: "mm10" };
+
+/** Assembly name without its patch level (`GRCh37.p13` -> `GRCh37`). */
+export function assemblyBaseName(name: string): string {
+  return name.replace(/\.p\d+$/i, "");
+}
+
+/**
+ * Sequence names of an assembly (Sequence-Name `7`, UCSC `chr7`, GenBank `CM000669.1`) -> RefSeq accession
+ * (`NC_000007.13`), for input written with an assembly's own names.
+ */
+export function assemblyReportAliases(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line.startsWith("#")) continue;
+    const [name, , , , genbank, , refseq, , , ucsc] = line.split("\t");
+    if (!refseq || refseq === "na") continue;
+    for (const alias of [name, ucsc, genbank]) if (alias && alias !== "na" && out[alias] === undefined) out[alias] = refseq;
+  }
+  return out;
+}
+
+/** The sequences of an assembly as records (RefSeq accession, length, species), from its NCBI assembly report. */
+export function assemblyReportSequences(text: string, file?: string): SequenceRecord[] {
+  const info = assemblyReportInfo(text);
+  const out: SequenceRecord[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line.startsWith("#")) continue;
+    const [name, , , type, , , refseq, , length] = line.split("\t");
+    if (!refseq || refseq === "na" || !length || !/^\d+$/.test(length)) continue;
+    out.push({
+      ref: `refseq:${refseq}`,
+      moltype: "DNA",
+      unit: "nt",
+      length: Number(length),
+      ...(/mitochondri|chloroplast|plastid/i.test(type ?? "") && { topology: "circular" as const }),
+      ...(info.taxon && { taxon: Number(info.taxon) }),
+      ...(info.organism && { organism: info.organism }),
+      provenance: { adapter: "assembly-report", ...(file && { file }), record: name! },
+    });
   }
   return out;
 }

@@ -1,16 +1,20 @@
 // TogoCoord web UI: a thin client of the REST API (spec-service §6). State lives in the URL (?loc=&to=&codon=).
 const $ = (sel, root = document) => root.querySelector(sel);
 
+// Without `to`, an example keeps the current selectors; with it, it sets them all (unset ones to their default).
 const EXAMPLES = [
-  ["UniProt residue", "uniprot:P07203:49"],
-  ["genome codon", "refseq:NC_000003.12:complement(49358132..49358134)"],
-  ["structure residue", "pdb:2F8A.A:59"],
-  ["Ensembl protein range", "ensembl:ENSP00000407375.1:40..60"],
-  ["RefSeq protein", "refseq:NP_036366.3:20"],
-  ["whole protein", "refseq:NP_000572.2"],
-  ["overlapping genes (mtDNA)", "refseq:NC_012920.1:8527..8529"],
-  ["human → mouse UniProt", "uniprot:P07203:49", "protein", "10090", "uniprot"],
-  ["mouse → human genome", "refseq:NC_000075.7:106312500..106312550", "genome", "9606"],
+  { label: "UniProt residue", loc: "uniprot:P07203:49" },
+  { label: "genome codon", loc: "refseq:NC_000003.12:complement(49358132..49358134)" },
+  { label: "structure residue", loc: "pdb:2F8A.A:59" },
+  { label: "Ensembl protein range", loc: "ensembl:ENSP00000407375.1:40..60" },
+  { label: "RefSeq protein", loc: "refseq:NP_036366.3:20" },
+  { label: "whole protein", loc: "refseq:NP_000572.2" },
+  { label: "overlapping genes (mtDNA)", loc: "refseq:NC_012920.1:8527..8529" },
+  { label: "hg19 → GRCh38 (BRAF V600E)", loc: "hg19:chr7:140453136", to: "genome", assembly: "GRCh38", needs: "GRCh37" },
+  { label: "hg19 → protein", loc: "hg19:chr7:complement(140453135..140453137)", to: "protein", db: "refseq", needs: "GRCh37" },
+  { label: "protein → hg19", loc: "uniprot:P15056:600", to: "genome", assembly: "GRCh37", needs: "GRCh37" },
+  { label: "human → mouse UniProt", loc: "uniprot:P07203:49", to: "protein", taxon: "10090", db: "uniprot" },
+  { label: "mouse → human genome", loc: "refseq:NC_000075.7:106312500..106312550", to: "genome", taxon: "9606" },
 ];
 
 const form = $("#query");
@@ -161,6 +165,7 @@ function renderResult(r) {
       r.taxon !== undefined && r.taxon !== inputTaxon
         ? el("span", { class: "badge species", title: `taxon ${r.taxon}` }, r.organism ?? `taxon ${r.taxon}`)
         : null,
+      r.assembly && multiAssembly.has(r.taxon) ? el("span", { class: "badge species", title: "genome assembly" }, r.assembly) : null,
       el("span", { class: "badge", title: "path cost" }, `cost ${r.cost}`),
       r.approximate ? el("span", { class: "badge warn", title: "the path uses an edge not verified against the sequences; positions may be shifted" }, "approximate") : null,
       r.orientation !== "forward" ? el("span", { class: "badge" }, r.orientation) : null,
@@ -174,13 +179,30 @@ function renderResult(r) {
   return card;
 }
 
+/** Species with several assemblies (their genome results carry an assembly badge). */
+const multiAssembly = new Set();
+/** Loaded assemblies by name, UCSC name and name without patch level (for examples and URLs: hg19, GRCh37). */
+const assemblyNames = new Map();
+
 /** Loaded species (and assemblies, shown only when a species has several) for the scope selectors. */
-const speciesReady = api("/v1/meta").then(({ species = [] }) => {
+const speciesReady = api("/v1/meta").then(({ species = [], assemblies = [] }) => {
   taxonSelect.append(...species.map((s) => el("option", { value: String(s.taxon) }, s.organism ?? `taxon ${s.taxon}`)));
+  for (const s of species) if (s.assemblies.length > 1) multiAssembly.add(s.taxon);
+  for (const a of assemblies) for (const n of [a.name, a.name.replace(/\.p\d+$/, ""), a.ucsc]) if (n) assemblyNames.set(n.toLowerCase(), a.name);
+  // Only species with a choice; the UCSC name helps those who know hg19 / hg38.
   assemblySelect.append(
-    ...species.flatMap((s) => s.assemblies.map((a) => el("option", { value: a }, `${a}${s.organism ? ` (${s.organism})` : ""}`))),
+    ...assemblies
+      .filter((a) => multiAssembly.has(a.taxon))
+      .map((a) => {
+        const s = species.find((x) => x.taxon === a.taxon);
+        const def = s?.defaultAssembly === a.name ? " · annotated" : "";
+        const title = `${s?.organism ?? `taxon ${a.taxon}`}${a.accession ? ` · ${a.accession}` : ""}${def}`;
+        return el("option", { value: a.name, title }, `${a.name}${a.ucsc ? ` / ${a.ucsc}` : ""}`);
+      }),
   );
-  assemblySelect.hidden = !species.some((s) => s.assemblies.length > 1);
+  assemblySelect.hidden = multiAssembly.size === 0;
+  // Examples that need data not loaded here (e.g. GRCh37) are left out.
+  for (const b of $("#examples").querySelectorAll("button[data-needs]")) b.hidden = !assemblyNames.has(b.dataset.needs.toLowerCase());
 }).catch(() => {});
 
 async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
@@ -191,6 +213,7 @@ async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
   }
   toSelect.value = to ?? "";
   taxonSelect.value = taxon;
+  assembly = assemblyNames.get((assembly ?? "").toLowerCase()) ?? assembly;
   assemblySelect.value = assembly;
   dbSelect.value = db;
   $("#error").hidden = true;
@@ -205,6 +228,10 @@ async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
     ]);
     $("#input-id").textContent = info.id;
     $("#input-kind").textContent = `${info.unit === "aa" ? "protein" : "nucleotide"}${info.kind === "order" ? " · order" : ""}`;
+    // Species and assembly of the input; the name as written (hg19:chr7:...) when it was given that way.
+    const scope = [info.organism, info.assembly, info.written && `written as ${info.written.name}`].filter(Boolean).join(" · ");
+    $("#input-scope").textContent = scope;
+    $("#input-scope").hidden = !scope;
     $("#segments").replaceChildren(...segmentRows(info.segments));
     const inputCard = $("#input .card");
     $(".extra", inputCard).hidden = true;
@@ -236,14 +263,22 @@ $("#input .card").addEventListener("click", (e) => {
 });
 $("#examples").append(
   "Examples: ",
-  ...EXAMPLES.map(([label, id, to, taxon, db]) =>
-    el("button", {
+  ...EXAMPLES.map((x) => {
+    const b = el("button", {
       type: "button",
       class: "small",
-      title: id,
-      onclick: () => (to ? run(id, to, true, taxon ?? "", "", db ?? "") : run(id, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value)),
-    }, label),
-  ),
+      title: x.loc,
+      onclick: () =>
+        x.to
+          ? run(x.loc, x.to, true, x.taxon ?? "", x.assembly ?? "", x.db ?? "")
+          : run(x.loc, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value),
+    }, x.label);
+    if (x.needs) {
+      b.dataset.needs = x.needs;
+      b.hidden = true;
+    }
+    return b;
+  }),
 );
 
 // ---- Loaded data view ------------------------------------------------------------------------------------------

@@ -188,3 +188,11 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 - **自己検証**: `--fasta` で両方のゲノム配列を与えると、chain ごとに等間隔に最大20ブロック（各200塩基まで）を取り出して比べる。一致率が0.5以上なら ok（`basis: "partial"`）。整列した相同配列では0.6〜0.9、位置がずれていれば0.25前後になる。hg38 ↔ mm39 では全体で約70%だった。
 - **保存（スキーマ5）**: 向きを持つ edge のブロックは、`block` 表ではなく、256ブロックごとの `chunk` 表に入れる。chunk には、両方の配列、元の側の範囲（`lo`、`hi`）、最初のブロックの位置、ブロックの数と、各ブロックを「前のブロックからの差分（元の側、先の側）と長さ」の zigzag LEB128 で並べたバイト列を持つ。元の側の範囲を R*Tree（`chunk_src`）で引き、該当する chunk だけを展開する。ブロック1個あたり約5バイトで、hg38 → mm39 の3,177万ブロックは158MB になる（`block` 表では約7GB を見込んでいた）。読み手はスキーマ4と5を受け付ける。
 - 集計（§12）の例には、chain の範囲から30塩基を選ぶ。
+
+## 15. アセンブリの配列名と、アノテーションのないアセンブリ（v0.5）
+
+- `--assembly-report FILE` を指定すると、保存先の `meta` に、アセンブリの配列名（Sequence-Name、UCSC 名、GenBank の accession）から RefSeq の accession への対応（`aliases`、JSON）と、UCSC のデータベース名（`ucsc`。GRC のアセンブリは assembly report に載っていないので、組み込みの表 `UCSC_DATABASES` から決める。GRCh38 → hg38、GRCh37 → hg19、GRCm39 → mm39、GRCm38 → mm10）も記録する。サービスはこれを使い、`hg19:chr7:140453136` のような入力を読み替える（spec-service §2.2）。
+- NCBI の assembly report（`*_assembly_report.txt`）そのものも入力にできる。各配列を、RefSeq の accession、長さ、生物種、DNA（ミトコンドリアと葉緑体は環状）の SequenceRecord にする。アノテーションのないアセンブリ（例: GRCh37）を、ゲノムの FASTA（ダイジェスト用）と一緒に1つの保存先にする。
+- chain の保存先は、`--from-report` と `--to-report` の両方のアセンブリの配列の記録（種と長さ）も持つ。
+
+**ヒト GRCh37 ↔ GRCh38（2026-09-18）**: `grch37.sqlite`（GRCh37.p13 の assembly report と genomic.fna）、`chain_hg19ToHg38.sqlite`、`chain_hg38ToHg19.sqlite`（UCSC の `hg19ToHg38.over.chain.gz`、`hg38ToHg19.over.chain.gz`）。ほかに、以前に作った `human.sqlite` には配列名の記録がないので、GRCh38 の配列名だけの保存先 `grch38_names.sqlite` を assembly report から作った（705配列）。

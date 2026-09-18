@@ -1,7 +1,15 @@
 export { defaultFastaRef, ingestFastaFile, type FastaOptions } from "./adapter-fasta.ts";
 export { GenBankIngestor, ingestGenBank, ingestGenBankRecords } from "./adapter-gbff.ts";
 export { Gff3Ingestor, ingestGff3, ingestGff3Document, type Gff3Options } from "./adapter-gff3.ts";
-export { accessionRef, assemblyReportInfo, assemblyReportSeqids, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, extent, VersionResolver, type AdapterOptions } from "./common.ts";
+export {
+  accessionRef,
+  assemblyBaseName,
+  assemblyReportAliases,
+  assemblyReportInfo,
+  assemblyReportSeqids,
+  assemblyReportSequences,
+  UCSC_DATABASES,
+  ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, extent, VersionResolver, type AdapterOptions } from "./common.ts";
 export { ingestSiftsFile, type SiftsOptions } from "./adapter-sifts.ts";
 export { ingestManeSummary } from "./adapter-mane.ts";
 export { chainBlocks, ingestChainFile, readChains, type Chain, type ChainOptions, type ChainStats } from "./adapter-chain.ts";

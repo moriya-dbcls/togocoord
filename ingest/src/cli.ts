@@ -9,7 +9,15 @@ import { readFileSync, statSync, existsSync } from "node:fs";
 import { basename } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { NamespaceRegistry } from "@togocoord/core";
-import { accessionRef, assemblyReportInfo, assemblyReportSeqids, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, VersionResolver } from "./common.ts";
+import {
+  accessionRef,
+  assemblyBaseName,
+  assemblyReportAliases,
+  assemblyReportInfo,
+  assemblyReportSeqids,
+  assemblyReportSequences,
+  UCSC_DATABASES,
+  ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, VersionResolver } from "./common.ts";
 import { parseFastaHeaders } from "./fasta.ts";
 import { FaiSequenceSource } from "./fasta-index.ts";
 import { MemorySequenceSource, type SequenceSource } from "./sequence.ts";
@@ -23,7 +31,8 @@ import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 const USAGE =
   "usage: togocoord-ingest [--db OUT.sqlite [--overwrite]] [--fasta FILE]... [--seqid-map ASSEMBLY_REPORT] [--assembly-report FILE]\n" +
   "                        [--label TEXT] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations]\n" +
-  "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain files)] FILE...\n";
+  "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain files)] FILE...\n" +
+  "FILE: .gbff/.gb/.gp, .gff3, .fa/.fna/.faa, SIFTS .tsv, MANE summary, UCSC .chain, NCBI *_assembly_report.txt (optionally .gz)\n";
 const args = process.argv.slice(2);
 if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
   process.stderr.write(USAGE);
@@ -55,6 +64,8 @@ const meta: Record<string, string> = {};
 /** Sequence names of the two assemblies of a liftOver chain file. */
 let fromNames: Map<string, string> | undefined;
 let toNames: Map<string, string> | undefined;
+/** Both assemblies' reports: the chain store records the species and length of the sequences it connects. */
+const chainReports: string[] = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i]!;
   if (a === "--db") db = args[++i];
@@ -66,8 +77,14 @@ for (let i = 0; i < args.length; i++) {
     if (a === "--seqid-map") seqids = assemblyReportSeqids(text);
     const info = assemblyReportInfo(text);
     for (const [k, v] of Object.entries(info)) meta[k] ??= v;
+    // Sequence names of the assembly (chr7, 7, CM000669.2), so input may be written like hg38:chr7:140753336.
+    meta.aliases ??= JSON.stringify(assemblyReportAliases(text));
+    const ucsc = info.assembly && UCSC_DATABASES[assemblyBaseName(info.assembly)];
+    if (ucsc) meta.ucsc ??= ucsc;
   } else if (a === "--from-report" || a === "--to-report") {
-    const names = assemblyReportSeqids(readFileSync(args[++i]!, "utf8"));
+    const text = readFileSync(args[++i]!, "utf8");
+    const names = assemblyReportSeqids(text);
+    chainReports.push(text);
     if (a === "--from-report") fromNames = names;
     else toNames = names;
   } else if (["--label", "--taxon", "--organism", "--assembly"].includes(a)) meta[a.slice(2)] = args[++i]!;
@@ -124,9 +141,23 @@ for (const file of inputs) {
   const name = file.replace(/\.gz$/, "");
   if (/\.chain$/i.test(name)) {
     if (!fromNames || !toNames) throw new Error(`${file}: chain files need --from-report and --to-report (NCBI assembly reports of both assemblies)`);
+    for (const text of chainReports) for (const r of assemblyReportSequences(text, basename(file))) sink.sequence(r);
     const s = await ingestChainFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => fromNames!.get(n), toRef: (n) => toNames!.get(n) });
     const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(1) : "-";
     process.stderr.write(`${file}: ${s.chains} chains, ${s.blocks} blocks, ${s.skipped} skipped; sampled identity ${identity}%\n`);
+    continue;
+  }
+  if (/assembly_report\.txt$/i.test(name)) {
+    // The sequences of an assembly (length, species) and its names, e.g. an assembly without annotation (GRCh37).
+    const text = file.endsWith(".gz") ? gunzipSync(readFileSync(file)).toString("utf8") : readFileSync(file, "utf8");
+    const records = assemblyReportSequences(text, basename(file));
+    for (const r of records) sink.sequence(r);
+    const info = assemblyReportInfo(text);
+    for (const [k, v] of Object.entries(info)) meta[k] ??= v;
+    meta.aliases ??= JSON.stringify(assemblyReportAliases(text));
+    const ucsc = info.assembly && UCSC_DATABASES[assemblyBaseName(info.assembly)];
+    if (ucsc) meta.ucsc ??= ucsc;
+    process.stderr.write(`${file}: ${records.length} sequences of ${info.assembly ?? "the assembly"}\n`);
     continue;
   }
   if (/MANE.*summary\.txt$/i.test(name)) {

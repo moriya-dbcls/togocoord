@@ -60,11 +60,30 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
   const prefer = options.prefer ?? DEFAULT_PREFER;
   const ctx = stores.context();
 
+  /**
+   * Input written with an assembly's own sequence names, `<assembly>:<sequence name>[:<location>]` (e.g.
+   * `hg19:chr7:140453136`, `GRCh37:7:140453136`), is rewritten to the RefSeq sequence (`refseq:NC_000007.13:...`).
+   */
+  const resolveAssemblyName = (text: string): { text: string; assembly?: string; name?: string } => {
+    const m = /^([A-Za-z][\w.-]*):([^:\s]+)(:.*)?$/.exec(text.trim());
+    if (!m || stores.registry.get(m[1]!)) return { text };
+    const assembly = stores.assembly(m[1]!);
+    if (!assembly) return { text };
+    const name = m[2]!;
+    const accession =
+      assembly.aliases[name] ??
+      assembly.aliases[name.replace(/^chr/i, "")] ??
+      assembly.aliases[`chr${name}`] ??
+      (Object.values(assembly.aliases).includes(name) ? name : undefined);
+    if (!accession) throw new HttpError(400, `no sequence '${name}' in ${assembly.name} (use a name such as chr1, 1 or a RefSeq accession)`);
+    return { text: `refseq:${accession}${m[3] ?? ""}`, assembly: assembly.name, name };
+  };
+
   /** Location IDs; `namespace:accession` alone means the whole sequence (1..length). */
   const parse = (text: string | null | undefined): Location => {
     if (!text) throw new HttpError(400, "missing parameter 'loc'");
     try {
-      return parseLocationId(text, ctx, { wholeSequence: true });
+      return parseLocationId(resolveAssemblyName(text).text, ctx, { wholeSequence: true });
     } catch (e) {
       if (e instanceof LocationSyntaxError) throw new HttpError(400, e.message, { position: e.position });
       if (e instanceof LocationSemanticError) throw new HttpError(400, e.message);
@@ -100,10 +119,10 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
   };
   const assemblyParam = (v: unknown): string | undefined => {
     if (v === undefined || v === null || v === "") return undefined;
-    const name = String(v).trim().toLowerCase();
-    const hit = stores.species().flatMap((s) => s.assemblies).find((a) => a.toLowerCase() === name);
-    if (!hit) throw new HttpError(400, `unknown assembly '${String(v)}' (loaded: ${stores.species().flatMap((s) => s.assemblies).join(", ")})`);
-    return hit;
+    // GRCh37.p13, GRCh37, grch37 or the UCSC name hg19.
+    const hit = stores.assembly(String(v).trim());
+    if (!hit) throw new HttpError(400, `unknown assembly '${String(v)}' (loaded: ${stores.assemblies().map((a) => a.name).join(", ")})`);
+    return hit.name;
   };
 
   interface Scope {
@@ -140,13 +159,23 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     return {
       input: formatLocationId(loc, ctx, codon),
       ...(stores.taxonOf(loc.outer) !== undefined && { inputTaxon: stores.taxonOf(loc.outer) }),
+      ...(stores.assemblyOf(loc.outer) !== undefined && { inputAssembly: stores.assemblyOf(loc.outer) }),
       results: results.slice(0, maxResults).map((r) => conversionJson(r, ctx, base, codon, stores)),
       ...(results.length > maxResults && { truncated: true }),
     };
   };
 
   const routes: Array<[string, RegExp, (m: RegExpMatchArray, q: URLSearchParams, body: unknown, req: IncomingMessage) => unknown]> = [
-    ["GET", /^\/v1\/meta$/, () => ({ stores: stores.meta(), species: stores.species(), base })],
+    [
+      "GET",
+      /^\/v1\/meta$/,
+      () => ({
+        stores: stores.meta(),
+        species: stores.species(),
+        assemblies: stores.assemblies().map(({ aliases: _aliases, accessions: _accessions, ...a }) => a),
+        base,
+      }),
+    ],
     [
       "GET",
       /^\/v1\/convert$/,
@@ -192,12 +221,21 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
       (_m, q) => {
         const loc = parse(q.get("loc"));
         const codon = codonParam(q);
+        const written = resolveAssemblyName(q.get("loc") ?? "");
+        const taxon = stores.taxonOf(loc.outer);
+        const organism = taxon !== undefined ? stores.organismName(taxon) : undefined;
+        const assembly = stores.assemblyOf(loc.outer);
         return {
           id: formatLocationId(loc, ctx, codon),
           iri: locationIri(loc, ctx, base),
           sequence: loc.outer,
           unit: ctx.unitOf(loc.outer),
           kind: loc.kind,
+          ...(taxon !== undefined && { taxon }),
+          ...(organism && { organism }),
+          ...(assembly && { assembly }),
+          // The sequence as written with the assembly's own name (e.g. chr7 of GRCh37.p13).
+          ...(written.name && { written: { assembly: written.assembly, name: written.name } }),
           segments: loc.segments.map((s) => segmentJson(s, ctx)),
         };
       },
@@ -382,6 +420,7 @@ function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: C
     ...(r.tags.length && { tags: r.tags }),
     ...(r.taxon !== undefined && { taxon: r.taxon }),
     ...(organism && { organism }),
+    ...(r.assembly && { assembly: r.assembly }),
     cost: r.cost,
     approximate: r.approximate,
     orientation: r.orientation,

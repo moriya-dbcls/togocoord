@@ -24,7 +24,11 @@ export interface ConvertOptions {
    * (spec-service §2.2).
    */
   taxon?: number;
-  /** Assembly of genome targets (e.g. GRCm39). Default: the input's; another assembly is reached only when named. */
+  /**
+   * Assembly of genome targets (e.g. GRCh37.p13). Default: the input's when the input is on a genome of the target
+   * species, else the species' default (annotated) assembly. Assemblies of one species are crossed when a path needs
+   * it (e.g. GRCh37 -> GRCh38 -> protein); this only chooses the assembly of genome results.
+   */
   assembly?: string;
 }
 
@@ -58,6 +62,8 @@ export interface Conversion {
   tags: string[];
   /** Species of the target: tracked along the path (its own record may not carry one, e.g. Ensembl). */
   taxon?: number;
+  /** Assembly of a genome target. */
+  assembly?: string;
   cost: number;
   /**
    * The path uses an edge that failed self-validation or that NCBI flags with /exception without full verification:
@@ -114,16 +120,17 @@ interface State {
   /** Species and genome assembly the path is in (undefined until known). */
   taxon: number | undefined;
   assembly: string | undefined;
-  /** The path has stepped into another species or assembly (at most once). */
-  crossed: boolean;
+  /** The path has stepped into another species / another assembly of the species (each at most once). */
+  crossedSpecies: boolean;
+  crossedAssembly: boolean;
   /** Insertion order, for deterministic tie-breaking. */
   seq: number;
 }
 
 /**
- * Extra hops allowed when crossing species or assemblies: the crossing step and the way back to the target's layer.
- * Without a target the search stops where it lands in the other species: the result is what the input corresponds to
- * there (spec-service §2.2).
+ * Extra hops allowed when crossing species: the crossing step and the way back to the target's layer. Without a target
+ * the search stops where it lands in the other species: the result is what the input corresponds to there
+ * (spec-service §2.2). A species with several assemblies adds one hop for the liftOver between them.
  */
 export const CROSSING_HOPS = 2;
 
@@ -137,15 +144,22 @@ const CROSSING_KINDS = new Set<Step["kind"]>(["liftover"]);
  */
 export function convert(stores: StoreSet, input: Location, options: ConvertOptions = {}, ctx: CoordContext = stores.context()): Conversion[] {
   const targets = options.to === undefined ? undefined : Array.isArray(options.to) ? options.to : [options.to];
-  // Scope (spec-service §2.2): stay in the input's species and assembly unless another one is requested.
+  // Scope (spec-service §2.2): stay in the input's species unless another one is requested; genome results on one
+  // assembly (see ConvertOptions.assembly).
   const inputTaxon = stores.taxonOf(input.outer);
   const inputAssembly = stores.assemblyOf(input.outer);
-  const crossing =
-    (options.taxon !== undefined && options.taxon !== inputTaxon) || (options.assembly !== undefined && options.assembly !== inputAssembly);
-  const maxHops = options.maxHops ?? (targets ? 4 : 1) + (crossing ? CROSSING_HOPS : 0);
+  const targetTaxon = options.taxon ?? inputTaxon;
+  const crossSpecies = options.taxon !== undefined && options.taxon !== inputTaxon;
+  const targetAssembly = options.assembly ?? (!targets ? undefined : !crossSpecies && inputAssembly ? inputAssembly : stores.defaultAssembly(targetTaxon));
+  const assembliesOf = (taxon: number | undefined) => stores.species().find((s) => s.taxon === taxon)?.assemblies.length ?? 0;
+  const multiAssembly = targets !== undefined && (assembliesOf(inputTaxon) > 1 || assembliesOf(targetTaxon) > 1);
+  const maxHops = options.maxHops ?? (targets ? 4 : 1) + (crossSpecies ? CROSSING_HOPS : 0) + (multiAssembly ? 1 : 0);
   const inScope = (s: State) =>
-    (options.taxon === undefined || s.taxon === options.taxon || (s.taxon === undefined && !crossing)) &&
-    (options.assembly === undefined || stores.category(s.location.outer) !== "genome" || stores.assemblyOf(s.location.outer) === options.assembly);
+    (targetTaxon === undefined || s.taxon === targetTaxon || (s.taxon === undefined && !crossSpecies)) &&
+    (targetAssembly === undefined ||
+      stores.category(s.location.outer) !== "genome" ||
+      stores.assemblyOf(s.location.outer) === undefined ||
+      stores.inAssembly(s.location.outer, targetAssembly));
   const matches = (ref: string) =>
     !targets ||
     targets.some((t) =>
@@ -155,7 +169,8 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
   const layerOf = (ref: string) => LAYER[stores.category(ref)];
   const cap = depthCap(stores, input.outer, targets, layerOf);
   // A sequence may be worth reaching in several layer states (trend, turns); keep the cheapest per state.
-  const key = (s: Pick<State, "location" | "trend" | "turns" | "crossed">) => `${s.location.outer}|${s.trend}|${s.turns}|${s.crossed}`;
+  const key = (s: Pick<State, "location" | "trend" | "turns" | "crossedSpecies" | "crossedAssembly">) =>
+    `${s.location.outer}|${s.trend}|${s.turns}|${s.crossedSpecies}|${s.crossedAssembly}`;
   const prefer = new Set(options.prefer ?? []);
   const preferred = (ref: string) => prefer.size > 0 && stores.tags(ref).some((t) => prefer.has(t));
   const start: State = {
@@ -168,7 +183,8 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     detours: 0,
     taxon: inputTaxon,
     assembly: inputAssembly,
-    crossed: false,
+    crossedSpecies: false,
+    crossedAssembly: false,
     seq: 0,
   };
   const best = new Map<string, [number, number]>([[key(start), [0, 0]]]);
@@ -178,6 +194,21 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
   queue.push(start);
   const results: Conversion[] = [];
   const reached = new Set<string>([input.outer]);
+  // A sequence shared by the assemblies (e.g. chrM in GRCh37.p13 and GRCh38) is its own answer in the other one.
+  if (targetAssembly !== undefined && targetAssembly !== inputAssembly && matches(input.outer) && inScope(start)) {
+    results.push({
+      location: input,
+      id: formatLocationId(input, ctx),
+      category: stores.category(input.outer),
+      tags: stores.tags(input.outer),
+      ...(inputTaxon !== undefined && { taxon: inputTaxon }),
+      assembly: targetAssembly,
+      cost: 0,
+      approximate: false,
+      orientation: start.orientation,
+      path: [],
+    });
+  }
 
   while (queue.size) {
     const state = queue.pop()!;
@@ -195,6 +226,9 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         category: stores.category(ref),
         tags: stores.tags(ref),
         ...(state.taxon !== undefined && { taxon: state.taxon }),
+        ...(stores.assemblyOf(ref) !== undefined && {
+          assembly: targetAssembly !== undefined && stores.inAssembly(ref, targetAssembly) ? targetAssembly : stores.assemblyOf(ref),
+        }),
         cost: state.cost,
         approximate: state.path.some(isApproximate),
         orientation: state.orientation,
@@ -203,7 +237,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       if (options.maxResults !== undefined && results.length >= options.maxResults) break;
     }
     if (state.path.length >= maxHops) continue;
-    if (!targets && state.crossed) continue; // landed in the other species (see CROSSING_HOPS)
+    if (!targets && state.crossedSpecies) continue; // landed in the other species (see CROSSING_HOPS)
     // A reached target leads on only to identical sequences: the records of the same residues in other databases
     // (RefSeq, Ensembl, UniProt) are results too. A target outside the requested scope (e.g. the human protein when
     // mouse is asked for) also leads on by crossing, or towards the genome where the crossing is (UniProt -> identical
@@ -228,8 +262,9 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       const scope = nextScope(state, next);
       if (!scope) continue;
       const identity = next.path.at(-1)!.kind === "identity";
-      if (inScopeTarget && !(identity && scope.crossed === state.crossed)) continue;
-      if (outOfScope && !identity && !(scope.crossed && !state.crossed) && !(dir === -1 && turns === state.turns)) continue;
+      const crosses = (scope.crossedSpecies && !state.crossedSpecies) || (scope.crossedAssembly && !state.crossedAssembly);
+      if (inScopeTarget && !(identity && scope.crossedSpecies === state.crossedSpecies)) continue;
+      if (outOfScope && !identity && !crosses && !(dir === -1 && turns === state.turns)) continue;
       // The sequence being left becomes an intermediate node of the path (the source is not counted).
       const detours = state.detours + (state.path.length > 0 && prefer.size > 0 && !preferred(ref) ? 1 : 0);
       const candidate = { ...next, ...scope, trend, turns, detours, seq: seq++ };
@@ -241,22 +276,25 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     }
   }
   // Where a step leads in species and assembly; undefined when the step leaves the requested scope.
-  function nextScope(state: State, next: { location: Location; path: Step[] }): Pick<State, "taxon" | "assembly" | "crossed"> | undefined {
+  type Scope = Pick<State, "taxon" | "assembly" | "crossedSpecies" | "crossedAssembly">;
+  function nextScope(state: State, next: { location: Location; path: Step[] }): Scope | undefined {
     const ref = next.location.outer;
     const taxon = stores.taxonOf(ref);
     const assembly = stores.assemblyOf(ref);
-    const across =
-      CROSSING_KINDS.has(next.path.at(-1)!.kind) ||
-      (taxon !== undefined && state.taxon !== undefined && taxon !== state.taxon) ||
-      (assembly !== undefined && state.assembly !== undefined && assembly !== state.assembly);
-    if (!across) return { taxon: state.taxon ?? taxon, assembly: assembly ?? state.assembly, crossed: state.crossed };
-    if (!crossing || state.crossed) return undefined;
-    // Only into the requested species / assembly.
-    const toTaxon = taxon ?? options.taxon ?? state.taxon;
-    if (options.taxon !== undefined && toTaxon !== options.taxon) return undefined;
-    if (options.taxon === undefined && toTaxon !== state.taxon) return undefined;
-    if (options.assembly !== undefined && assembly !== undefined && assembly !== options.assembly) return undefined;
-    return { taxon: toTaxon, assembly, crossed: true };
+    const lift = CROSSING_KINDS.has(next.path.at(-1)!.kind);
+    const toTaxon = taxon ?? (lift && crossSpecies ? options.taxon : undefined) ?? state.taxon;
+    const same = { crossedSpecies: state.crossedSpecies, crossedAssembly: state.crossedAssembly };
+    if (toTaxon !== undefined && state.taxon !== undefined && toTaxon !== state.taxon) {
+      // Into another species: only into the requested one, once.
+      if (!crossSpecies || state.crossedSpecies || toTaxon !== options.taxon) return undefined;
+      return { taxon: toTaxon, assembly, ...same, crossedSpecies: true };
+    }
+    if (lift || (assembly !== undefined && state.assembly !== undefined && assembly !== state.assembly)) {
+      // Into another assembly of the species: whenever a path needs it, once.
+      if (state.crossedAssembly) return undefined;
+      return { taxon: state.taxon ?? toTaxon, assembly: assembly ?? state.assembly, ...same, crossedAssembly: true };
+    }
+    return { taxon: state.taxon ?? taxon, assembly: assembly ?? state.assembly, ...same };
   }
 
   // Equal-cost results: preferred targets first (stable otherwise).
@@ -329,7 +367,7 @@ function expand(
   ctx: CoordContext,
   allowed: (ref: string) => boolean = () => true,
   identityOnly = false,
-): Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossed">> {
+): Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossedSpecies" | "crossedAssembly">> {
   const loc = state.location;
   const byEdge = new Map<string, SetBlock[]>();
   for (const seg of identityOnly ? [] : loc.segments) {
@@ -342,7 +380,7 @@ function expand(
       } else byEdge.set(blk.key, [blk]);
     }
   }
-  const out: Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossed">> = [];
+  const out: Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossedSpecies" | "crossedAssembly">> = [];
   const inputId = formatLocationId(loc, ctx);
 
   // Identity: the same coordinates on every sequence with identical residues.
