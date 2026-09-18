@@ -1,4 +1,4 @@
-# TogoCoord アダプタ仕様（v0.2：GBFF / GFF3）
+# TogoCoord アダプタ仕様（v0.3：GBFF / GFF3 / FASTA / SIFTS）
 
 2026-09-18。[design.md](design.md) の §6 のうち、フェーズ2で実装した部分の規則。実装は `ingest/`。
 
@@ -20,8 +20,9 @@ CLI（`togocoord-ingest`）は、これらを JSON Lines（`{"record": "sequence
 
 ## 2. 参照キー
 
-- accession に `XX_` の形の接頭辞があれば `refseq:`、なければ `insdc:` とする（例: `refseq:NC_012920.1`、`insdc:AAF99721.1`）。
-- GFF3 の seqid が accession でない場合（Ensembl の `1` など）は、`seqidToRef` で対応を与える。与えない場合は警告を出して、その seqid の feature を読み飛ばす。
+- Ensembl の安定 ID（`ENST…`、`ENSP…`、他種の `ENSMUSP…` など）は `ensembl:`、accession に `XX_` の形の接頭辞があれば `refseq:`、それ以外は `insdc:` とする（例: `refseq:NC_012920.1`、`insdc:AAF99721.1`、`ensembl:ENSP00000407375.1`）。
+- GFF3 の seqid が accession でない場合（Ensembl の `1` など）は、`seqidToRef` で対応を与える。CLI では `--seqid-map` に NCBI の assembly report を渡すと、配列名（`1`、`MT`）、GenBank の accession（`CM000663.2`、`KI270728.1`）、UCSC の名前（`chr1`）を、すべて RefSeq の accession に対応させる。対応がない場合は警告を出して、その seqid の feature を読み飛ばす。
+- Ensembl の GFF3 は version を別の属性（`transcript_id=ENST00000419783;version=3`、CDS 行の `protein_id=…;version=1`）に書くので、結合して `ensembl:ENST00000419783.3` とする。version がない ID は、`--fasta` の配列の ID から補う（`VersionResolver`）。
 
 ---
 
@@ -49,8 +50,10 @@ CLI（`togocoord-ingest`）は、これらを JSON Lines（`{"record": "sequence
   - `protein_id` のタンパク質 → seqid の配列への edge にする。`protein_id` がない場合、偽遺伝子（`pseudo=true`）は警告なしで読み飛ばす。それ以外（免疫グロブリンの遺伝子断片など）は警告を出す。
   - codon_start は、5' 側の端の行の `phase + 1` とする。
   - GFF3 には翻訳配列がないので、aaLength は §5 の規則で推定する。
+- **転写産物**: RNA 系の型、または `transcript_id` を持つ feature（Ensembl の gene segment など）。ただし、exon・CDS・UTR など転写産物の部分を表す型は、NCBI では `transcript_id` を持っていても転写産物として扱わない。
 - **RNA 系**（mRNA、ncRNA、lnc_RNA など）: `Parent` で紐づく **exon の行から location を組み立てる**。NCBI の GFF3 では、mRNA 自体は遺伝子の範囲全体を表す1行にすぎないため。エキソンは親より後に来るので、転写産物は保留しておく。一定数（1000件）の feature が流れても更新されないとき、別の配列に移ったとき、または最後に確定させる。エキソンがない場合は、転写産物自身の行を使う。`transcript_id` があれば、転写産物 → 配列への edge にする。
 - **アライメント**（`cDNA_match`、`match` など、`Target` を持つ行）: `Target` の配列 → seqid の配列への alignment edge にする。
+  - 自己検証: ブロックごとに同一塩基数を数え、**自分で数えた一致率が5割以上なら ok** とする（Gap の読み違いで座標がずれると25%前後に落ちる）。NCBI の `num_mismatch` と数が違う場合は、detail に `(counted N)` と記録する（例: NM_001291281.3 は、数えると3、`num_mismatch=4`）。v0.2 では報告値との一致で判定していたため、座標は正しいのに不一致とした例がヒトで23件あった。
   - Gap（CIGAR）の各操作の意味:
 
     | 操作 | 意味 |
@@ -91,7 +94,13 @@ CLI（`togocoord-ingest`）は、これらを JSON Lines（`{"record": "sequence
 | 転写産物のモデル | ゲノムから組み立てた配列と、転写産物自身の配列（`--fasta rna.fna`）を比べる | 長さが同じで、塩基置換が5%以下なら ok（座標は保たれる）。転写産物が長く、はみ出した部分が9割以上 A なら、ポリA鎖とみなしてその手前で比べる。それ以外の長さの違いは、挿入・欠失ありとして mismatch |
 | alignment | ブロックごとに同一塩基数を数える | `num_mismatch` があれば、それと一致するかを判定する |
 
-CDS の検証では、次の特殊ケースを考慮する。
+CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 release 116 の全 CDS、約37万件がすべて ok になることを確認した）。
+
+- **CDS のタンパク質長**: 公開タンパク質配列が手元にあれば、その長さを使う（推定では、終止コドンのない不完全な CDS の最後の残基が欠けるため）。
+- **先頭の `X`**: phase が0以外で、公開配列の先頭が `X` なら、Ensembl の慣習（欠けた先頭コドンを1残基とする）とみなし、`leadingPartialCodon` で写像を作る（spec-core §4.2）。これがないと、ヒトの Ensembl で7,700件以上が1残基ずれていた。
+- **翻訳開始コドン**: 5' 側が完全な CDS で、先頭のコドンが翻訳表の開始コドン、または公開配列の1番目が M なら、M として読む（GTG、ACG などの AUG 以外の開始。Ensembl で82件）。
+- **読み替えられた終止コドン**: 公開配列が U（セレノシステイン）か O（ピロリシン）で、ゲノムの翻訳が終止コドンになっている位置は、一致とみなして記録する（Ensembl の GFF3 には `transl_except` がない）。
+- **翻訳表の推定**: 翻訳表が明示されていない場合（Ensembl の GFF3 のミトコンドリアなど）で不一致になったときは、公開配列と完全に一致する翻訳表を探して採用し、`translTable` 属性と detail に記録する。GBFF では、INSDC の規約どおり `/transl_table` がなければ翻訳表1とし、推定はしない。
 
 - 開始コドン: 5' 側が完全で、NCBI の翻訳表で開始コドンになっているものは M とする（例: ND2 の ATT）。
 - `/transl_except`: 位置を**コアの逆写像で残基番号に変換**して、アミノ酸を置き換える（例: GPX1 の Sec が49番残基）。TERM はタンパク質の外側なので無視する。アミノ酸名は大文字と小文字を区別しない（GBFF は `OTHER`、NCBI の GFF3 は `Other`）。
@@ -129,3 +138,20 @@ CDS の検証では、次の特殊ケースを考慮する。
 - **FASTA**: 64MB を超えるファイルや、`.fai` があるファイルは、`.fai`（samtools と同じ形式。なければ自動で作る）を使ってランダムアクセスする。
 - **保存先**: SQLite（`node:sqlite`）。スキーマは scaling.md §4（v0.2 で edge に `basis` 列を追加し、スキーマのバージョンを2にした）。R*Tree は、全行を書き込んだあとに位置順に構築する。
 - **exon**: 既定では annotation として保存しない（`--all-annotations` で保存する）。
+
+---
+
+## 9. FASTA アダプタ（配列の同一性）
+
+- `ingestFastaFile`: 各配列を、長さ・refget ダイジェスト・MD5 を持つ SequenceRecord として出力する（配列そのものは保存しない）。
+- ヘッダの解釈: `sp|P07203|…`・`tr|…` → `uniprot:`（アイソフォームの接尾辞は残す）、`ENSP…` → `ensembl:`、`101m_A mol:protein` → `pdb:101M.A`（wwPDB の `pdb_seqres.txt`。`mol:na` は読み飛ばす）、それ以外は accession として解釈する。
+- 同じ配列が先に（ダイジェストなしで）登録されていた場合、SQLite の保存先は、空の項目だけを後のレコードで埋める。
+- CLI: `.fa`、`.faa`、`.fasta`（`.gz` も可）を入力に渡すと、このアダプタで取り込む。
+
+## 10. SIFTS アダプタ
+
+- 入力: `uniprot_segments_observed.tsv(.gz)`（EBI）。1行 = UniProt の区間と PDB 鎖の SEQRES の区間。
+- edge: `uniprot:<SP_PRIMARY>` → `pdb:<PDB>.<CHAIN>` の alignment。座標は SEQRES の番号（`RES_BEG..RES_END`、label_seq_id に相当）で、著者番号（`PDB_BEG-PDB_END`）は `authorNumbering` 属性に残す。CHAIN は著者の chain ID（auth_asym_id）。
+- 同じ（UniProt, 鎖）の連続する行を1つの edge にまとめる。UniProt 側と SEQRES 側で長さが違う行は、1対1にできないので読み飛ばす（ヒトで867行、0.06%）。
+- 自己検証: UniProt と `pdb_seqres.txt` の配列で、一致する残基の数を数える。5割未満なら mismatch（人工的な変異は多くても数残基なので、座標のずれだけを検出する）。ヒトでは24万 edge のうち、mismatch は137件（いずれも短い区間）。
+- CLI: ファイル名に `sifts` か `uniprot_segments` を含む `.tsv(.gz)` を、このアダプタで取り込む。`--sifts-known-only` を付けると、`--fasta` で与えた UniProt 配列にある accession の行だけを取り込む。

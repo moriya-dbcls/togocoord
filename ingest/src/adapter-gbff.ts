@@ -12,7 +12,7 @@ import {
 import { accessionRef, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, DROPPED_ATTRIBUTES, extent, ingestContext, RNA_TYPES, type AdapterOptions } from "./common.ts";
 import { parseGenBank, qualifier, qualifiers, type GbFeature, type GbRecord } from "./gbff.ts";
 import { MemorySink, type Annotation, type Edge, type IngestResult, type Provenance, type SequenceRecord, type Sink } from "./model.ts";
-import { MemorySequenceSource, refgetDigest } from "./sequence.ts";
+import { checksums, MemorySequenceSource } from "./sequence.ts";
 import { expectMismatch, inferAaLength, validateCds, validateTranscript } from "./validate.ts";
 
 export function ingestGenBank(text: string, options: AdapterOptions = {}): IngestResult {
@@ -86,7 +86,7 @@ function sequenceRecord(record: GbRecord, ref: string, provenance: Provenance): 
   if (taxon) seq.taxon = Number(taxon.slice(6));
   const organism = src && qualifier(src, "organism");
   if (organism) seq.organism = organism;
-  if (record.sequence) seq.digest = refgetDigest(record.sequence);
+  if (record.sequence) Object.assign(seq, checksums(record.sequence));
   return seq;
 }
 
@@ -160,7 +160,7 @@ function ingestCds(f: GbFeature, loc: Location, ref: string, provenance: Provena
   pushCdsEdge({ f, cds: loc, outer: ref, protein, codonStart, table, aaLength, translation, provenance, st });
 
   const seq: SequenceRecord = { ref: protein, moltype: "protein", unit: "aa", length: aaLength, provenance };
-  if (translation) seq.digest = refgetDigest(translation);
+  if (translation) Object.assign(seq, checksums(translation));
   st.sequence(seq);
 }
 
@@ -242,6 +242,8 @@ function pushCdsEdge(a: {
       aaLength: a.aaLength,
       ...(a.translation !== undefined && { translation: a.translation }),
       translExcept: qualifiers(a.f, "transl_except"),
+      // INSDC: without /transl_table the standard code applies; it is never guessed.
+      tableGiven: true,
       outer: a.outer,
       ...(qualifier(a.f, "exception") !== undefined && { exception: qualifier(a.f, "exception")! }),
       ctx: st.ctx,

@@ -194,3 +194,18 @@ describe("merging across join segments", () => {
   });
 });
 
+describe("cdsMapping with a leading partial codon (Ensembl X)", () => {
+  it("maps residue 1 to the bases before the first complete codon", () => {
+    const c = testContext({ units: { "test:P": "aa" } });
+    // CDS of 11 nt with 2 leading bases (phase 2): X + 3 complete codons.
+    const m = cdsMapping({ protein: "test:P", cds: parseLocationId("test:G:101..111", c), codonStart: 3, aaLength: 4, leadingPartialCodon: true });
+    const ids = (t: string) => mapLocation(parseLocationId(t, c), m, c).targets.map((x) => formatLocationId(x.location, c));
+    // Only the last two codon positions exist in the CDS, so the begin is truncated.
+    assert.deepEqual(ids("test:P:1"), ["test:G:<101..102"]);
+    assert.deepEqual(ids("test:P:2"), ["test:G:103..105"]);
+    assert.deepEqual(ids("test:P:4"), ["test:G:109..111"]);
+    assert.deepEqual(mapLocation(parseLocationId("test:G:101", c), m.inverse(), c).targets.map((x) => formatLocationId(x.location, c)), ["test:P:1c2"]);
+    assert.throws(() => cdsMapping({ protein: "test:P", cds: parseLocationId("test:G:101..111", c), aaLength: 3, leadingPartialCodon: true }), MappingError);
+  });
+});
+

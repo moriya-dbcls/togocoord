@@ -11,6 +11,10 @@ export class Lru<K, V> {
     return this.#map.size;
   }
 
+  clear(): void {
+    this.#map.clear();
+  }
+
   has(key: K): boolean {
     return this.#map.has(key);
   }

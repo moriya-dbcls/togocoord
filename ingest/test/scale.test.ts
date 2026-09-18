@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { describe, it } from "node:test";
-import { formatLocationId, mapLocation, parseLocationId } from "@togocoord/core";
+import { createContext, formatLocationId, mapLocation, NamespaceRegistry, parseLocationId } from "@togocoord/core";
 import { ingestGenBank } from "../src/adapter-gbff.ts";
 import { ingestGff3 } from "../src/adapter-gff3.ts";
 import { buildFai, FaiSequenceSource } from "../src/fasta-index.ts";
@@ -15,6 +15,10 @@ import { FeatureGrouper, parseGffLine } from "../src/gff3.ts";
 import { edgeMapping, MemorySink } from "../src/model.ts";
 import { SqliteSink, TogoCoordStore } from "../src/store.ts";
 import { ingestGenBankFile, ingestGff3File } from "../src/stream.ts";
+import { defaultFastaRef, ingestFastaFile } from "../src/adapter-fasta.ts";
+import { ingestSiftsFile } from "../src/adapter-sifts.ts";
+import { parseFastaHeaders } from "../src/fasta.ts";
+import { MemorySequenceSource } from "../src/sequence.ts";
 import { fixture, genbankSource } from "./helpers.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "togocoord-"));
@@ -163,4 +167,42 @@ it("togocoord-ingest --db builds a store from gzipped GFF3 with FASTA validation
     "refseq:YP_009725295.1:4401c3",
   ]);
   store.close();
+});
+
+it("FASTA records add checksums to sequences first seen without residues", async () => {
+  const path = join(dir, "fasta.sqlite");
+  const sink = new SqliteSink(path);
+  sink.sequence({ ref: "uniprot:P07203", moltype: "protein", unit: "aa", length: 203, provenance: { adapter: "gff3" } });
+  await ingestFastaFile(fixturePath("uniprot_P07203.fa"), sink);
+  sink.close();
+  const store = new TogoCoordStore(path);
+  const seq = store.sequence("uniprot:P07203")!;
+  assert.deepEqual([seq.length, seq.digest, seq.md5], [203, "SQ.qsfE5UDDg5US4PKbR3-mgCvYbsfBsxFH", "b3ac19c6abd503ac0cc8c151701eb02a"]);
+  // UniParc reports MD5 in upper case (UPI00001B07C3: B3AC19C6ABD503AC0CC8C151701EB02A).
+  assert.deepEqual(store.refsByMd5("B3AC19C6ABD503AC0CC8C151701EB02A"), ["uniprot:P07203"]);
+  assert.deepEqual(store.refsByDigest("SQ.qsfE5UDDg5US4PKbR3-mgCvYbsfBsxFH"), ["uniprot:P07203"]);
+  store.close();
+});
+
+describe("SIFTS (UniProt P07203 <-> PDB 2F8A, real data)", () => {
+  it("builds residue blocks on SEQRES numbering and validates against pdb_seqres", async () => {
+    const source = new MemorySequenceSource();
+    for (const [header, s] of parseFastaHeaders(fixture("uniprot_P07203.fa") + fixture("pdb_seqres_P07203.txt"))) {
+      const ref = defaultFastaRef(header, new NamespaceRegistry());
+      if (ref) source.add(ref, s);
+    }
+    const sink = new MemorySink();
+    const stats = await ingestSiftsFile(fixturePath("sifts_P07203.tsv"), sink, { source });
+    assert.deepEqual(stats, { rows: 2, edges: 2, skipped: 0 });
+    const [a] = sink.result.edges;
+    assert.deepEqual([a!.from, a!.to, a!.kind], ["uniprot:P07203", "pdb:2F8A.A", "alignment"]);
+    assert.deepEqual(a!.blocks, [{ srcRef: "uniprot:P07203", src: 39, tgtRef: "pdb:2F8A.A", tgt: 69, len: 552, rev: false }]);
+    // 2F8A is the U49G mutant: 183 of 184 aligned residues identical.
+    assert.deepEqual([a!.validation.status, a!.validation.detail], ["ok", "183/184 aligned residues identical"]);
+    assert.equal(a!.attributes.authorNumbering, "12-195");
+    const ctx = createContext({ units: { "pdb:2F8A.A": "aa" } });
+    const r = mapLocation(parseLocationId("uniprot:P07203:49", ctx), edgeMapping(a!), ctx);
+    assert.deepEqual(r.targets.map((t) => formatLocationId(t.location, ctx)), ["pdb:2F8A.A:59"]);
+    assert.equal(source.get("pdb:2F8A.A", 58, 59), "G");
+  });
 });

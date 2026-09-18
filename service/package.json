@@ -4,11 +4,19 @@
   "description": "TogoCoord service layer: multi-store path search and conversion",
   "type": "module",
   "exports": "./src/index.ts",
-  "engines": { "node": ">=23.6" },
+  "engines": {
+    "node": ">=23.6"
+  },
   "scripts": {
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": { "@togocoord/core": "0.1.0", "@togocoord/ingest": "0.1.0" },
-  "license": "MIT"
+  "dependencies": {
+    "@togocoord/core": "0.1.0",
+    "@togocoord/ingest": "0.1.0"
+  },
+  "license": "MIT",
+  "bin": {
+    "togocoord-serve": "./src/serve.ts"
+  }
 }

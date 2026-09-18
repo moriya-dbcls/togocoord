@@ -28,3 +28,14 @@ export {
   type ResidueBlockSpec,
 } from "./mapping.ts";
 export { mapLocation, type MapResult, type Piece, type TargetLocation } from "./convert.ts";
+export {
+  decodeLocationId,
+  DEFAULT_BASE,
+  DEFAULT_VOCABULARY,
+  encodeLocationId,
+  FALDO,
+  locationIri,
+  RDF,
+  toFaldo,
+  type FaldoOptions,
+} from "./faldo.ts";

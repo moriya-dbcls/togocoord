@@ -8,6 +8,8 @@ export interface SequenceSource {
   get(ref: string, start: number, end: number): string | undefined;
   /** Length in residues, when the whole sequence is available. */
   length?(ref: string): number | undefined;
+  /** Keys of the sequences held (for completing version-less accessions). */
+  refs?(): Iterable<string>;
 }
 
 /** In-memory source. A molecule may be given as several slices, each starting at `offset` (0-based). */
@@ -23,6 +25,10 @@ export class MemorySequenceSource implements SequenceSource {
 
   has(ref: string): boolean {
     return this.#seqs.has(ref);
+  }
+
+  refs(): Iterable<string> {
+    return this.#seqs.keys();
   }
 
   /** Length of a sequence given in full (a single slice at offset 0). */
@@ -65,6 +71,8 @@ function codonIndex(codon: string): number | undefined {
   return a === undefined || b === undefined || c === undefined ? undefined : 16 * a + 4 * b + c;
 }
 
+export const GENETIC_CODE_IDS: readonly number[] = Object.keys(GENETIC_CODES).map(Number);
+
 export function hasGeneticCode(table: number): boolean {
   return table in GENETIC_CODES;
 }
@@ -85,6 +93,12 @@ export function translate(nt: string, table = 1): string {
 export function isStartCodon(codon: string, table = 1): boolean {
   const idx = codonIndex(codon.toUpperCase());
   return idx !== undefined && GENETIC_CODES[table]?.starts[idx] === "M";
+}
+
+/** Both identity checksums of a sequence. */
+export function checksums(residues: string): { digest: string; md5: string } {
+  const upper = residues.toUpperCase();
+  return { digest: refgetDigest(upper), md5: createHash("md5").update(upper).digest("hex") };
 }
 
 /** GA4GH refget sequence digest: `SQ.` + base64url(sha512(residues.upper())[0:24]). */

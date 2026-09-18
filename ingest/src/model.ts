@@ -2,7 +2,7 @@
 import { Mapping, type Block, type Unit } from "@togocoord/core";
 
 export interface Provenance {
-  adapter: "gbff" | "gff3";
+  adapter: "gbff" | "gff3" | "fasta" | "sifts";
   /** Source file or stream label. */
   file?: string;
   /** Record accession.version (GBFF) or seqid (GFF3). */
@@ -28,8 +28,10 @@ export interface SequenceRecord {
   topology?: "linear" | "circular";
   taxon?: number;
   organism?: string;
-  /** GA4GH refget digest (`SQ.` + sha512t24u), when the residues are known. */
+  /** GA4GH refget digest (`SQ.` + sha512t24u), when the residues are known. The key for sequence identity. */
   digest?: string;
+  /** Lower-case hex MD5 of the upper-case residues (as used by UniParc and refget v1), for joining external data. */
+  md5?: string;
   provenance: Provenance;
 }
 

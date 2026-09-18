@@ -22,9 +22,12 @@ export function ownString(s: string): string {
   return JSON.parse(JSON.stringify(s)) as string;
 }
 
-/** INSDC / RefSeq accession -> internal key (`refseq` when the accession has an underscore prefix). */
+/**
+ * Accession -> internal key: Ensembl stable IDs (`ENST…`, `ENSP…`, also other species' `ENSMUSP…`) -> `ensembl`,
+ * `XX_` prefixes -> `refseq`, others -> `insdc`.
+ */
 export function accessionRef(accession: string, registry: NamespaceRegistry): string | undefined {
-  const namespace = /^[A-Z]{2}_/.test(accession) ? "refseq" : "insdc";
+  const namespace = /^ENS[A-Z]*[GTPER]\d{11}/.test(accession) ? "ensembl" : /^[A-Z]{2}_/.test(accession) ? "refseq" : "insdc";
   try {
     return ownString(registry.refKey(namespace, accession));
   } catch {
@@ -69,4 +72,41 @@ export function extent(loc: Location): { ref: string; start: number; end: number
   const own = loc.segments.filter((s) => s.ref === loc.outer);
   const segs = own.length ? own : loc.segments;
   return { ref: loc.outer, start: Math.min(...segs.map((s) => s.start)), end: Math.max(...segs.map((s) => s.end)) };
+}
+
+/**
+ * Completes version-less accessions (Ensembl GFF3 writes `protein_id=ENSP00000334393` without the version that its
+ * protein FASTA carries) from the sequence keys known to the sources. Unknown or ambiguous keys are returned unchanged.
+ */
+export class VersionResolver {
+  readonly #latest = new Map<string, string | null>();
+
+  add(ref: string): void {
+    const m = /^(.*)\.(\d+)$/.exec(ref);
+    if (!m) return;
+    const bare = m[1]!;
+    const seen = this.#latest.get(bare);
+    this.#latest.set(bare, seen === undefined ? ref : seen === ref ? ref : null);
+  }
+
+  resolve(ref: string): string {
+    return this.#latest.get(ref) ?? ref;
+  }
+}
+
+/**
+ * Sequence-name -> RefSeq key from an NCBI assembly report (`*_assembly_report.txt`): the sequence name (`1`, `MT`),
+ * GenBank accession (`CM000663.2`, `KI270728.1`), UCSC name (`chr1`) and RefSeq accession all map to `refseq:<RefSeq-Accn>`.
+ */
+export function assemblyReportSeqids(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line.startsWith("#")) continue;
+    const cols = line.split("\t");
+    const [name, , , , genbank, , refseq, , , ucsc] = cols;
+    if (!refseq || refseq === "na") continue;
+    const key = `refseq:${refseq}`;
+    for (const alias of [name, genbank, refseq, ucsc]) if (alias && alias !== "na") out.set(alias, key);
+  }
+  return out;
 }

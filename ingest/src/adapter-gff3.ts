@@ -13,8 +13,8 @@ import {
 import { accessionRef, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, extent, ingestContext, ownString, RNA_TYPES, type AdapterOptions } from "./common.ts";
 import { attr, parseGff3, type Gff3Document, type GffFeature, type GffRow } from "./gff3.ts";
 import { MemorySink, type Edge, type IngestResult, type Provenance, type SequenceRecord, type Sink } from "./model.ts";
-import { MemorySequenceSource, refgetDigest, type SequenceSource } from "./sequence.ts";
-import { alignmentIdentity, expectMismatch, inferAaLength, validateCds, validateTranscript } from "./validate.ts";
+import { checksums, MemorySequenceSource, type SequenceSource } from "./sequence.ts";
+import { alignmentIdentity, cdsLength, expectMismatch, inferAaLength, validateCds, validateTranscript } from "./validate.ts";
 
 /** Ingest a whole GFF3 text (including a `##FASTA` section) into memory. For large files use `ingestGff3File`. */
 export function ingestGff3(text: string, options: Gff3Options = {}): IngestResult {
@@ -33,9 +33,30 @@ export function ingestGff3Document(doc: Gff3Document, sink: Sink, options: Gff3O
 }
 
 export interface Gff3Options extends AdapterOptions {
-  /** seqid -> internal key; defaults to INSDC/RefSeq accession detection. */
+  /** seqid -> internal key; defaults to INSDC/RefSeq accession detection (see assemblyReportSeqids for `1`, `chr1`). */
   seqidToRef?: (seqid: string) => string | undefined;
+  /** Completes version-less keys (e.g. Ensembl protein IDs); default: identity. */
+  resolveRef?: (ref: string) => string;
 }
+
+/**
+ * Sequence key of a transcript or protein named in GFF3 attributes. Ensembl writes the version separately
+ * (`transcript_id=ENST00000456328;version=2`); NCBI writes `transcript_id=NM_000581.4`.
+ */
+function attributeRef(id: string | undefined, version: string | undefined, registry: NamespaceRegistry, resolve: (r: string) => string): string | undefined {
+  if (!id) return undefined;
+  const versioned = version !== undefined && !/\.\d+$/.test(id) ? `${id}.${version}` : id;
+  const ref = accessionRef(versioned, registry);
+  return ref && resolve(ref);
+}
+
+const TRANSCRIPT_PARTS = new Set([
+  "exon", "CDS", "five_prime_UTR", "three_prime_UTR", "start_codon", "stop_codon", "intron",
+  "polyA_signal_sequence", "polyA_site", "transcription_start_site", "mature_protein_region_of_CDS", "signal_peptide_region_of_CDS",
+]);
+
+/** Identity below which an alignment edge is reported as a mismatch (misaligned coordinates). */
+const MIN_ALIGNMENT_IDENTITY = 0.5;
 
 const ALIGNMENT_TYPES = new Set(["cDNA_match", "EST_match", "match", "nucleotide_match", "translated_nucleotide_match", "protein_match"]);
 
@@ -65,6 +86,7 @@ export class Gff3Ingestor {
   readonly #emitted = new Set<string>();
   readonly #unknown = new Set<string>();
   readonly #exclude: ReadonlySet<string>;
+  readonly #resolve: (ref: string) => string;
   /** Transcripts waiting for their exons (NCBI writes mRNA as one row spanning the gene; exons are children). */
   readonly #pending = new Map<string, { f: GffFeature; m: Molecule; provenance: Provenance; exons: GffRow[]; touched: number }>();
   #counter = 0;
@@ -76,6 +98,7 @@ export class Gff3Ingestor {
     this.#toRef = options.seqidToRef ?? ((seqid) => accessionRef(seqid, this.#registry));
     this.#source = new ChainedSource(this.#residues, options.source);
     this.#exclude = options.excludeAnnotations ?? DEFAULT_EXCLUDED_ANNOTATIONS;
+    this.#resolve = options.resolveRef ?? ((r) => r);
     if (options.file) this.#base.file = options.file;
   }
 
@@ -136,7 +159,10 @@ export class Gff3Ingestor {
     }
 
     this.#counter++;
-    if (RNA_TYPES.has(f.type) && f.id !== undefined) {
+    // Transcripts: RNA feature types, or any other feature naming a transcript (Ensembl gene segments, ...);
+    // parts of a transcript also carry transcript_id in NCBI GFF3 and are not transcripts themselves.
+    const namesTranscript = attr(f, "transcript_id") !== undefined && !TRANSCRIPT_PARTS.has(f.type);
+    if ((RNA_TYPES.has(f.type) || namesTranscript) && f.id !== undefined) {
       this.#pending.set(`${f.seqid}\t${f.id}`, { f, m, provenance, exons: [], touched: this.#counter });
       this.#flushTranscripts(f.seqid);
       return;
@@ -178,8 +204,7 @@ export class Gff3Ingestor {
     if (!this.#exclude.has(f.type)) {
       this.#sink.annotation({ location: formatLocationId(loc, this.#ctx), type: f.type, attributes: f.attributes, extent: extent(loc), provenance });
     }
-    const tid = attr(f, "transcript_id");
-    const transcript = tid && accessionRef(tid, this.#registry);
+    const transcript = attributeRef(attr(f, "transcript_id"), attr(f, "version"), this.#registry, this.#resolve);
     if (!transcript) return;
     this.#units.set(transcript, "nt");
     this.#sink.edge({
@@ -202,9 +227,9 @@ export class Gff3Ingestor {
   }
 
   #cds(f: GffFeature, loc: Location, ref: string, provenance: Provenance): void {
-      const st = { registry: this.#registry, units: this.#units, ctx: this.#ctx, source: this.#source };
-    const pid = attr(f, "protein_id");
-    const protein = pid && accessionRef(pid, st.registry);
+    const st = { registry: this.#registry, units: this.#units, ctx: this.#ctx, source: this.#source };
+    // Ensembl writes the protein version as `version=` on CDS rows; NCBI writes it in protein_id.
+    const protein = attributeRef(attr(f, "protein_id"), attr(f, "version"), st.registry, this.#resolve);
     if (!protein) {
       // Pseudogene CDSs have no product; gene segments (e.g. IGKC) have no protein record of their own.
       if (attr(f, "pseudo") !== "true") this.#sink.warning(`${f.seqid}: CDS ${f.id ?? ""}: no protein_id; no protein edge`);
@@ -216,12 +241,17 @@ export class Gff3Ingestor {
     const firstRow = f.rows.find((r) => (first.strand === 1 ? r.start - 1 === first.start : r.end === first.end)) ?? f.rows[0]!;
     const codonStart = (firstRow.phase ?? 0) + 1;
     const table = Number(attr(f, "transl_table") ?? 1);
-    const aaLength = inferAaLength(loc, codonStart);
-    // Published protein residues (e.g. --fasta protein.faa) make validation exact; GFF3 has no translation.
+    // Published protein residues (e.g. --fasta protein.faa) make validation exact; GFF3 has no translation. Their
+    // length also replaces the inferred one (Ensembl CDSs without a stop codon would otherwise lose a residue).
     const protLength = st.source.length?.(protein);
+    const inferred = inferAaLength(loc, codonStart);
+    // Ensembl proteins of 5'-incomplete CDSs start with an X for the incomplete first codon (one residue longer).
+    const leadingPartialCodon = codonStart > 1 && st.source.get(protein, 0, 1) === "X";
+    const fits = protLength !== undefined && (leadingPartialCodon ? 3 * protLength - 3 + codonStart - 1 : 3 * protLength + codonStart - 1) <= cdsLength(loc);
+    const aaLength = fits ? protLength! : inferred;
     let mapping;
     try {
-      mapping = cdsMapping({ protein, cds: loc, codonStart, aaLength });
+      mapping = cdsMapping({ protein, cds: loc, codonStart, aaLength, leadingPartialCodon });
     } catch (e) {
       this.#sink.warning(`${f.seqid}: CDS ${f.id ?? ""}: ${(e as Error).message}`);
       return;
@@ -230,12 +260,30 @@ export class Gff3Ingestor {
       codonStart: String(codonStart),
       translTable: String(table),
       aaLength: String(aaLength),
-      aaLengthSource: "inferred",
+      aaLengthSource: aaLength === protLength ? "protein sequence" : "inferred",
+      ...(leadingPartialCodon && { leadingPartialCodon: "true" }),
     };
     for (const name of ["gene", "product", "exception"]) {
       const v = attr(f, name);
       if (v !== undefined) attributes[name] = v;
     }
+    const validation = validateCds({
+      cds: loc,
+      mapping,
+      codonStart,
+      table,
+      aaLength,
+      ...(protLength !== undefined && { translation: st.source.get(protein, 0, protLength)! }),
+      translExcept: f.attributes.transl_except ?? [],
+      leadingPartialCodon,
+      tableGiven: attr(f, "transl_table") !== undefined,
+      outer: ref,
+      ...(attr(f, "exception") !== undefined && { exception: attr(f, "exception")! }),
+      ctx: st.ctx,
+      source: st.source,
+    });
+    if (validation.table !== undefined) attributes.translTable = String(validation.table);
+    delete validation.table;
     this.#sink.edge({
       kind: "annotation",
       from: protein,
@@ -244,27 +292,23 @@ export class Gff3Ingestor {
       location: formatLocationId(loc, st.ctx),
       attributes,
       provenance,
-      validation: validateCds({
-        cds: loc,
-        mapping,
-        codonStart,
-        table,
-        aaLength,
-        ...(protLength !== undefined && { translation: st.source.get(protein, 0, protLength)! }),
-        translExcept: f.attributes.transl_except ?? [],
-        outer: ref,
-        ...(attr(f, "exception") !== undefined && { exception: attr(f, "exception")! }),
-        ctx: st.ctx,
-        source: st.source,
-      }),
+      validation,
     });
-    this.#sequence({ ref: protein, moltype: "protein", unit: "aa", length: aaLength, provenance });
+    // Published residues (--fasta protein.faa) give the checksums used to identify the protein across databases.
+    const residues = protLength !== undefined ? st.source.get(protein, 0, protLength) : undefined;
+    this.#sequence({
+      ref: protein,
+      moltype: "protein",
+      unit: "aa",
+      length: protLength ?? aaLength,
+      provenance,
+      ...(residues !== undefined && checksums(residues)),
+    });
   }
 
   /**
    * Target + Gap alignment -> blocks from the target (e.g. a RefSeq transcript) to the genome.
-   * Gap operations are read in target order; on '-' rows that is descending genome order (verified on
-   * NCBI GRCh38 cDNA_match: NM_012234.7 aligns 4036/4041 this way, matching num_mismatch=5).
+   * Gap operations follow the genome in the direction of the row's strand (spec-ingest §4).
    */
   #alignment(f: GffFeature, genome: string, provenance: Provenance): void {
       const st = { registry: this.#registry, units: this.#units, source: this.#source };
@@ -336,12 +380,18 @@ export class Gff3Ingestor {
     if (!identity) {
       edge.validation = { status: "skipped", detail: "sequences not available" };
     } else {
+      // Coordinates are judged by our own count: a misread Gap drops identity to ~25%, while real sequence differences
+      // (alternate haplotypes, RefSeq corrections) keep it high. NCBI's num_mismatch is recorded, not trusted blindly:
+      // it can differ from the count on the released sequences (e.g. NM_001291281.3: 3 counted, num_mismatch=4).
       const mismatches = identity.aligned - identity.identical;
       const reported = attributes.num_mismatch === undefined ? undefined : Number(attributes.num_mismatch);
       edge.validation = {
-        status: reported === undefined || reported === mismatches ? "ok" : "mismatch",
+        status: identity.identical >= identity.aligned * MIN_ALIGNMENT_IDENTITY ? "ok" : "mismatch",
         basis: "full",
-        detail: `${identity.identical}/${identity.aligned} aligned bases identical` + (reported === undefined ? "" : `; num_mismatch=${reported}`),
+        detail:
+          `${identity.identical}/${identity.aligned} aligned bases identical` +
+          (reported === undefined ? "" : `; num_mismatch=${reported}`) +
+          (reported !== undefined && reported !== mismatches ? ` (counted ${mismatches})` : ""),
       };
     }
     this.#sink.edge(edge);
@@ -365,7 +415,7 @@ function moleculeRecord(
   };
   const taxon = region?.attributes.Dbxref?.find((x) => x.startsWith("taxon:"));
   if (taxon) seq.taxon = Number(taxon.slice(6));
-  if (residues) seq.digest = refgetDigest(residues);
+  if (residues) Object.assign(seq, checksums(residues));
   return seq;
 }
 

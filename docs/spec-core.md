@@ -149,6 +149,7 @@ Block = { srcRef, src, tgtRef, tgt, len, rev }
 | `fromLocation(F, loc)` | feature 配列 F から参照配列への写像。セグメントを並び順にたどり、累積の位置 `off` について `{F, off, seg.ref, seg.start, len, seg.strand = −1}` を作る |
 | `cdsMapping(P, cds, codonStart, aaLength)` | `compose(scale, fromLocation(P#cds, cds))`。scale は `{P, 0, P#cds, codonStart−1, 3·aaLength, false}` |
 
+- **先頭の不完全なコドン**（`leadingPartialCodon`、v0.1.2）: Ensembl は、5' 側が欠けた CDS のタンパク質の先頭に、欠けたコドンを表す `X` を1残基置く（INSDC の `/codon_start` にはこの残基がない）。この選択肢を指定すると、1番目の残基の最後の `codonStart − 1` 単位を、CDS の先頭の塩基に対応させる。scale は `{P, 3−(codonStart−1), P#cds, 0, 3·aaLength−(3−(codonStart−1)), false}`。1番目の残基をゲノムに変換すると、欠けた部分があるので始点に切り詰めの印が付く（例: `<930312..930313`）。
 - `aaLength` は、呼び出し側が必ず与える（コアでは推定しない）。終止コドンの有無、不完全な終止コドン（`transl_except` の TERM）、3' 側が部分的な CDS などを、コアでは判断できないため。
 - `3·aaLength + codonStart − 1` が CDS の長さを超える場合はエラーとする。
 

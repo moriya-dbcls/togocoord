@@ -1,7 +1,7 @@
 // Self-validation at ingest time (design §6.3).
 import { formatLocationId, mapLocation, parseLocationId, type CoordContext, type Location, type Mapping } from "@togocoord/core";
 import type { Validation } from "./model.ts";
-import { AA_ABBREVIATIONS, extract, hasGeneticCode, isStartCodon, reverseComplement, translate, type SequenceSource } from "./sequence.ts";
+import { AA_ABBREVIATIONS, extract, GENETIC_CODE_IDS, hasGeneticCode, isStartCodon, reverseComplement, translate, type SequenceSource } from "./sequence.ts";
 
 export function fivePrimePartial(cds: Location): boolean {
   const s = cds.segments[0];
@@ -44,13 +44,28 @@ export interface CdsCheck {
   outer: string;
   /** INSDC /exception (e.g. "annotated by transcript or proteomic data"): a mismatch is then expected. */
   exception?: string;
+  /** The first residue stands for the incomplete first codon (Ensembl `X`); see cdsMapping. */
+  leadingPartialCodon?: boolean;
+  /** `table` came from the data (transl_table); otherwise other codes may be tried against the published protein. */
+  tableGiven?: boolean;
   ctx: CoordContext;
   source: SequenceSource;
 }
 
 /** Translate the CDS from sequence and compare with the expected protein. */
-export function validateCds(c: CdsCheck): Validation {
-  const v = translateAndCompare(c);
+export function validateCds(c: CdsCheck): Validation & { table?: number } {
+  let v: Validation & { table?: number } = translateAndCompare(c);
+  // Without an explicit genetic code (e.g. Ensembl GFF3 on mitochondria), take the code that reproduces the protein.
+  if (v.status === "mismatch" && !c.tableGiven && c.translation !== undefined) {
+    for (const table of GENETIC_CODE_IDS) {
+      if (table === c.table) continue;
+      const alt = translateAndCompare({ ...c, table });
+      if (alt.status === "ok") {
+        v = { ...alt, table, detail: `${alt.detail}; genetic code ${table} inferred (none given)` };
+        break;
+      }
+    }
+  }
   if (v.status === "mismatch" && c.exception) v.detail = `${v.detail}; expected: /exception="${c.exception}"`;
   return v;
 }
@@ -61,12 +76,16 @@ function translateAndCompare(c: CdsCheck): Validation {
   if (nt === undefined) return { status: "skipped", detail: "nucleotide sequence not available" };
 
   const coding = nt.slice(c.codonStart - 1);
-  const aa = [...translate(coding, c.table)];
-  const notes: string[] = [];
+  const aa = [...(c.leadingPartialCodon ? "X" : ""), ...translate(coding, c.table)];
+  const notes: string[] = c.leadingPartialCodon ? ["first residue is the incomplete first codon (X)"] : [];
 
-  if (!fivePrimePartial(c.cds) && c.codonStart === 1 && aa.length > 0 && aa[0] !== "M" && isStartCodon(coding.slice(0, 3), c.table)) {
+  // Initiation codons are read as Met: alternative starts of the genetic code, and any codon when the published
+  // protein says M (non-AUG initiation, e.g. Ensembl GTG/ACG starts).
+  const startCodon = coding.slice(0, 3);
+  const completeStart = !fivePrimePartial(c.cds) && c.codonStart === 1 && aa.length > 0 && aa[0] !== "M";
+  if (completeStart && (isStartCodon(startCodon, c.table) || c.translation?.[0]?.toUpperCase() === "M")) {
     aa[0] = "M";
-    notes.push(`alternative start codon ${coding.slice(0, 3)}`);
+    notes.push(isStartCodon(startCodon, c.table) ? `alternative start codon ${startCodon}` : `non-AUG initiation codon ${startCodon}`);
   }
 
   const inverse = c.mapping.inverse();
@@ -108,6 +127,11 @@ function translateAndCompare(c: CdsCheck): Validation {
   const diffs: number[] = [];
   for (let i = 0; i < Math.max(product.length, expected.length); i++) {
     const [a, b] = [product[i], expected[i]];
+    if (a === "*" && (b === "U" || b === "O")) {
+      // Stop codon recoded as selenocysteine / pyrrolysine without /transl_except (e.g. Ensembl GFF3).
+      notes.push(`${b === "U" ? "selenocysteine" : "pyrrolysine"} at residue ${i + 1} (recoded stop codon)`);
+      continue;
+    }
     if (a !== b && a !== "X" && b !== "X") diffs.push(i + 1);
   }
   if (diffs.length === 0) return { status: "ok", basis: "full", detail: ["translation matches", ...notes].join("; ") };

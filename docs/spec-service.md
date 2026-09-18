@@ -1,6 +1,6 @@
-# TogoCoord サービス層仕様（v0.1：経路探索）
+# TogoCoord サービス層仕様（v0.2：経路探索・同一配列・REST API）
 
-2026-09-18。フェーズ3a・3b の規則。実装は `service/`（`@togocoord/service`）。
+2026-09-18。フェーズ3a〜3c と 3e（SIFTS）の規則。実装は `service/`（`@togocoord/service`）。
 
 ---
 
@@ -18,7 +18,7 @@
 | `to` | 意味 |
 |---|---|
 | `{ ref }` | 特定の配列 |
-| `{ category }` | `genome` / `transcript` / `protein` / `gene_region`（accession の規則と分子種から判定する） |
+| `{ category }` | `genome` / `gene_region` / `transcript` / `protein` / `structure`（accession の規則と分子種から判定する。PDB の鎖は `structure`） |
 | `{ namespace }` | 名前空間（例: `uniprot`） |
 | 省略 | `maxHops`（既定1）以内にあるすべての配列 |
 
@@ -28,14 +28,40 @@
 - 変換先の条件に合う配列に達したら、そこから先へは展開しない。
 - 同じ経路の中で、同じ edge は再び使わない。
 - `maxHops` の既定値は、変換先がある場合は4、ない場合は1。
+- 打ち切りはしない（最大の段数までの近傍を探索し終えるまで続ける）。そのため、探索範囲は §2.1 の層の規則で絞る。
+
+### 2.1 層の規則（探索範囲の限定）
+
+配列の種類には、緩い上下関係がある: **ゲノム(0) − 遺伝子領域(1) − 転写産物(2) − タンパク質(3) − 構造(4)**。概念的に離れた層どうしの変換も、どこかの層でUターンすれば足りるので、上下に深く行き来する経路は探索しない。規則は恣意的に次のように定める。
+
+1. **深さの上限**: 出発点と変換先のうち、より下位（構造寄り）のほうより下の層には入らない。変換先が名前空間だけで指定されたとき（層が分からない）は、上限を設けない。
+2. **Uターンは1回まで**: 上り（ゲノム方向）と下りの切り替えは1回まで。同じ層の中の移動（同一配列、同じ層どうしのアライメント）や、層の分からない配列（`other`）との間の移動は数えない。
+3. 同じ配列でも、状態（最後の向きとUターンの回数）が違えば別の節点として扱う。変換先としては、配列ごとに最も安い結果だけを返す。
+
+例: 残る経路は、ATP8 → ゲノム → ATP6（上って下る）、UniProt → Ensembl → ゲノム、ゲノム → タンパク質 → PDB。切られる経路は、UniProt → PDB → UniProt → ゲノム（変換先がゲノムなのに構造へ下りる）、タンパク質A → ゲノム → タンパク質B → 別のゲノム（ジグザグ）。
+
+効果（ヒト、UniProt の100番残基 → ゲノム）: 展開する配列は、p53 で 492 → 27、ヘモグロビン α で 10 になった。
+
+**将来の注意**: オーソログのタンパク質を経由した種間変換（ゲノム → タンパク質 → オーソログのタンパク質 → 別種のゲノム）は規則1で切られる。導入するときに例外を設ける。
 
 ## 3. edge のコストと優先順位
 
-| 条件 | コスト |
+完全一致する経路があれば、必ずそれを選ぶ。どのデータベースを経由するか（UniProt なら Ensembl 経由、など）を個別に決めるコードは持たず、次のコストの順序だけで決める。
+
+| 段 | コスト |
 |---|---|
-| 通常 | 1 |
+| **同一配列**（refget ダイジェストが一致。§3.1） | 0 |
+| 一次データの edge（CDS、`cDNA_match`、SIFTS など）で、検証済みまたは検証の対象外 | 1 |
+| 自前で計算したアライメント（T2、未実装） | 3 程度を予定 |
 | 自己検証で不一致（`mismatch`） | 1 + 10 |
 | NCBI の `/exception` があり、配列による全体照合（`basis: "full"`）で ok になっていない | 1 + 10 |
+
+### 3.1 同一配列（identity）
+
+- 取り込み時に、配列の refget ダイジェスト（SHA-512 由来、同一性の判定に使う）と MD5（UniParc などの外部データと照合するための鍵。UniParc は大文字で持つが、比較では大文字と小文字を区別しない）を記録する。対象は、GBFF の配列と `/translation`、`--fasta` で与えた公開タンパク質配列、FASTA アダプタで取り込んだ UniProt や Ensembl の配列。
+- 位置が特定の配列の上だけにある location は、**ダイジェストが同じ別の配列へ、同じ座標のままコスト0で移れる**。経路では `kind: "identity"` の段として記録する。
+- UniParc の CRC64 は、衝突の例があるため同一性の判定には使わない。
+- 実例: UniProt の P07203（GPX1）と RefSeq の NP_000572.2 はダイジェストが一致する（49番のセレノシステインを含めて203残基が同一）。そのため、`uniprot:P07203:49` は同一配列の段と CDS の段を経て `refseq:NM_000581.4:220..222` に変換される（コスト1）。
 
 - **配列で照合済みなら、exception の目印を無視する**。例えば、ゲノムとの違いが塩基置換だけの転写産物は、座標が保たれている。一方、`basis: "partial"`（終止コドンがないことだけを確かめたもの）の ok は、照合済みとはみなさない。
 - **アライメントを優先する**: 同じ2つの配列を結ぶアライメント edge（`cDNA_match` など）が location に重なっているときは、ゲノム上のモデルから作った annotation edge を使わない。アライメントは転写産物自身の配列を表しているが、ゲノム上のモデルはそうではないため。
@@ -106,3 +132,77 @@
 
 - 代替配列（NT_・NW_）の多くには `cDNA_match` がない。exception 付きの転写産物では、最後の手段として `approximate` な経路が使われる。
 - 部分的にしか写せない経路と、全体を写せるが高コストの経路の選択は、配列ごとのコストだけで決めている。入力のうち写せた割合は、選択に使っていない。
+
+---
+
+## 6. REST API（`togocoord-serve`）
+
+`node service/src/serve.ts [--port 8080] [--host 127.0.0.1] [--base URL] STORE.sqlite...`。Node 組み込みの http で実装し、依存パッケージはない。CORS は全開放。
+
+| メソッド | パス | 内容 |
+|---|---|---|
+| GET | `/v1/convert?loc=&to=&maxHops=&codon=never` | 変換。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す |
+| POST | `/v1/convert` | 一括変換。`{"locations": [...], "to": ..., "maxHops": ..., "codon": ...}`。最大1000件。個々の入力の誤りは、その要素に `error` として返す |
+| GET | `/v1/location?loc=` | 正規形の ID、IRI、セグメント（1始まり。タンパク質は残基番号とコドン内の位置） |
+| GET | `/v1/location/faldo?loc=` | FALDO JSON-LD（`application/ld+json`） |
+| GET | `/v1/sequences/{ref}` | 配列の情報（全保存先の情報をまとめたもの）と、同一配列の一覧 |
+| GET | `/v1/sequences/{ref}/edges` | その配列から出る edge と入る edge |
+| GET | `/v1/annotations?loc=` | その区間に重なる annotation |
+| GET | `/v1/meta` | 保存先の一覧とメタデータ |
+| GET | `/<namespace>:<accession>:<location>` | IRI の解決（identifiers.org 風）。`Accept` に応じて、HTML、FALDO JSON-LD、`/v1/location` への 303 リダイレクトを返す |
+
+誤りは `{"error": ..., "position"?: ...}` で返す（400: 構文や意味の誤り、404、405、413）。
+
+## 7. FALDO JSON-LD
+
+FALDO の定義（`faldo.ttl`）で確認した語彙だけを使う。コンセプト版で使っていた `faldo:NegativeStrand`、`faldo:member`、`faldo:order` は、FALDO の定義にない。
+
+| Location | FALDO |
+|---|---|
+| 1塩基・1残基 | `faldo:ExactPosition` |
+| 範囲 | `faldo:Region`（`faldo:begin` と `faldo:end`。逆鎖では生物学的な始点を begin とするので、begin のほうが数値が大きい。FALDO の README の cheY の例と一致することを確認した） |
+| 鎖の向き | 位置の型として `faldo:ForwardStrandPosition` / `faldo:ReverseStrandPosition`（タンパク質には付けない） |
+| `a^b` | `faldo:InBetweenPosition`（`faldo:after` / `faldo:before`。鎖の向きに沿う） |
+| `a.b` | `faldo:InRangePosition` |
+| `<`、`>` | その端の位置を `faldo:FuzzyPosition` 型にする（`faldo:position` は残す） |
+| `join` / `order` | `faldo:ListOfRegions`（`rdf:Seq`）/ `faldo:BagOfRegions`（`rdf:Bag`）。要素は `rdf:_1`、`rdf:_2`… の順に、生物学的な順序で並べる |
+| コドン拡張 | 位置に `tgc:codonPosition`（1..3）を付ける。FALDO に採用されれば `faldo:` に移す |
+
+- 最上位のノードは location そのもの（`@id` は location の IRI）。IRI では `<`、`>`、`^` だけを % エンコードする。
+- 配列は `https://identifiers.org/<namespace>:<accession>` で参照する。
+- jsonld.js で RDF に展開し、正しいトリプルになることを確認した。
+- 既定の基底 IRI は `https://togocoord.example.org/`（ドメインは未定。`--base` で指定する）。
+
+---
+
+## 8. 構造との対応（3e、2026-09-18、ヒト）
+
+**保存先**（すべて `togocoord-ingest` で作成）
+
+| 保存先 | 入力 | 時間 | 自己検証 |
+|---|---|---|---|
+| RefSeq ゲノム | GRCh38.p14 の GFF3、ゲノム・RNA・タンパク質の配列 | 134秒 | CDS と alignment で説明のつかない不一致は0件（exception 付き 5,778件を除く） |
+| RefSeq RNA | RNA の GenBank | 37秒 | CDS 136,794件すべて ok |
+| Ensembl | release 116 の GFF3、Ensembl のタンパク質配列、`--seqid-map`（NCBI の assembly report） | 190秒 | **CDS 約37万件すべて ok** |
+| UniProt | ヒトの参照プロテオーム（canonical 20,652件 ＋ additional 148,999件） | 2秒 | — |
+| SIFTS | `uniprot_segments_observed`（ヒトの UniProt に限定） | 9秒 | 24万 edge のうち ok 240,124件 |
+
+**同一配列の割合**（UniProt の配列のうち、同一の Ensembl または RefSeq のタンパク質があるもの）
+
+| UniProt | 件数 | Ensembl | RefSeq | いずれか |
+|---|---|---|---|---|
+| canonical、構造あり | 8,983 | 98.1% | 97.5% | **98.6%** |
+| canonical、全体 | 11,669 | 89.9% | 86.3% | 90.5% |
+| additional（アイソフォームなど） | 148,896 | 93.7% | 17.5% | 94.5% |
+
+構造のある UniProt の98.6%は、アライメントなしで（同一配列 → CDS）ゲノムに正確に到達できる。残りには T2（自前のアライメント）が必要。
+
+**構造との往復**（`service/bench/verify-structure.ts`、SIFTS の区間から3,000残基）
+- ゲノムに到達できたもの: 2,957件（すべて完全一致の経路。approximate は0件）。同一配列がない43件は、到達できない。
+- 変換先のコドンが UniProt の残基をコードしている: **2,957 / 2,957**
+- ゲノムから PDB の同じ残基に戻る: **2,957 / 2,957**（同じ鎖に同じ残基が2回現れる構造は、両方の位置が返る）
+- PDB の SEQRES の残基と UniProt の残基が一致: 2,944件（残りは構造での人工的な変異）
+
+**実例**: GPX1 のセレノシステインのコドン `refseq:NC_000003.12:complement(49358132..49358134)` → Ensembl の CDS（逆方向）→ UniProt P07203（同一配列）→ SIFTS → `pdb:2F8A.A:59` と `pdb:2F8A.B:59`（2F8A は U49G 変異体）。コスト2、approximate なし。
+
+**速さ**: UniProt の残基 → ゲノムは p50 6.4ms、p95 25ms、p99 50ms（構造の多いタンパク質ほど標本に選ばれやすいので、厳しめの値）。層の規則（§2.1）を入れる前は p50 12.5ms、p99 175ms で、変換先と同じコストの段階にある数百〜数千の PDB 鎖をすべて展開していた。RefSeq タンパク質 → ゲノムは p50 1.3ms、p99 12ms。

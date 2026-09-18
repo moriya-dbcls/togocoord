@@ -16,13 +16,13 @@ import { ownString } from "./common.ts";
 import { Lru } from "./lru.ts";
 import type { Annotation, Edge, Provenance, SequenceRecord, Sink, Validation } from "./model.ts";
 
-export const STORE_SCHEMA_VERSION = "2";
+export const STORE_SCHEMA_VERSION = "3";
 
 const SCHEMA = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE sequence(
   id INTEGER PRIMARY KEY, ref TEXT UNIQUE NOT NULL, moltype TEXT, unit TEXT, length INTEGER,
-  topology TEXT, taxon INTEGER, organism TEXT, digest TEXT, provenance TEXT);
+  topology TEXT, taxon INTEGER, organism TEXT, digest TEXT, md5 TEXT, provenance TEXT);
 CREATE TABLE edge(
   id INTEGER PRIMARY KEY, kind TEXT NOT NULL, from_seq INTEGER NOT NULL, to_seq INTEGER NOT NULL,
   location TEXT, attributes TEXT, provenance TEXT, status TEXT, detail TEXT, basis TEXT);
@@ -43,6 +43,8 @@ CREATE VIRTUAL TABLE block_tgt USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
 INSERT INTO block_tgt SELECT id, tgt_seq, tgt_seq, tgt, tgt + len FROM block ORDER BY tgt_seq, tgt;
 CREATE VIRTUAL TABLE annotation_idx USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
 INSERT INTO annotation_idx SELECT id, seq, seq, start, max("end", start + 1) FROM annotation ORDER BY seq, start;
+CREATE INDEX sequence_digest ON sequence(digest) WHERE digest IS NOT NULL;
+CREATE INDEX sequence_md5 ON sequence(md5) WHERE md5 IS NOT NULL;
 CREATE INDEX edge_from ON edge(from_seq);
 CREATE INDEX edge_to ON edge(to_seq);
 CREATE INDEX block_edge ON block(edge);
@@ -79,7 +81,9 @@ export class SqliteSink implements Sink {
     this.#s = {
       newSeq: this.#db.prepare("INSERT INTO sequence(ref) VALUES (?) RETURNING id"),
       fillSeq: this.#db.prepare(
-        "UPDATE sequence SET moltype=?, unit=?, length=?, topology=?, taxon=?, organism=?, digest=?, provenance=? WHERE id=? AND moltype IS NULL",
+        // Later records fill only missing fields (e.g. a FASTA record adds the checksums of a protein first seen in a GFF3).
+        "UPDATE sequence SET moltype=COALESCE(moltype,?), unit=COALESCE(unit,?), length=COALESCE(length,?), topology=COALESCE(topology,?), " +
+          "taxon=COALESCE(taxon,?), organism=COALESCE(organism,?), digest=COALESCE(digest,?), md5=COALESCE(md5,?), provenance=COALESCE(provenance,?) WHERE id=?",
       ),
       edge: this.#db.prepare(
         "INSERT INTO edge(kind, from_seq, to_seq, location, attributes, provenance, status, detail, basis) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
@@ -111,7 +115,7 @@ export class SqliteSink implements Sink {
   sequence(r: SequenceRecord): void {
     this.counts.sequence++;
     this.#s.fillSeq.run(
-      r.moltype, r.unit, r.length, r.topology ?? null, r.taxon ?? null, r.organism ?? null, r.digest ?? null,
+      r.moltype, r.unit, r.length, r.topology ?? null, r.taxon ?? null, r.organism ?? null, r.digest ?? null, r.md5 ?? null,
       JSON.stringify(r.provenance), this.#seq(r.ref),
     );
     this.#tick();
@@ -231,6 +235,8 @@ export class TogoCoordStore {
         'SELECT a.* FROM annotation_idx r JOIN annotation a ON a.id = r.id WHERE r.seq_lo = ? AND r.seq_hi = ? AND r.lo < ? AND r.hi > ? ORDER BY a.start',
       ),
       meta: this.#db.prepare("SELECT key, value FROM meta"),
+      byDigest: this.#db.prepare("SELECT ref FROM sequence WHERE digest = ?"),
+      byMd5: this.#db.prepare("SELECT ref FROM sequence WHERE md5 = ?"),
     };
   }
 
@@ -260,7 +266,7 @@ export class TogoCoordStore {
     const row = this.#s.seq!.get(ref) as Record<string, unknown> | undefined;
     if (!row) return undefined;
     const out: Partial<SequenceRecord> & { ref: string } = { ref };
-    for (const k of ["moltype", "unit", "length", "topology", "taxon", "organism", "digest"] as const) {
+    for (const k of ["moltype", "unit", "length", "topology", "taxon", "organism", "digest", "md5"] as const) {
       if (row[k] !== null) (out as Record<string, unknown>)[k] = row[k];
     }
     if (typeof row.provenance === "string") out.provenance = JSON.parse(row.provenance);
@@ -279,6 +285,16 @@ export class TogoCoordStore {
   /** Units from the store, then namespace defaults. */
   context(registry = new NamespaceRegistry()): CoordContext {
     return createContext({ registry, units: (ref) => this.unitOf(ref) });
+  }
+
+  /** Sequences with this refget digest (identical residues). */
+  refsByDigest(digest: string): string[] {
+    return (this.#s.byDigest!.all(digest) as Array<{ ref: string }>).map((r) => r.ref);
+  }
+
+  /** Sequences with this MD5 (hex, any case), e.g. to join UniParc. */
+  refsByMd5(md5: string): string[] {
+    return (this.#s.byMd5!.all(md5.toLowerCase()) as Array<{ ref: string }>).map((r) => r.ref);
   }
 
   /** Edges from or to `ref` (without blocks). */

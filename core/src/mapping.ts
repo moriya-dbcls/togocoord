@@ -140,18 +140,29 @@ export interface CdsOptions {
   codonStart?: number;
   /** Protein length in residues; supplied by the caller (spec-core §4.2). */
   aaLength: number;
+  /**
+   * The protein's first residue stands for the incomplete codon formed by the `codonStart - 1` bases before the first
+   * complete codon (Ensembl writes it as `X`); INSDC /codon_start has no such residue. Requires codonStart > 1.
+   */
+  leadingPartialCodon?: boolean;
 }
 
 /** Protein (codon units) -> nucleotide mapping of a CDS. */
-export function cdsMapping({ protein, cds, codonStart = 1, aaLength }: CdsOptions): Mapping {
+export function cdsMapping({ protein, cds, codonStart = 1, aaLength, leadingPartialCodon = false }: CdsOptions): Mapping {
   if (![1, 2, 3].includes(codonStart)) throw new MappingError(`codon_start must be 1, 2 or 3 (got ${codonStart})`);
   if (!Number.isSafeInteger(aaLength) || aaLength < 1) throw new MappingError(`invalid aaLength ${aaLength}`);
+  if (leadingPartialCodon && codonStart === 1) throw new MappingError("leadingPartialCodon needs codon_start 2 or 3");
   const cdsLength = cds.segments.reduce((n, s) => n + s.end - s.start, 0);
-  if (codonStart - 1 + 3 * aaLength > cdsLength) {
+  // Protein units [skip, 3·aaLength) map onto CDS bases starting at `tgt` (the partial first residue keeps only its
+  // last codonStart-1 units).
+  const phase = codonStart - 1;
+  const skip = leadingPartialCodon ? 3 - phase : 0;
+  const tgt = leadingPartialCodon ? 0 : phase;
+  if (tgt + 3 * aaLength - skip > cdsLength) {
     throw new MappingError(`${aaLength} aa (codon_start ${codonStart}) do not fit in a ${cdsLength} nt CDS`);
   }
   const virtual = `${protein}#cds`;
-  const scale = new Mapping([{ srcRef: protein, src: 0, tgtRef: virtual, tgt: codonStart - 1, len: 3 * aaLength, rev: false }]);
+  const scale = new Mapping([{ srcRef: protein, src: skip, tgtRef: virtual, tgt, len: 3 * aaLength - skip, rev: false }]);
   return compose(scale, mappingFromLocation(virtual, cds));
 }
 

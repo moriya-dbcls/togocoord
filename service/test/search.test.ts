@@ -19,6 +19,8 @@ import {
   type Edge,
   type IngestResult,
 } from "@togocoord/ingest";
+import { ingestFastaFile, MemorySink } from "@togocoord/ingest";
+import { fileURLToPath } from "node:url";
 import { categoryOf, convert, StoreSet } from "../src/index.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "togocoord-service-"));
@@ -172,6 +174,108 @@ describe("edge preferences", () => {
   });
 });
 
+describe("identity by refget digest (UniProt P07203 = RefSeq NP_000572.2, real data)", async () => {
+  const uniprot = new MemorySink();
+  await ingestFastaFile(fileURLToPath(fixture("uniprot_P07203.fa")), uniprot);
+  const stores = new StoreSet().add(store("gpx1_rna", ingestGenBank(await read("NM_000581.4.gb")))).add(store("uniprot", uniprot.result));
+  const ctx = stores.context();
+
+  it("reaches the transcript through the identical RefSeq protein at no extra cost", () => {
+    const [hit] = convert(stores, parseLocationId("uniprot:P07203:49", ctx), { to: { category: "transcript" } }, ctx);
+    // Residue 49 is the selenocysteine, encoded by the UGA at NM_000581.4:220..222 (/transl_except).
+    assert.equal(hit!.id, "refseq:NM_000581.4:220..222");
+    assert.equal(hit!.cost, 1);
+    assert.deepEqual(hit!.path.map((s) => [s.kind, s.to]), [["identity", "refseq:NP_000572.2"], ["annotation", "refseq:NM_000581.4"]]);
+    assert.equal(hit!.approximate, false);
+  });
+
+  it("finds identical sequences in both directions", () => {
+    assert.deepEqual(stores.identical("uniprot:P07203"), ["refseq:NP_000572.2"]);
+    assert.deepEqual(stores.identical("refseq:NP_000572.2"), ["uniprot:P07203"]);
+    const back = convert(stores, parseLocationId("refseq:NM_000581.4:220..222", ctx), { to: { namespace: "uniprot" } }, ctx);
+    assert.deepEqual(back.map((r) => r.id), ["uniprot:P07203:49"]);
+  });
+});
+
+describe("genome -> PDB structure: Ensembl CDS, identical UniProt protein, SIFTS (GPX1, real data)", async () => {
+  const { assemblyReportSeqids, defaultFastaRef, ingestSiftsFile, parseFastaHeaders } = await import("@togocoord/ingest");
+  const { NamespaceRegistry } = await import("@togocoord/core");
+  const registry = new NamespaceRegistry();
+  const residues = new MemorySequenceSource();
+  for (const name of ["ensembl_GRCh38.116_GPX1.pep.fa", "uniprot_P07203.fa", "pdb_seqres_P07203.txt"]) {
+    for (const [header, s] of parseFastaHeaders(await read(name))) residues.add(defaultFastaRef(header, registry)!, s);
+  }
+  for (const [, s] of parseFasta(await read("NC_000003.12_49357176-49358353.fa"))) residues.add("refseq:NC_000003.12", s, 49357175);
+  const seqids = assemblyReportSeqids(await read("GRCh38.p14_assembly_report_chr3.txt"));
+  const uniprot = new MemorySink();
+  await ingestFastaFile(fileURLToPath(fixture("uniprot_P07203.fa")), uniprot);
+  const sifts = new MemorySink();
+  await ingestSiftsFile(fileURLToPath(fixture("sifts_P07203.tsv")), sifts, { source: residues });
+  const stores = new StoreSet()
+    .add(store("ensembl_gpx1", ingestGff3(await read("ensembl_GRCh38.116_GPX1.gff3"), { source: residues, seqidToRef: (id) => seqids.get(id) })))
+    .add(store("uniprot_gpx1", uniprot.result))
+    .add(store("sifts_gpx1", sifts.result));
+  const ctx = stores.context();
+
+  it("maps the selenocysteine codon to residue 59 of both 2F8A chains (the U49G mutant)", () => {
+    const [codon] = convert(stores, parseLocationId("ensembl:ENSP00000407375.1:49", ctx), { to: { category: "genome" } }, ctx);
+    // CDS starts at 49358278 on the minus strand: residue 49 = CDS nt 145..147 = 49358134..49358132.
+    assert.equal(codon!.id, "refseq:NC_000003.12:complement(49358132..49358134)");
+    assert.equal(translate(extract(codon!.location, residues)!), "*"); // UGA read as selenocysteine
+    const hits = convert(stores, codon!.location, { to: { namespace: "pdb" } }, ctx);
+    assert.deepEqual(hits.map((h) => h.id).sort(), ["pdb:2F8A.A:59", "pdb:2F8A.B:59"]);
+    const path = hits[0]!.path;
+    assert.deepEqual(path.map((s) => [s.kind, s.to]), [
+      ["annotation", "refseq:NC_000003.12"],
+      ["identity", "uniprot:P07203"],
+      ["alignment", hits[0]!.location.outer],
+    ]);
+    // Several Ensembl proteins of GPX1 are identical to P07203; any of them gives the same, exact path.
+    assert.match(path[0]!.from, /^ensembl:ENSP\d{11}\.\d+$/);
+    assert.ok(stores.identical("uniprot:P07203").includes(path[0]!.from));
+    assert.deepEqual([hits[0]!.cost, hits[0]!.approximate], [2, false]);
+  });
+
+  it("does not expand structures when converting a protein to the genome (layer rule 1)", () => {
+    const visited: string[] = [];
+    const blocksAt = stores.blocksAt.bind(stores);
+    stores.blocksAt = (ref, a, b) => (visited.push(ref), blocksAt(ref, a, b));
+    const hits = convert(stores, parseLocationId("uniprot:P07203:49", ctx), { to: { category: "genome" } }, ctx);
+    stores.blocksAt = blocksAt;
+    assert.deepEqual(hits.map((h) => h.id), ["refseq:NC_000003.12:complement(49358132..49358134)"]);
+    assert.ok(visited.length > 0 && visited.every((r) => !r.startsWith("pdb:")), visited.join(" "));
+    assert.deepEqual(convert(stores, parseLocationId("uniprot:P07203:49", ctx), { to: { category: "structure" } }, ctx).map((h) => h.id).sort(), ["pdb:2F8A.A:59", "pdb:2F8A.B:59"]);
+  });
+
+  it("maps a single base inside a codon to a codon position on the structure", () => {
+    const hits = convert(stores, parseLocationId("refseq:NC_000003.12:49358133", ctx), { to: { ref: "pdb:2F8A.A" } }, ctx);
+    assert.deepEqual(hits.map((h) => h.id), ["pdb:2F8A.A:59c2"]);
+  });
+});
+
+describe("layer rules (spec-service §2.1)", () => {
+  it("allows one U-turn (protein -> genome -> protein) but not a zigzag to a second genome", () => {
+    const A = "refseq:NP_000011.1";
+    const B = "refseq:NP_000012.1";
+    const G1 = "refseq:NC_000011.1";
+    const G2 = "refseq:NW_000012.1";
+    const e = (from: string, to: string, tgt: number): Edge => ({
+      kind: "annotation",
+      from,
+      to,
+      blocks: [{ srcRef: from, src: 0, tgtRef: to, tgt, len: 30, rev: false }],
+      attributes: {},
+      provenance: { adapter: "gff3" },
+      validation: { status: "ok" },
+    });
+    const stores = new StoreSet().add(store("zigzag", { sequences: [], annotations: [], warnings: [], edges: [e(A, G1, 100), e(B, G1, 100), e(B, G2, 500)] }));
+    const ctx = stores.context();
+    const ids = (to: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(`${A}:2`, ctx), to, ctx).map((r) => r.id);
+    assert.deepEqual(ids({ to: { category: "protein" } }), [`${B}:2`]); // A -> G1 -> B: one U-turn
+    assert.deepEqual(ids({ to: { category: "genome" } }), [`${G1}:104..106`]); // A -> G1 -> B -> G2 would turn twice
+  });
+});
+
 describe("helpers", () => {
   it("categorises sequence keys", () => {
     assert.equal(categoryOf("refseq:NC_000001.11"), "genome");
@@ -181,6 +285,7 @@ describe("helpers", () => {
     assert.equal(categoryOf("ensembl:ENST00000531224.5"), "transcript");
     assert.equal(categoryOf("insdc:AB000001.1", { moltype: "mRNA" }), "transcript");
     assert.equal(categoryOf("uniprot:P12883"), "protein");
+    assert.equal(categoryOf("pdb:2F8A.A", { unit: "aa" }), "structure");
   });
   it("bounds caches", () => {
     const lru = new Lru<string, number>(2).set("a", 1).set("b", 2);

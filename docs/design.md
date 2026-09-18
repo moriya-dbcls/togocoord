@@ -144,13 +144,14 @@ https://<togocoordのドメイン>/refseq:NM_014739.3:join(233..235,5958..6116)
 
 ### 3.6 FALDO JSON-LD
 
-- FALDO との対応: 位置は `ExactPosition`、範囲は `Region`、join は `ListOfRegions` と `order`、complement は `NegativeStrand`、`<`/`>` は `FuzzyPosition`、`^` は `InBetweenPosition`、`.` は `InRangePosition`。
-- Location ID と JSON-LD は 1:1 で相互に変換できるようにする。
-- コドン拡張は、`faldo:Position` に `faldo:codonPosition`（値は 1..3）を追加する形で FALDO に提案する。FALDO に入らなかった場合は、独自の名前空間で `tgc:codonPosition` として定義する。このプロパティを知らない処理系は、aa の位置としてそのまま正しく読める。
+FALDO の正式な語彙に合わせる（詳細は [spec-service.md](spec-service.md) §7）。鎖の向きは位置の型（`faldo:ForwardStrandPosition` / `faldo:ReverseStrandPosition`）で表し、逆鎖では begin を数値の大きい側にする。`join` は `faldo:ListOfRegions`、`order` は `faldo:BagOfRegions` で、要素は `rdf:_n` で並べる。`<` と `>` は `faldo:FuzzyPosition`、`^` は `faldo:InBetweenPosition`、`.` は `faldo:InRangePosition`。（当初この節に書いた `NegativeStrand` は FALDO の語彙ではなかったので訂正した。）
+
+- Location ID と JSON-LD は 1:1 で対応させる。
+- コドン拡張は、`faldo:Position` に `faldo:codonPosition`（値は 1..3）を追加する形で FALDO に提案する。FALDO に入らなかった場合は、独自の名前空間で `tgc:codonPosition` として定義する。このプロパティを知らない処理系は、aa の位置としてそのまま正しく読める。現在の実装は `tgc:codonPosition` を出力する。
 
 ```turtle
 [] a faldo:ExactPosition ; faldo:position 60 ;
-   faldo:reference <…/Q9BYF1-1> ; faldo:codonPosition 2 .
+   faldo:reference <…/Q9BYF1-1> ; tgc:codonPosition 2 .
 ```
 
 ### 3.7 名前空間ごとの ID 規則
@@ -445,7 +446,7 @@ P  hapA  s1+,s2-,s3+  *
 | 0 | 本仕様を確定する。テストデータを整備する。**完了（2026-09-18）**: [spec-core.md](spec-core.md)、`core/test/corpus/` |
 | 1 | コアライブラリ（パーサ、正規化、ブロック演算、意味論）とオラクルテスト。**v0.1 完了（2026-09-18）**: `core/`（テスト104件） |
 | 2 | GBFF と GFF3 のアダプタ。汎用性を確かめるため、ヒト・マウスに加えて、性質の異なる種（環状ゲノムの細菌、シロイヌナズナなど）を最初から対象に含める。**v0.1 完了（2026-09-18）**: `ingest/`、[spec-ingest.md](spec-ingest.md)。ウイルス、ヒトのミトコンドリアゲノム、アデノウイルス、プラスミド、ヒト GRCh38 の cDNA_match の実データで検証。ヒトやマウスの全ゲノム規模の GFF3、シロイヌナズナ、Ensembl の seqid は未検証 |
-| 3 | REST API、経路探索、Web UI。T1 の Enrichment（SIFTS、cDNA_match、UCSC chain、MANE）。**3a・3b 完了（2026-09-18）**: `service/`（経路探索、複数の保存先）、[spec-service.md](spec-service.md)。API・UI・拡張データは未着手 |
+| 3 | REST API、経路探索、Web UI。T1 の Enrichment（SIFTS、cDNA_match、UCSC chain、MANE）。**3a・3b 完了（2026-09-18）**: `service/`（経路探索、複数の保存先）、[spec-service.md](spec-service.md)。**3c 完了**: REST API、FALDO JSON-LD、同一配列（ダイジェスト）による経路。**3e（SIFTS）完了**: Ensembl・UniProt・SIFTS の取り込みと、構造との往復の検証（spec-service §8）。UI と、SIFTS 以外の拡張データ（UCSC chain、MANE）は未着手 |
 | 4 | T2（オンデマンドのアライメントとキャッシュ）、アノテーションの伝播（ポスターのユースケースの再現） |
 | 5 | T3（GFA と chain の持ち込み、ワークスペース）。需要に応じて、自前の計算も検討する |
 

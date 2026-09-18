@@ -6,7 +6,8 @@ import { ingestGff3 } from "../src/adapter-gff3.ts";
 import { edgeMapping, type Edge, type IngestResult } from "../src/model.ts";
 import { extract, MemorySequenceSource, translate, type SequenceSource } from "../src/sequence.ts";
 import { validateTranscript } from "../src/validate.ts";
-import { parseFasta } from "../src/fasta.ts";
+import { parseFasta, parseFastaHeaders } from "../src/fasta.ts";
+import { assemblyReportSeqids } from "../src/common.ts";
 import { chr3Source, fixture, genbankSource } from "./helpers.ts";
 
 const GENOMES = ["NC_045512.2", "NC_012920.1", "NC_001405.1"];
@@ -57,7 +58,10 @@ describe("GenBank adapter: CDS self-validation on real records", () => {
     const broken = text.replace('/translation="MCAAR', '/translation="MCAAW');
     assert.equal(ingestGenBank(broken).edges[0]!.validation.status, "mismatch");
     const noExcept = text.replace(/\s+\/transl_except=\(pos:220\.\.222,aa:Sec\)/, "");
-    assert.match(ingestGenBank(noExcept).edges[0]!.validation.detail!, /1 residue\(s\) differ \(49:\*\/U\)/);
+    // Without /transl_except the UGA reads as a stop; the published U is accepted as a recoded stop and reported.
+    const recoded = ingestGenBank(noExcept).edges[0]!.validation;
+    assert.equal(recoded.status, "ok");
+    assert.match(recoded.detail!, /selenocysteine at residue 49 \(recoded stop codon\)/);
     const wrongTable = fixture("NC_012920.1.gb").replace(/\/transl_table=2/g, "/transl_table=1");
     assert.ok(cdsEdges(ingestGenBank(wrongTable)).some((e) => e.validation.status === "mismatch"));
   });
@@ -173,6 +177,54 @@ describe("GFF3 transcripts are located by their exons (RYBP and GPX1, GRCh38)", 
     assert.match(rybp.detail!, /4445 nt, refseq:NM_012234.7 is 4662 nt/);
     const gpx1 = transcript("refseq:NM_000581.4").validation;
     assert.deepEqual([gpx1.status, gpx1.basis], ["ok", "full"]);
+  });
+});
+
+describe("Ensembl GFF3 (GRCh38 release 116, GPX1): seqid map, versions, validation against Ensembl proteins", () => {
+  const source = new MemorySequenceSource();
+  for (const [header, s] of parseFastaHeaders(fixture("ensembl_GRCh38.116_GPX1.pep.fa"))) source.add(`ensembl:${header.split(" ")[0]}`, s);
+  for (const [, s] of parseFasta(fixture("NC_000003.12_49357176-49358353.fa"))) source.add("refseq:NC_000003.12", s, 49357175);
+  const seqids = assemblyReportSeqids(fixture("GRCh38.p14_assembly_report_chr3.txt"));
+  const result = ingestGff3(fixture("ensembl_GRCh38.116_GPX1.gff3"), { source, seqidToRef: (id) => seqids.get(id) });
+  const cds = result.edges.filter((e) => e.attributes.codonStart !== undefined);
+
+  it("maps Ensembl seqid 3 to NC_000003.12 through the NCBI assembly report", () => {
+    assert.deepEqual([seqids.get("3"), seqids.get("chr3"), seqids.get("CM000665.2")], ["refseq:NC_000003.12", "refseq:NC_000003.12", "refseq:NC_000003.12"]);
+    assert.deepEqual(result.warnings, []);
+  });
+
+  it("keys proteins and transcripts with their Ensembl versions and validates every CDS against pep.all", () => {
+    assert.equal(cds.length, 15);
+    assert.ok(cds.every((e) => /^ensembl:ENSP\d{11}\.\d+$/.test(e.from) && e.to === "refseq:NC_000003.12"));
+    assert.deepEqual(cds.filter((e) => e.validation.status !== "ok" || e.validation.basis !== "full").map((e) => `${e.from}: ${e.validation.detail}`), []);
+    const mane = cds.find((e) => e.from === "ensembl:ENSP00000407375.1")!;
+    assert.equal(mane.location, "refseq:NC_000003.12:complement(join(49357388..49357747,49358027..49358278))");
+    assert.equal(mane.attributes.aaLengthSource, "protein sequence");
+    const tx = result.edges.find((e) => e.from === "ensembl:ENST00000419783.3")!;
+    assert.equal(tx.location, "refseq:NC_000003.12:complement(join(49357176..49357747,49358027..49358353))");
+  });
+
+  it("records checksums of the Ensembl protein: identical to UniProt P07203 and RefSeq NP_000572.2", () => {
+    const seq = result.sequences.find((s) => s.ref === "ensembl:ENSP00000407375.1")!;
+    assert.equal(seq.digest, "SQ.qsfE5UDDg5US4PKbR3-mgCvYbsfBsxFH");
+  });
+});
+
+describe("Ensembl 5'-incomplete CDS: the protein starts with X for the incomplete first codon (ENSP00000349216.4)", () => {
+  it("detects the leading X, maps residue 2 to the first complete codon and validates", () => {
+    const source = new MemorySequenceSource();
+    for (const [header, s] of parseFastaHeaders(fixture("ensembl_GRCh38.116_ENSP00000349216.pep.fa"))) source.add(`ensembl:${header.split(" ")[0]}`, s);
+    for (const [, s] of parseFasta(fixture("NC_000001.11_930312-944575.fa"))) source.add("refseq:NC_000001.11", s, 930311);
+    const seqids = assemblyReportSeqids(fixture("GRCh38.p14_assembly_report_chr1.txt"));
+    const result = ingestGff3(fixture("ensembl_GRCh38.116_ENSP00000349216.gff3"), { source, seqidToRef: (id) => seqids.get(id) });
+    const e = result.edges.find((x) => x.from === "ensembl:ENSP00000349216.4")!;
+    assert.deepEqual([e.attributes.codonStart, e.attributes.leadingPartialCodon, e.validation.status], ["3", "true", "ok"]);
+    assert.match(e.validation.detail!, /first residue is the incomplete first codon/);
+    const ctx = createContext({ units: (r) => (r.startsWith("ensembl:ENSP") ? "aa" : undefined) });
+    const ids = (t: string) => mapLocation(parseLocationId(t, ctx), edgeMapping(e), ctx).targets.map((x) => formatLocationId(x.location, ctx));
+    assert.deepEqual(ids("ensembl:ENSP00000349216.4:1"), ["refseq:NC_000001.11:<930312..930313"]); // incomplete codon
+    assert.deepEqual(ids("ensembl:ENSP00000349216.4:2"), ["refseq:NC_000001.11:930314..930316"]);
+    assert.equal(translate(source.get("refseq:NC_000001.11", 930313, 930316)!), source.get("ensembl:ENSP00000349216.4", 1, 2));
   });
 });
 

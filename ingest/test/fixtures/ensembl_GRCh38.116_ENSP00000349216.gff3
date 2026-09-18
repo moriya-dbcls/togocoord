@@ -1,0 +1,28 @@
+##gff-version 3
+##sequence-region   1 1 248956422
+1	havana	mRNA	930312	944575	.	+	.	ID=transcript:ENST00000341065;Parent=gene:ENSG00000187634;Name=SAMD11-201;biotype=protein_coding;transcript_id=ENST00000341065;transcript_support_level=5;version=8
+1	havana	exon	930312	930336	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00001768193;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00001768193;rank=1;version=1
+1	havana	CDS	930312	930336	.	+	2	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	931039	931089	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00003911839;constitutive=0;ensembl_end_phase=2;ensembl_phase=2;exon_id=ENSE00003911839;rank=2;version=1
+1	havana	CDS	931039	931089	.	+	1	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	935772	935896	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00003911340;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00003911340;rank=3;version=1
+1	havana	CDS	935772	935896	.	+	1	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	939040	939129	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00003912201;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00003912201;rank=4;version=1
+1	havana	CDS	939040	939129	.	+	2	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	939275	939412	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00001708361;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00001708361;rank=5;version=1
+1	havana	CDS	939275	939412	.	+	2	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	941144	941306	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00003477353;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003477353;rank=6;version=1
+1	havana	CDS	941144	941306	.	+	2	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	942136	942251	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00003913392;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00003913392;rank=7;version=1
+1	havana	CDS	942136	942251	.	+	1	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	942410	942488	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00003675531;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003675531;rank=8;version=1
+1	havana	CDS	942410	942488	.	+	2	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	942559	943058	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00002728091;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00002728091;rank=9;version=1
+1	havana	CDS	942559	943058	.	+	1	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	943253	943377	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00002733131;constitutive=0;ensembl_end_phase=0;ensembl_phase=1;exon_id=ENSE00002733131;rank=10;version=1
+1	havana	CDS	943253	943377	.	+	2	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	943698	943808	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00002692620;constitutive=0;ensembl_end_phase=0;ensembl_phase=0;exon_id=ENSE00002692620;rank=11;version=1
+1	havana	CDS	943698	943808	.	+	0	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	CDS	943908	944153	.	+	0	ID=CDS:ENSP00000349216;Parent=transcript:ENST00000341065;protein_id=ENSP00000349216;version=4
+1	havana	exon	943908	944575	.	+	.	Parent=transcript:ENST00000341065;Name=ENSE00001804027;constitutive=0;ensembl_end_phase=-1;ensembl_phase=0;exon_id=ENSE00001804027;rank=12;version=1
+1	havana	three_prime_UTR	944154	944575	.	+	.	Parent=transcript:ENST00000341065
