@@ -114,6 +114,10 @@ export interface PafOptions {
   minIdentity?: number;
   /** Alignments shorter than this on the query are ignored (default 1000). */
   minLength?: number;
+  /** Source sequences that belong to both assemblies: identity, so their alignments are skipped (see ChainOptions). */
+  shared?: (ref: string) => boolean;
+  /** Whether two sequences may correspond (see ChainOptions.compatible). */
+  compatible?: (from: string, to: string) => boolean;
 }
 
 export interface PafStats {
@@ -121,6 +125,10 @@ export interface PafStats {
   alignments: number;
   blocks: number;
   skipped: number;
+  /** Skipped because the source sequence belongs to both assemblies. */
+  shared?: number;
+  /** Skipped between a nuclear sequence and an organelle genome. */
+  crossMolecule?: number;
   /** Query bases dropped because a better alignment already covered them (one-to-one on the source side). */
   overlapBases: number;
   sampledBases: number;
@@ -159,6 +167,16 @@ export async function ingestPafFile(path: string, sink: Sink, options: PafOption
           sink.warning(`${options.file ?? path}: no sequence for ${n}; its alignments are skipped`);
         }
       }
+      continue;
+    }
+    if (options.compatible && !options.compatible(options.fromRef(r.qname)!, options.toRef(r.tname)!)) {
+      stats.skipped++;
+      stats.crossMolecule = (stats.crossMolecule ?? 0) + 1;
+      continue;
+    }
+    if (options.shared?.(options.fromRef(r.qname)!)) {
+      stats.skipped++;
+      stats.shared = (stats.shared ?? 0) + 1;
       continue;
     }
     records.push({ ...r, qname: ownString(r.qname), tname: ownString(r.tname) });

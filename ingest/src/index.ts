@@ -7,6 +7,7 @@ export {
   assemblyReportAliases,
   assemblyReportInfo,
   assemblyReportSeqids,
+  assemblyReportMolecules,
   assemblyReportSequences,
   lookupSeqid,
   UCSC_DATABASES,

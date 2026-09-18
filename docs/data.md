@@ -40,6 +40,7 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | grcm38 | `grcm38`、`chain_mm10ToMm39`、`chain_mm39ToMm10` | GRCm38.p6（GCF_000001635.26）、UCSC liftOver chain | 0.2MB、0.3MB、0.5MB |
 | human_mouse | `chain_hg38ToMm39`、`chain_mm39ToHg38` | UCSC liftOver chain | 158MB、156MB |
 | arabidopsis | `arabidopsis`、`arabidopsis_rna`、`arabidopsis_uniprot` | RefSeq TAIR10.1（GCF_000001735.4）、UniProt UP000006548 | 300MB、174MB、14MB |
+| tair10 | `tair10`、`chain_tair10.1ToTair10`、`tair10_to_tair10.1` | 一つ前の RefSeq の版 TAIR10（GCF_000001735.3）の assembly report とゲノム配列、UCSC GenArk の chain（TAIR10.1 → TAIR10 だけ）、逆向きは minimap2 のアライメント | 0.1MB、0.1MB、0.1MB |
 | marchantia | `marchantia_v71` | INSDC MpTak_v7.1（GCA_039105155.1）の GenBank | 72MB |
 | | `marchantia` | INSDC MpTak v3.1（GCA_003032435.1）の GenBank | 80MB |
 | | `marchantia_uniprot` | UniProt UP000244005 | 7MB |
@@ -50,6 +51,10 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 各グループの結果（件数、自己検証、変換の検証）は spec-ingest と spec-service にある。
 
 **2026-09-18 の作り直しの確認**: このスクリプトで全29の保存先を作り直し、以前の手作業の保存先と、配列・edge・注釈の数と自己検証の結果が一致することを確かめた。違いは chain の4つだけで、その後の改良による（両側のアセンブリの配列を記録する、パッチの UCSC 名を読み替えて取り込む chain が 5〜277 本増えた）。増えた chain のうち、RefSeq に収録されていない未配置 scaffold（`KI270752.1` など）に着くものは、RefSeq のゲノム配列で照合できないので自己検証が `skipped` になる。
+
+**TAIR10 と TAIR10.1**: 核の染色体と葉緑体は同じ accession・同じ配列で、違うのはミトコンドリアのゲノム（TAIR10 `NC_001284.2`、TAIR10.1 `NC_037304.1`）だけ。核の位置は、どちらのアセンブリでもそのまま答えになる（spec-service §2.2）。
+
+**入れていないもの**: Col-CEN v1.2（セントロメアまでつながった Col-0 のアセンブリ。UCSC GenArk に TAIR10.1 との chain がある）は、INSDC の accession がなく GitHub（schatzlab/Col-CEN）でだけ配布されているので、配列の鍵を決められず、入れていない。
 
 **版について**: NCBI のアセンブリ、Ensembl（release-116）、MANE（release_1.5）、fanta.bio（v1.2.1）は版を固定した URL から取る。UniProt（current_release）、SIFTS、PDB の配列は、配布元が同じ URL で更新するので、取得した時期によって中身が変わる。
 

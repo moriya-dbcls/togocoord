@@ -92,12 +92,26 @@ export interface ChainOptions {
   sample?: number;
   /** Identity below which a chain is reported as a mismatch (coordinates wrong); default 0.5. */
   minIdentity?: number;
+  /**
+   * Source sequences that belong to both assemblies (the same accession, e.g. the nuclear chromosomes of TAIR10 and
+   * TAIR10.1): their correspondence is identity, so their alignments (repeats, organelle insertions) are skipped.
+   */
+  shared?: (ref: string) => boolean;
+  /**
+   * Whether two sequences may correspond (default: always). Alignments between a nuclear sequence and an organelle
+   * genome (nuclear insertions of organelle DNA, NUMTs / NUPTs) are paralogous, not the same position.
+   */
+  compatible?: (from: string, to: string) => boolean;
 }
 
 export interface ChainStats {
   chains: number;
   blocks: number;
   skipped: number;
+  /** Skipped because the source sequence belongs to both assemblies. */
+  shared?: number;
+  /** Skipped between a nuclear sequence and an organelle genome. */
+  crossMolecule?: number;
   sampledBases: number;
   identicalBases: number;
 }
@@ -123,6 +137,16 @@ export async function ingestChainFile(path: string, sink: Sink, options: ChainOp
           sink.warning(`${options.file ?? path}: no sequence for ${n}; its chains are skipped`);
         }
       }
+      continue;
+    }
+    if (options.compatible && !options.compatible(from, to)) {
+      stats.skipped++;
+      stats.crossMolecule = (stats.crossMolecule ?? 0) + 1;
+      continue;
+    }
+    if (options.shared?.(from)) {
+      stats.skipped++;
+      stats.shared = (stats.shared ?? 0) + 1;
       continue;
     }
     const blocks = chainBlocks(c, ownString(from), ownString(to));

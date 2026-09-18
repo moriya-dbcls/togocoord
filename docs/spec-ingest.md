@@ -208,6 +208,7 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 - CIGAR から、隣り合う一致をまとめたブロック列を作る（`=`、`X`、`M` は両方を、`I` は query を、`D`、`N` は target を進める）。`-` 鎖では、target を順方向に、query を逆向きにたどる。
 - **1対1に絞る**: PAF は、反復配列やパラログに対して複数の対応を出す。UCSC の liftOver chain と同じく、変換元（query）の各塩基には1つの対応だけを残す。secondary（`tp:A:S`）と、query 上で 1kb 未満のアライメントを除き、スコア（`AS:i`、なければ一致塩基数）の高い順に採る。既に覆われた query の範囲は、後のアライメントから切り取る。target 側の重なりは許す。1本のアライメントを、向きのある `liftover` edge 1本にする（chain と同じ圧縮した保存）。
 - 自己検証は chain と同じ（標本のブロックの一致率が0.5以上なら ok）。
+- **取り込まないアライメント**（chain も同じ。2026-09-18）: (1) 変換元の配列が両方のアセンブリに属するもの（同じ accession。TAIR10 と TAIR10.1 の核の染色体、GRCh37 と GRCh38 の chrM や多くの未配置 scaffold）。対応は同一性で、アライメントは反復配列などの別の場所を指すだけ。(2) 核の配列とオルガネラのゲノム（ミトコンドリア、葉緑体）の間のもの。核に入り込んだオルガネラ由来の配列（NUMT、NUPT）との対応で、同じ位置ではない。分子の種類は assembly report の Assigned-Molecule-Location/Type で決める。例: TAIR10 のミトコンドリアを minimap2 で TAIR10.1 に並べると、Col-0 の2番染色体にあるミトコンドリア由来の大きな挿入によく一致し、1対1に絞るとそちらが選ばれていた。ヒト → マウスの chain では392本がこれに当たる。
 - **再現のための記録**（すべての保存先）: 入力ファイルの MD5（`meta.inputs_md5`）、`--fasta` の配列ファイルの MD5（`meta.sequences_md5`。アライメントの元になったゲノム）、TogoCoord の commit（`meta.togocoord`。未 commit の変更があれば `+local changes`）、`--method TEXT`（入力の作り方。アライナーの版と引数、絞り方）。Loaded data に表示する。
 
 **ゼニゴケ v3.1 ↔ v7.1（2026-09-18）**

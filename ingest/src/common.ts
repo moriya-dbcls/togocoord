@@ -147,6 +147,23 @@ export function assemblyReportAliases(text: string): Record<string, string> {
   return out;
 }
 
+/**
+ * Kind of molecule of each sequence of an assembly: `nuclear`, or the organelle (`mitochondrion`, `chloroplast`, ...),
+ * from the Assigned-Molecule-Location/Type column. Unplaced scaffolds (na) are nuclear.
+ */
+export function assemblyReportMolecules(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line.startsWith("#")) continue;
+    const [, , , type, genbank, , refseq] = line.split("\t");
+    const ref = reportRef(refseq, genbank);
+    if (!ref) continue;
+    const t = (type ?? "").toLowerCase();
+    out.set(ref, /mitochondri/.test(t) ? "mitochondrion" : /chloroplast|plastid|apicoplast|cyanelle/.test(t) ? "plastid" : "nuclear");
+  }
+  return out;
+}
+
 /** The sequences of an assembly as records (RefSeq or GenBank accession, length, species), from its NCBI assembly report. */
 export function assemblyReportSequences(text: string, file?: string): SequenceRecord[] {
   const info = assemblyReportInfo(text);

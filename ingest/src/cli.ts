@@ -16,6 +16,7 @@ import {
   assemblyReportAliases,
   assemblyReportInfo,
   assemblyReportSeqids,
+  assemblyReportMolecules,
   assemblyReportSequences,
   lookupSeqid,
   UCSC_DATABASES,
@@ -78,6 +79,16 @@ let fromNames: Map<string, string> | undefined;
 let toNames: Map<string, string> | undefined;
 /** Both assemblies' reports: the chain store records the species and length of the sequences it connects. */
 const chainReports: string[] = [];
+/** Sequences listed in both reports (the same accession in both assemblies): identity, no alignment needed. */
+/** Nuclear sequences and organelle genomes do not correspond (organelle DNA inserted in the nucleus is paralogous). */
+function sameMolecule(): (from: string, to: string) => boolean {
+  const kinds = new Map(chainReports.flatMap((t) => [...assemblyReportMolecules(t)]));
+  return (a, b) => !kinds.has(a) || !kinds.has(b) || kinds.get(a) === kinds.get(b);
+}
+function sharedBetweenReports(): (ref: string) => boolean {
+  const [a, b] = chainReports.map((t) => new Set(assemblyReportSequences(t).map((r) => r.ref)));
+  return (ref) => !!a && !!b && a.has(ref) && b.has(ref);
+}
 for (let i = 0; i < args.length; i++) {
   const a = args[i]!;
   if (a === "--db") db = args[++i];
@@ -160,9 +171,19 @@ for (const file of inputs) {
   if (/\.chain$/i.test(name)) {
     if (!fromNames || !toNames) throw new Error(`${file}: chain files need --from-report and --to-report (NCBI assembly reports of both assemblies)`);
     for (const text of chainReports) for (const r of assemblyReportSequences(text, basename(file))) sink.sequence(r);
-    const s = await ingestChainFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => lookupSeqid(fromNames!, n), toRef: (n) => lookupSeqid(toNames!, n) });
+    const s = await ingestChainFile(file, sink, {
+      file: basename(file),
+      registry,
+      source,
+      fromRef: (n) => lookupSeqid(fromNames!, n),
+      toRef: (n) => lookupSeqid(toNames!, n),
+      shared: sharedBetweenReports(),
+      compatible: sameMolecule(),
+    });
     const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(1) : "-";
-    process.stderr.write(`${file}: ${s.chains} chains, ${s.blocks} blocks, ${s.skipped} skipped; sampled identity ${identity}%\n`);
+    process.stderr.write(
+      `${file}: ${s.chains} chains, ${s.blocks} blocks, ${s.skipped} skipped (${s.shared ?? 0} from sequences shared by both assemblies, ${s.crossMolecule ?? 0} between nuclear and organelle genomes); sampled identity ${identity}%\n`,
+    );
     continue;
   }
   if (/assembly_report\.txt$/i.test(name)) {
@@ -181,10 +202,19 @@ for (const file of inputs) {
   if (/\.paf$/i.test(name)) {
     if (!fromNames || !toNames) throw new Error(`${file}: PAF files need --from-report (query assembly) and --to-report (target assembly)`);
     for (const text of chainReports) for (const r of assemblyReportSequences(text, basename(file))) sink.sequence(r);
-    const s = await ingestPafFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => lookupSeqid(fromNames!, n), toRef: (n) => lookupSeqid(toNames!, n) });
+    const s = await ingestPafFile(file, sink, {
+      file: basename(file),
+      registry,
+      source,
+      fromRef: (n) => lookupSeqid(fromNames!, n),
+      toRef: (n) => lookupSeqid(toNames!, n),
+      shared: sharedBetweenReports(),
+      compatible: sameMolecule(),
+    });
     const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(2) : "-";
     process.stderr.write(
-      `${file}: ${s.records} records, ${s.alignments} alignments kept, ${s.blocks} blocks, ${s.skipped} skipped, ` +
+      `${file}: ${s.records} records, ${s.alignments} alignments kept, ${s.blocks} blocks, ${s.skipped} skipped ` +
+        `(${s.shared ?? 0} shared by both assemblies, ${s.crossMolecule ?? 0} between nuclear and organelle genomes), ` +
         `${s.overlapBases} source bases covered by better alignments; sampled identity ${identity}%\n`,
     );
     continue;

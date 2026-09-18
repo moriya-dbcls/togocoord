@@ -59,6 +59,22 @@ describe("PAF adapter", () => {
     assert.equal(stats.identicalBases, stats.sampledBases);
   });
 
+  it("skips alignments from a sequence that belongs to both assemblies (identity)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "togocoord-paf-"));
+    const path = join(dir, "shared.paf");
+    writeFileSync(path, row("Q", Q.length, 0, 149, "+", "T", 200, 0, 150, 147, "50=2I50=3D47=") + "\n");
+    const stats = await ingestPafFile(path, new MemorySink(), { fromRef: ref, toRef: ref, minLength: 10, shared: (r) => r === ref("Q") });
+    assert.deepEqual([stats.alignments, stats.shared], [0, 1]);
+  });
+
+  it("skips alignments between a nuclear sequence and an organelle genome (NUMT)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "togocoord-paf-"));
+    const path = join(dir, "numt.paf");
+    writeFileSync(path, row("Q", Q.length, 0, 149, "+", "T", 200, 0, 150, 147, "50=2I50=3D47=") + "\n");
+    const stats = await ingestPafFile(path, new MemorySink(), { fromRef: ref, toRef: ref, minLength: 10, compatible: () => false });
+    assert.deepEqual([stats.alignments, stats.crossMolecule], [0, 1]);
+  });
+
   it("requires the CIGAR", () => {
     const r = parsePafLine(row("Q", Q.length, 0, 149, "+", "T", 200, 0, 150, 147, "x").replace("\tcg:Z:x", ""))!;
     assert.throws(() => pafBlocks(r, ref("Q"), ref("T")), /cg:Z/);

@@ -30,6 +30,7 @@ const GRCH37 = assembly("GCF_000001405.25", "GRCh37.p13");
 const GRCM39 = assembly("GCF_000001635.27", "GRCm39");
 const GRCM38 = assembly("GCF_000001635.26", "GRCm38.p6");
 const TAIR = assembly("GCF_000001735.4", "TAIR10.1");
+const TAIR10 = assembly("GCF_000001735.3", "TAIR10");
 const MP31 = assembly("GCA_003032435.1", "Marchanta_polymorpha_v1");
 const MP71 = assembly("GCA_039105155.1", "MpTak_v7.1");
 const UNIPROT = "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Eukaryota";
@@ -73,6 +74,10 @@ const r37 = ncbi(GRCH37, "assembly_report.txt");
 const rm39 = ncbi(GRCM39, "assembly_report.txt");
 const rm38 = ncbi(GRCM38, "assembly_report.txt");
 const rTair = ncbi(TAIR, "assembly_report.txt");
+const rTair10 = ncbi(TAIR10, "assembly_report.txt");
+const gTair = ncbi(TAIR, "genomic.fna.gz");
+const gTair10 = ncbi(TAIR10, "genomic.fna.gz");
+const pafTair10 = work("TAIR10_to_TAIR10.1.paf");
 const rMp31 = ncbi(MP31, "assembly_report.txt");
 const rMp71 = ncbi(MP71, "assembly_report.txt");
 const g38 = ncbi(GRCH38, "genomic.fna.gz");
@@ -114,9 +119,19 @@ const STORE_LIST: Store[] = [
   { name: "chain_hg38ToMm39", group: "human_mouse", args: ["--label", "UCSC liftOver chains hg38 → mm39 (human to mouse)", "--from-report", r38, "--to-report", rm39, "--fasta", g38, "--fasta", gm39, raw(`${UCSC}/hg38/liftOver/hg38ToMm39.over.chain.gz`)] },
   { name: "chain_mm39ToHg38", group: "human_mouse", args: ["--label", "UCSC liftOver chains mm39 → hg38 (mouse to human)", "--from-report", rm39, "--to-report", r38, "--fasta", gm39, "--fasta", g38, raw(`${UCSC}/mm39/liftOver/mm39ToHg38.over.chain.gz`)] },
   // Arabidopsis
-  { name: "arabidopsis", group: "arabidopsis", args: ["--label", "Arabidopsis RefSeq annotation (TAIR10.1)", "--assembly-report", rTair, "--fasta", ncbi(TAIR, "genomic.fna.gz"), "--fasta", ncbi(TAIR, "rna.fna.gz"), "--fasta", ncbi(TAIR, "protein.faa.gz"), ncbi(TAIR, "genomic.gff.gz")] },
+  { name: "arabidopsis", group: "arabidopsis", args: ["--label", "Arabidopsis RefSeq annotation (TAIR10.1)", "--assembly-report", rTair, "--fasta", gTair, "--fasta", ncbi(TAIR, "rna.fna.gz"), "--fasta", ncbi(TAIR, "protein.faa.gz"), ncbi(TAIR, "genomic.gff.gz")] },
   { name: "arabidopsis_rna", group: "arabidopsis", args: ["--label", "Arabidopsis RefSeq RNA", ncbi(TAIR, "rna.gbff.gz")] },
   { name: "arabidopsis_uniprot", group: "arabidopsis", args: ["--label", "Arabidopsis UniProt reference proteome (UP000006548)", ...upArab] },
+  // Arabidopsis TAIR10 (the previous RefSeq version): the same nuclear chromosomes and chloroplast; another
+  // mitochondrial genome. UCSC GenArk has a chain TAIR10.1 -> TAIR10 only; the other direction is aligned here.
+  { name: "tair10", group: "tair10", args: ["--label", "TAIR10 genome (GCF_000001735.3; NCBI assembly report and sequences)", "--assembly-report", rTair10, rTair10, gTair10] },
+  { name: "chain_tair10.1ToTair10", group: "tair10", args: ["--label", "UCSC GenArk liftOver chains TAIR10.1 → TAIR10", "--from-report", rTair, "--to-report", rTair10, "--fasta", gTair, "--fasta", gTair10, raw("https://hgdownload.soe.ucsc.edu/hubs/GCF/000/001/735/GCF_000001735.4/liftOver/GCF_000001735.4_TAIR10.1ToGCF_000001735.3_TAIR10.over.chain.gz")] },
+  {
+    name: "tair10_to_tair10.1",
+    group: "tair10",
+    prepare: [align(gTair, gTair10, pafTair10)],
+    args: ["--label", "minimap2 alignment: TAIR10 → TAIR10.1", "--method", `${minimap2} ${basename(gTair)} ${basename(gTair10)} (target TAIR10.1, query TAIR10). ${pafFilter}; sequences of both assemblies skipped (identity)`, "--from-report", rTair10, "--to-report", rTair, "--fasta", gTair10, "--fasta", gTair, pafTair10],
+  },
   // Marchantia: v7.1 (default) and v3.1 (INSDC only), joined by minimap2 alignments
   { name: "marchantia_v71", group: "marchantia", args: ["--label", "Marchantia polymorpha MpTak_v7.1 INSDC annotation (GCA_039105155.1)", "--assembly-report", rMp71, ncbi(MP71, "genomic.gbff.gz")] },
   { name: "marchantia", group: "marchantia", args: ["--label", "Marchantia polymorpha INSDC annotation (GCA_003032435.1)", "--assembly-report", rMp31, ncbi(MP31, "genomic.gbff.gz")] },
