@@ -18,7 +18,7 @@ import {
 } from "@togocoord/core";
 import { CATEGORIES, type Category } from "./category.ts";
 import { convert, type Conversion, type Target } from "./search.ts";
-import type { StoreSet } from "./stores.ts";
+import type { StoreSet, StoredAnnotation } from "./stores.ts";
 
 export interface ApiOptions {
   /** Base of location IRIs (default https://togocoord.example.org/). */
@@ -64,9 +64,23 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
    * Input written with an assembly's own sequence names, `<assembly>:<sequence name>[:<location>]` (e.g.
    * `hg19:chr7:140453136`, `GRCh37:7:140453136`), is rewritten to the RefSeq sequence (`refseq:NC_000007.13:...`).
    */
-  const resolveAssemblyName = (text: string): { text: string; assembly?: string; name?: string } => {
+  interface Written {
+    text: string;
+    assembly?: string;
+    name?: string;
+    /** An annotation given by its ID (fanta:FCHS_1), with its type and name. */
+    annotation?: { id: string; type: string; name?: string; link?: string };
+  }
+  const resolveAssemblyName = (text: string): Written => {
     const m = /^([A-Za-z][\w.-]*):([^:\s]+)(:.*)?$/.exec(text.trim());
     if (!m || stores.registry.get(m[1]!)) return { text };
+    // An annotation ID (e.g. the fanta.bio CRE fanta:FCHS_1) stands for the annotation's location.
+    if (!m[3] && stores.annotationNamespaces().some((n) => n.toLowerCase() === m[1]!.toLowerCase())) {
+      const a = stores.annotationById(m[1]!, m[2]!);
+      if (!a) throw new HttpError(404, `no ${m[1]} annotation ${m[2]}`);
+      const name = a.attributes.Name?.[0];
+      return { text: a.location, annotation: { id: a.id ?? `${m[1]}:${m[2]}`, type: a.type, ...(name && { name }), ...(a.link && { link: a.link }) } };
+    }
     const assembly = stores.assembly(m[1]!);
     if (!assembly) return { text };
     const name = m[2]!;
@@ -125,6 +139,33 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     return hit.name;
   };
 
+  /**
+   * Annotations whose own segments overlap a location. The index holds each feature's bounding interval; a position
+   * in an intron is not "in" the transcript.
+   */
+  const annotationsAt = (loc: Location): StoredAnnotation[] => {
+    const seen = new Set<string>();
+    const overlaps = (text: string) => {
+      let feature: Location;
+      try {
+        feature = parseLocationId(text, ctx);
+      } catch {
+        return true;
+      }
+      return feature.segments.some((f) =>
+        loc.segments.some((s) => f.ref === s.ref && f.start < Math.max(s.end, s.start + 1) && Math.max(s.start, s.end === s.start ? s.start - 1 : s.start) < f.end),
+      );
+    };
+    return loc.segments
+      .flatMap((s) => stores.annotations(s.ref, s.start === s.end ? s.start - 1 : s.start, s.start === s.end ? s.start + 1 : s.end))
+      .filter((a) => {
+        const key = `${a.type}\t${a.location}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return overlaps(a.location);
+      });
+  };
+
   interface Scope {
     taxon?: number;
     assembly?: string;
@@ -174,6 +215,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         species: stores.species(),
         assemblies: stores.assemblies().map(({ aliases: _aliases, refs: _refs, ...a }) => a),
         crossings: stores.crossings(),
+        annotationNamespaces: stores.annotationNamespaces(),
         tags: stores.tagSpecies(),
         base,
       }),
@@ -238,6 +280,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
           ...(assembly && { assembly }),
           // The sequence as written with the assembly's own name (e.g. chr7 of GRCh37.p13).
           ...(written.name && { written: { assembly: written.assembly, name: written.name } }),
+          ...(written.annotation && { written: { annotation: written.annotation } }),
           segments: loc.segments.map((s) => segmentJson(s, ctx)),
         };
       },
@@ -266,32 +309,27 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
       /^\/v1\/annotations$/,
       (_m, q) => {
         const loc = parse(q.get("loc"));
-        const seen = new Set<string>();
-        const annotations = loc.segments.flatMap((s) =>
-          stores.annotations(s.ref, s.start === s.end ? s.start - 1 : s.start, s.start === s.end ? s.start + 1 : s.end),
-        );
-        // The index holds each feature's bounding interval; keep features whose own segments overlap the input
-        // (a position in an intron is not "in" the transcript).
-        const overlaps = (text: string) => {
-          let feature: Location;
-          try {
-            feature = parseLocationId(text, ctx);
-          } catch {
-            return true;
+        const own = annotationsAt(loc);
+        const inputAssembly = stores.assemblyOf(loc.outer);
+        const out: Array<Record<string, unknown>> = own.map((a) => ({ ...a, ...(inputAssembly && { assembly: inputAssembly }) }));
+        // Annotations of the other assemblies of the species (e.g. fanta.bio CREs on mm10 for an mm39 position): the
+        // position is lifted there through a chain / alignment, and each annotation is lifted back when possible.
+        const taxon = stores.taxonOf(loc.outer);
+        const others = inputAssembly ? (stores.species().find((s) => s.taxon === taxon)?.assemblies ?? []).filter((a) => a !== inputAssembly) : [];
+        for (const assembly of others) {
+          const there = convert(stores, loc, { to: { category: "genome" }, assembly, maxHops: 1 }, ctx)[0];
+          if (!there) continue;
+          for (const a of annotationsAt(there.location)) {
+            let back: string | undefined;
+            try {
+              back = convert(stores, parseLocationId(a.location, ctx), { to: { category: "genome" }, assembly: inputAssembly!, maxHops: 1 }, ctx)[0]?.id;
+            } catch {
+              back = undefined;
+            }
+            out.push({ ...a, assembly, via: there.id, ...(back && { lifted: back }) });
           }
-          return feature.segments.some((f) =>
-            loc.segments.some((s) => f.ref === s.ref && f.start < Math.max(s.end, s.start + 1) && Math.max(s.start, s.end === s.start ? s.start - 1 : s.start) < f.end),
-          );
-        };
-        return {
-          input: formatLocationId(loc, ctx),
-          annotations: annotations.filter((a) => {
-            const key = `${a.type}\t${a.location}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return overlaps(a.location);
-          }),
-        };
+        }
+        return { input: formatLocationId(loc, ctx), ...(inputAssembly && { assembly: inputAssembly }), annotations: out };
       },
     ],
   ];

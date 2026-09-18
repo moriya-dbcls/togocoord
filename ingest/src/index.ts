@@ -8,6 +8,7 @@ export {
   assemblyReportInfo,
   assemblyReportSeqids,
   assemblyReportSequences,
+  lookupSeqid,
   UCSC_DATABASES,
   ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, extent, VersionResolver, type AdapterOptions } from "./common.ts";
 export { ingestSiftsFile, type SiftsOptions } from "./adapter-sifts.ts";
@@ -44,3 +45,4 @@ export {
   type SequenceSource,
 } from "./sequence.ts";
 export { alignmentIdentity, inferAaLength, validateCds, validateTranscript } from "./validate.ts";
+export { ingestBedFile, type BedOptions, type BedStats } from "./adapter-bed.ts";

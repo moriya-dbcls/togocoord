@@ -17,6 +17,7 @@ import {
   assemblyReportInfo,
   assemblyReportSeqids,
   assemblyReportSequences,
+  lookupSeqid,
   UCSC_DATABASES,
   ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, VersionResolver } from "./common.ts";
 import { parseFastaHeaders } from "./fasta.ts";
@@ -27,6 +28,7 @@ import { ingestSiftsFile } from "./adapter-sifts.ts";
 import { ingestManeSummary } from "./adapter-mane.ts";
 import { ingestChainFile } from "./adapter-chain.ts";
 import { ingestPafFile } from "./adapter-paf.ts";
+import { ingestBedFile } from "./adapter-bed.ts";
 import { SqliteSink } from "./store.ts";
 import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 
@@ -35,6 +37,7 @@ const USAGE =
   "                        [--label TEXT] [--species-taxon N] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations]\n" +
   "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain / .paf files)] [--method TEXT] FILE...\n" +
   "FILE: .gbff/.gb/.gp, .gff3, .fa/.fna/.faa, SIFTS .tsv, MANE summary, UCSC .chain, PAF with cg:Z CIGAR, NCBI *_assembly_report.txt (optionally .gz)\n" +
+  "BED: [--bed-type TYPE] [--bed-columns NAME,...|attributes] [--id-namespace NS (IDs as input, e.g. fanta)] [--link URL_WITH_{id}]\n" +
   "--method: how an input was made (e.g. the aligner, its version and arguments), recorded for reproduction\n";
 const args = process.argv.slice(2);
 if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
@@ -64,6 +67,10 @@ let siftsKnownOnly = false;
 let seqids: Map<string, string> | undefined;
 /** Store metadata shown by the service (label, organism, assembly). */
 const meta: Record<string, string> = {};
+/** Sequence names of the --assembly-report assembly (for BED chromosome names). */
+let reportSeqids: Map<string, string> | undefined;
+let bedType: string | undefined;
+let bedColumns: string[] | undefined;
 /** Sequence files given with --fasta (for validation; their MD5 is recorded, e.g. the genomes an alignment used). */
 const fastaFiles: string[] = [];
 /** Sequence names of the two assemblies of a liftOver chain file. */
@@ -80,6 +87,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === "--seqid-map" || a === "--assembly-report") {
     const text = readFileSync(args[++i]!, "utf8");
     if (a === "--seqid-map") seqids = assemblyReportSeqids(text);
+    reportSeqids ??= assemblyReportSeqids(text);
     const info = assemblyReportInfo(text);
     for (const [k, v] of Object.entries(info)) meta[k] ??= v;
     // Sequence names of the assembly (chr7, 7, CM000669.2), so input may be written like hg38:chr7:140753336.
@@ -92,7 +100,9 @@ for (let i = 0; i < args.length; i++) {
     chainReports.push(text);
     if (a === "--from-report") fromNames = names;
     else toNames = names;
-  } else if (["--label", "--taxon", "--organism", "--assembly", "--species-taxon", "--method"].includes(a)) meta[a.slice(2).replace("-", "_")] = args[++i]!;
+  } else if (a === "--bed-type") bedType = args[++i];
+  else if (a === "--bed-columns") bedColumns = args[++i]!.split(",");
+  else if (["--label", "--taxon", "--organism", "--assembly", "--species-taxon", "--method", "--id-namespace", "--link"].includes(a)) meta[a.slice(2).replace("-", "_")] = args[++i]!;
   else if (a === "--fasta") {
     fastaFiles.push(args[i + 1]!);
     sources.push(openFasta(args[++i]));
@@ -150,7 +160,7 @@ for (const file of inputs) {
   if (/\.chain$/i.test(name)) {
     if (!fromNames || !toNames) throw new Error(`${file}: chain files need --from-report and --to-report (NCBI assembly reports of both assemblies)`);
     for (const text of chainReports) for (const r of assemblyReportSequences(text, basename(file))) sink.sequence(r);
-    const s = await ingestChainFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => fromNames!.get(n), toRef: (n) => toNames!.get(n) });
+    const s = await ingestChainFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => lookupSeqid(fromNames!, n), toRef: (n) => lookupSeqid(toNames!, n) });
     const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(1) : "-";
     process.stderr.write(`${file}: ${s.chains} chains, ${s.blocks} blocks, ${s.skipped} skipped; sampled identity ${identity}%\n`);
     continue;
@@ -171,12 +181,25 @@ for (const file of inputs) {
   if (/\.paf$/i.test(name)) {
     if (!fromNames || !toNames) throw new Error(`${file}: PAF files need --from-report (query assembly) and --to-report (target assembly)`);
     for (const text of chainReports) for (const r of assemblyReportSequences(text, basename(file))) sink.sequence(r);
-    const s = await ingestPafFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => fromNames!.get(n), toRef: (n) => toNames!.get(n) });
+    const s = await ingestPafFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => lookupSeqid(fromNames!, n), toRef: (n) => lookupSeqid(toNames!, n) });
     const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(2) : "-";
     process.stderr.write(
       `${file}: ${s.records} records, ${s.alignments} alignments kept, ${s.blocks} blocks, ${s.skipped} skipped, ` +
         `${s.overlapBases} source bases covered by better alignments; sampled identity ${identity}%\n`,
     );
+    continue;
+  }
+  if (/\.bed$/i.test(name)) {
+    const names = seqids ?? reportSeqids;
+    if (!names) throw new Error(`${file}: BED files need --assembly-report (chromosome names of the assembly)`);
+    const s = await ingestBedFile(file, sink, {
+      file: basename(file),
+      registry,
+      refOf: (c) => lookupSeqid(names, c),
+      ...(bedType && { type: bedType }),
+      ...(bedColumns && { extraColumns: bedColumns }),
+    });
+    process.stderr.write(`${file}: ${s.records} regions, ${s.skipped} skipped\n`);
     continue;
   }
   if (/MANE.*summary\.txt$/i.test(name)) {

@@ -220,3 +220,24 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 | よりよいアライメントに覆われて除いた query の塩基 | 55,948 | 1,781,960 |
 | 標本の一致率 | 99.53% | 98.51% |
 | 保存先 | `mp_v31_to_v71.sqlite` 2.7MB | `mp_v71_to_v31.sqlite` 3.4MB |
+
+## 17. BED アダプタと、ID で引ける注釈（fanta.bio の CRE、v0.5）
+
+- 入力: BED（`*.bed(.gz)`）。3〜12列の標準の列と、その後の独自の列。ゲノム上の領域を注釈（annotation）として保存する。BED12 のブロックは join に、`-` 鎖は complement にする。染色体名（`chr1`、`1` など）は `--assembly-report` の配列名で読み替える。assembly report に載らないパッチや未配置 scaffold の UCSC 名（`chr11_GL456060_alt`、`chr1_KI270706v1_random`）は、名前の中の GenBank の accession で引く（`lookupSeqid`。chain と PAF の配列名にも使う）。
+- `--bed-type TYPE`（注釈の種類。既定 `region`）、`--bed-columns NAME,...`（標準の列の後の列の名前。`attributes` は `key:value|key:value` を属性に分ける）。BED の name 列は属性 `ID` にする。
+- `--id-namespace NS`: 注釈を `NS:ID` で入力できるようにする（spec-service §6）。保存先に `annotation_id` 表（ID → 注釈）を作る。`--link URL`: `{id}` を ID に置き換えた URL を、注釈のリンクにする。
+
+**fanta.bio CRE v1.2.1（2026-09-18）**: `https://data.fanta.bio/cre/v1.2.1/` の BED9+2（10列目が CRE 名、11列目が `directionality:…|class:PLA/ELA`）。prefix は bioregistry の `fanta`（パターン `^FC(HS|MM)_\d+$`、`https://fanta.bio/cre/$1`）。
+
+| 保存先 | 入力 | 領域 | 取り込めなかった領域 | 大きさ | 時間 |
+|---|---|---|---|---|---|
+| `fanta_human_hg38.sqlite` | `human-CREv1.2.1.hg38.cre-peaks.bed.gz`、`--assembly-report` GRCh38.p14 | 513,895 | 0 | 196MB | 4秒 |
+| `fanta_mouse_mm10.sqlite` | `mouse-CREv1.2.1.mm10.cre-peaks.bed.gz`、`--assembly-report` GRCm38.p6 | 307,621 | 206（mm10 のパッチのうち、GRCm38.p6 で版の上がったもの。座標が同じとは限らないので取り込まない） | 115MB | 3秒 |
+
+```
+togocoord-ingest --db fanta_mouse_mm10.sqlite --assembly-report GCF_000001635.26_GRCm38.p6_assembly_report.txt \
+  --bed-type CRE --bed-columns Name,attributes --id-namespace fanta --link 'https://fanta.bio/cre/{id}' \
+  mouse-CREv1.2.1.mm10.cre-peaks.bed.gz
+```
+
+活性の表（TPM）と JSONL の注釈（関連遺伝子、TF の結合など、446MB）は取り込まない。座標の対応には要らず、fanta.bio へのリンクで参照できる。

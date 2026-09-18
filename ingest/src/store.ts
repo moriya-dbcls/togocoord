@@ -186,6 +186,13 @@ export class SqliteSink implements Sink {
     this.#db.exec("COMMIT");
     this.#db.exec("BEGIN");
     this.#db.exec(INDEXES);
+    // Annotations addressable by their ID in a namespace of their own (e.g. fanta:FCHS_1, spec-ingest §17).
+    if (meta.id_namespace) {
+      this.#db.exec(
+        "CREATE TABLE annotation_id(name TEXT PRIMARY KEY, annotation INTEGER NOT NULL) WITHOUT ROWID;" +
+          "INSERT OR IGNORE INTO annotation_id SELECT json_extract(attributes, '$.ID[0]'), id FROM annotation WHERE json_extract(attributes, '$.ID[0]') IS NOT NULL;",
+      );
+    }
     const put = this.#db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)");
     const summary = JSON.stringify(summarize(this.#db));
     for (const [k, v] of Object.entries({ schema: STORE_SCHEMA_VERSION, created: new Date().toISOString(), summary, ...meta })) put.run(k, v);
@@ -548,6 +555,24 @@ export class TogoCoordStore {
   neighbors(loc: Location, ctx: CoordContext = this.context()): MapResult {
     return mapLocation(loc, this.mappingFor(loc), ctx);
   }
+
+  /** An annotation by its ID, in a store built with --id-namespace (e.g. the CRE FCHS_1). */
+  annotationById(name: string): Omit<Annotation, "extent"> | undefined {
+    if (this.#hasAnnotationIds === undefined) {
+      this.#hasAnnotationIds = this.#db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'annotation_id'").get() !== undefined;
+    }
+    if (!this.#hasAnnotationIds) return undefined;
+    const r = this.#db.prepare("SELECT a.* FROM annotation_id i JOIN annotation a ON a.id = i.annotation WHERE i.name = ?").get(name) as
+      | Record<string, unknown>
+      | undefined;
+    return r && {
+      location: String(r.location),
+      type: String(r.type),
+      attributes: JSON.parse(String(r.attributes)),
+      provenance: JSON.parse(String(r.provenance)),
+    };
+  }
+  #hasAnnotationIds: boolean | undefined;
 
   annotations(ref: string, start: number, end: number): Array<Omit<Annotation, "extent">> {
     const id = this.#id(ref);

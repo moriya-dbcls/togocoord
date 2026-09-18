@@ -170,6 +170,18 @@ export function assemblyReportSequences(text: string, file?: string): SequenceRe
   return out;
 }
 
+/**
+ * Look up a sequence name, falling back to the GenBank accession inside UCSC names of patches and unplaced scaffolds
+ * that assembly reports do not list (`chr11_GL456060_alt`, `chrUn_JH584304`, `chr1_KI270706v1_random` ->
+ * GL456060.1, JH584304.1, KI270706.1).
+ */
+export function lookupSeqid(names: Map<string, string>, name: string): string | undefined {
+  const direct = names.get(name);
+  if (direct) return direct;
+  const m = /^chr[0-9A-Za-z]+_([A-Z]{2}\d+)(?:v(\d+))?(?:_(?:alt|fix|random))?$/.exec(name);
+  return m ? names.get(`${m[1]}.${m[2] ?? "1"}`) : undefined;
+}
+
 /** Header of an NCBI assembly report: organism, taxon, assembly name and accession, release date. */
 export function assemblyReportInfo(text: string): { organism?: string; taxon?: string; assembly?: string; accession?: string; released?: string } {
   const field = (name: string) => {

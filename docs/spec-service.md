@@ -169,14 +169,14 @@
 
 | メソッド | パス | 内容 |
 |---|---|---|
-| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&maxHops=&codon=never&tag=` | 変換。`db`（名前空間。例: `uniprot`、複数可）は、結果をそのデータベースのものに絞る（知らない名前空間は400）。`taxon`（NCBI taxon の番号、`taxon:10090`、読み込んだ生物種の学名や一般名。例: `Mus musculus`、`mouse`）と `assembly`（ゲノムの結果のアセンブリ。例: `GRCh37`、`hg19`）で、変換先の範囲を指定する（§2.2）。`loc` はアセンブリの配列名でも書ける（`hg19:chr7:140453136`）。知らない種やアセンブリは400。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す。`tag`（例: `MANE Select`）を指定すると、そのタグを持つ変換先だけを返す。結果には、変換先のタグ（`tags`）、生物種（`taxon`、`organism`）、ゲノムならアセンブリ（`assembly`）が付き、応答には入力の生物種とアセンブリ（`inputTaxon`、`inputAssembly`）が付く。UI は、入力と違う生物種の結果に生物種名を表示する |
+| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&maxHops=&codon=never&tag=` | 変換。`db`（名前空間。例: `uniprot`、複数可）は、結果をそのデータベースのものに絞る（知らない名前空間は400）。`taxon`（NCBI taxon の番号、`taxon:10090`、読み込んだ生物種の学名や一般名。例: `Mus musculus`、`mouse`）と `assembly`（ゲノムの結果のアセンブリ。例: `GRCh37`、`hg19`）で、変換先の範囲を指定する（§2.2）。`loc` はアセンブリの配列名でも書ける（`hg19:chr7:140453136`）。ID で引ける注釈の ID でもよい（`fanta:FCHS_301358` は、その CRE の領域 `refseq:NC_000003.12:181712289..181712497`。`/v1/location` の `written.annotation` に ID、種類、名前、リンクを返す）。知らない種やアセンブリは400。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す。`tag`（例: `MANE Select`）を指定すると、そのタグを持つ変換先だけを返す。結果には、変換先のタグ（`tags`）、生物種（`taxon`、`organism`）、ゲノムならアセンブリ（`assembly`）が付き、応答には入力の生物種とアセンブリ（`inputTaxon`、`inputAssembly`）が付く。UI は、入力と違う生物種の結果に生物種名を表示する |
 | POST | `/v1/convert` | 一括変換。`{"locations": [...], "to": ..., "db": ..., "taxon": ..., "assembly": ..., "maxHops": ..., "codon": ...}`。最大1000件。個々の入力の誤りは、その要素に `error` として返す |
 | GET | `/v1/location?loc=` | 正規形の ID、IRI、セグメント（1始まり。タンパク質は残基番号とコドン内の位置）、生物種とアセンブリ、アセンブリの配列名で書かれていればその名前（`written`） |
 | GET | `/v1/location/faldo?loc=` | FALDO JSON-LD（`application/ld+json`） |
 | GET | `/v1/sequences/{ref}` | 配列の情報（全保存先の情報をまとめたもの）と、同一配列の一覧 |
 | GET | `/v1/sequences/{ref}/edges` | その配列から出る edge と入る edge |
-| GET | `/v1/annotations?loc=` | その区間に重なる annotation。索引は feature の外枠で引くが、返すのは feature 自身の区間が重なるものだけ（イントロンの位置では、その転写産物を返さない） |
-| GET | `/v1/meta` | 保存先ごとのファイル名、メタデータ（表示名、生物種、アセンブリ、元ファイル、構築日時）、内容の集計（spec-ingest §12）。`species` に、読み込んだ生物種（taxon、名前、アセンブリ、既定のアセンブリ）の一覧、`assemblies` に、アセンブリ（名前、UCSC 名、accession）の一覧 |
+| GET | `/v1/annotations?loc=` | その区間に重なる annotation。索引は feature の外枠で引くが、返すのは feature 自身の区間が重なるものだけ（イントロンの位置では、その転写産物を返さない）。ゲノムの位置では、**同じ種の他のアセンブリの注釈も返す**。位置を chain やアライメントでそのアセンブリに移して引き（1段だけ）、各注釈に `assembly`、引いた位置（`via`）、入力のアセンブリに移し戻した位置（`lifted`）を付ける。例: mm39 の位置で、mm10 にしかない fanta.bio の CRE が見える。ID のある注釈には `id`（`fanta:FCMM_194523`）と `link` が付く |
+| GET | `/v1/meta` | 保存先ごとのファイル名、メタデータ（表示名、生物種、アセンブリ、元ファイル、構築日時）、内容の集計（spec-ingest §12）。`species` に、読み込んだ生物種（taxon、名前、アセンブリ、既定のアセンブリ）の一覧、`assemblies` に、アセンブリ（名前、UCSC 名、accession）の一覧、`annotationNamespaces` に ID で引ける注釈の名前空間 |
 | GET | `/<namespace>:<accession>:<location>` | IRI の解決（identifiers.org 風）。`Accept` に応じて、ブラウザには Web UI（`/?loc=`）への 303、JSON-LD の要求には FALDO JSON-LD、JSON の要求には `/v1/location` への 303 を返す |
 | GET | `/`、`/ui/*` | Web UI（§6.1） |
 
@@ -333,3 +333,11 @@ FALDO の定義（`faldo.ttl`）で確認した語彙だけを使う。コンセ
 **改訂された遺伝子**（`service/bench/verify-revised-genes.ts`）: v7.1 のタンパク質のうち、どのタンパク質とも同一でないもの（遺伝子モデルか残基が改訂されたもの）は1,925件ある。これらの残基から、v7.1 のゲノム → アライメント → v3.1 のゲノム → v3.1 の CDS → 同一配列の UniProt と変換すると、無作為な1,000残基のうち424（42.4%）が UniProt に届き、そのうち397（93.6%）は v3.1 のゲノム上でも同じアミノ酸をコードする。違うものは、読み枠の変わった改訂（UniProt 側の位置がコドンをまたぐ `161c3..162c2` になる）と、残基そのものの改訂（配列の誤りの訂正）。届かない残基は、v3.1 の遺伝子モデルにない部分（新しいエキソンなど）にある。例: `insdc:BFI18695.1:200` → `uniprot:A0A2R6X3H3:192`（残基番号がずれている）。
 
 答えが違う1%前後は、同じ配列のタンパク質が複数コピーある遺伝子（縦列重複、パラログ）だった。タンパク質を介した経路は別のコピーに着くことがあり、位置で対応するアライメントのほうが正しい。そこで、同じコストの経路では**段数の少ない経路**を選ぶ（コスト、優先タグの付かない中間の配列の数、段数の順。ゲノム → ゲノムでは、アライメントの1段がタンパク質経由の3段に勝つ）。この変更で、構造との往復（§8）と MANE の優先（§2）の結果は変わらなかった。
+
+## 12. シス調節領域（fanta.bio CRE、2026-09-18）
+
+ヒト（hg38）とマウス（mm10）の CRE（プロモーター、エンハンサー）を、ゲノムの注釈として読み込んだ（spec-ingest §17）。
+
+- **CRE から**: `fanta:FCHS_301358`（cp1@SOX2）を転写産物に変換すると `refseq:NM_003106.4:365..573`。マウスの `fanta:FCMM_194523`（cp2@Gpx1、mm10）は、`assembly=GRCm39` で `refseq:NC_000075.7:108216086..108216674` に、タンパク質に変換すると `uniprot:P11352:<1..55c1`（CRE の端がコード領域の始まりに重なる）。
+- **位置から**: 注釈（UI の Annotations）で、その位置に重なる CRE が見える。マウスの CRE は mm10 にしかないが、mm39 の位置からは mm10 に移して引き、mm39 の位置に移し戻して「from GRCm38.p6」と示す。
+- UI の例: 「CRE (fanta.bio) → transcript」「mouse CRE on mm10 → mm39 protein」。

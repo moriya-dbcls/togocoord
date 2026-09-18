@@ -15,6 +15,8 @@ export interface Species {
   defaultAssembly?: string;
 }
 
+export type StoredAnnotation = ReturnType<TogoCoordStore["annotations"]>[number] & { id?: string; link?: string };
+
 export interface Assembly {
   name: string;
   taxon?: number;
@@ -158,9 +160,37 @@ export class StoreSet {
     return this.stores.flatMap((s, i) => s.edges(ref).map((e) => ({ ...e, key: `${i}:${e.id}` })));
   }
 
-  /** Annotations overlapping `[start, end)` (internal units) of `ref` in every store. */
-  annotations(ref: string, start: number, end: number): ReturnType<TogoCoordStore["annotations"]> {
-    return this.stores.flatMap((s) => s.annotations(ref, start, end));
+  /**
+   * Annotations overlapping `[start, end)` (internal units) of `ref` in every store. Those of a store built with
+   * --id-namespace carry their ID in that namespace (`fanta:FCHS_1`) and, with --link, a URL.
+   */
+  annotations(ref: string, start: number, end: number): Array<StoredAnnotation> {
+    const meta = this.meta();
+    return this.stores.flatMap((s, i) => s.annotations(ref, start, end).map((a) => this.#withId(a, meta[i]!)));
+  }
+
+  /** An annotation by its ID in a namespace of annotation IDs (`fanta`, `FCHS_1`). */
+  annotationById(namespace: string, id: string): StoredAnnotation | undefined {
+    const meta = this.meta();
+    for (const [i, s] of this.stores.entries()) {
+      if (String(meta[i]!.id_namespace ?? "").toLowerCase() !== namespace.toLowerCase()) continue;
+      const a = s.annotationById(id);
+      if (a) return this.#withId(a, meta[i]!);
+    }
+    return undefined;
+  }
+
+  /** Namespaces of annotation IDs (e.g. fanta). */
+  annotationNamespaces(): string[] {
+    return [...new Set(this.meta().map((m) => m.id_namespace).filter((n): n is string => typeof n === "string"))];
+  }
+
+  #withId(a: ReturnType<TogoCoordStore["annotations"]>[number], meta: Record<string, unknown>): StoredAnnotation {
+    const ns = meta.id_namespace as string | undefined;
+    const id = a.attributes.ID?.[0];
+    if (!ns || !id) return a;
+    const link = typeof meta.link === "string" ? meta.link.replace("{id}", encodeURIComponent(id)) : undefined;
+    return { ...a, id: `${ns}:${id}`, ...(link && { link }) };
   }
 
   /** Per store: file name, recorded metadata (label, organism, assembly, inputs, ...) and content summary. */

@@ -16,6 +16,8 @@ const EXAMPLES = [
   { label: "revised gene → UniProt (Marchantia v7.1 → v3.1)", loc: "insdc:BFI18695.1:200", to: "protein", db: "uniprot", needs: "MpTak_v7.1" },
   { label: "Marchantia v3.1 → v7.1", loc: "insdc:KZ772678.1:1969300..1969400", to: "genome", assembly: "MpTak_v7.1", needs: "MpTak_v7.1" },
   { label: "mm10 → human hg19", loc: "mm10:chr9:108339451..108339453", to: "genome", taxon: "9606", assembly: "GRCh37", needs: "GRCm38" },
+  { label: "CRE (fanta.bio) → transcript", loc: "fanta:FCHS_301358", to: "transcript", db: "refseq", needs: "fanta" },
+  { label: "mouse CRE on mm10 → mm39 protein", loc: "fanta:FCMM_194523", to: "protein", db: "uniprot", needs: "fanta" },
   { label: "human → mouse UniProt", loc: "uniprot:P07203:49", to: "protein", taxon: "10090", db: "uniprot" },
   { label: "mouse → human genome", loc: "refseq:NC_000075.7:106312500..106312550", to: "genome", taxon: "9606" },
 ];
@@ -109,7 +111,7 @@ async function toggleExtra(card, kind, id) {
       const res = await fetch(endpoint(`/v1/location/faldo?${qs({ loc: id })}`));
       box.replaceChildren(el("pre", {}, JSON.stringify(await res.json(), null, 2)));
     } else {
-      const all = (await api(`/v1/annotations?${qs({ loc: id })}`)).annotations;
+      const { annotations: all, assembly: inputAssembly } = await api(`/v1/annotations?${qs({ loc: id })}`);
       // Narrowest first: the features that actually describe this position come before gene-long ones.
       const span = (a) => { const m = a.location.match(/\d+/g); return m ? Math.max(...m.map(Number)) - Math.min(...m.map(Number)) : 0; };
       const annotations = all.filter((a) => !WHOLE_MOLECULE_TYPES.has(a.type)).sort((a, b) => span(a) - span(b));
@@ -120,11 +122,21 @@ async function toggleExtra(card, kind, id) {
       const label = (a) => {
         const at = a.attributes ?? {};
         const pick = (k) => (at[k] ? [].concat(at[k])[0] : undefined);
-        return [pick("gene"), pick("product"), pick("Name"), pick("note")].filter(Boolean).slice(0, 2).join(" · ");
+        return [pick("gene"), pick("product"), pick("Name"), pick("class"), pick("note")].filter(Boolean).slice(0, 3).join(" · ");
+      };
+      // Annotations of another assembly of the species are shown at their lifted position, marked with their assembly.
+      const item = (a) => {
+        const other = a.assembly && a.assembly !== inputAssembly;
+        return el("li", {},
+          el("span", { class: "badge" }, a.type), " ",
+          locationLink(other && a.lifted ? a.lifted : a.location), " ",
+          other ? el("span", { class: "badge species", title: `annotated on ${a.assembly} at ${a.location}; lifted through ${a.via}` }, `from ${a.assembly}`) : null, " ",
+          a.id ? (a.link ? el("a", { href: a.link, target: "_blank", rel: "noopener" }, a.id) : el("code", {}, a.id)) : null, " ",
+          el("span", { class: "muted" }, label(a)));
       };
       box.replaceChildren(
         el("ul", { class: "annotations" },
-          annotations.slice(0, 100).map((a) => el("li", {}, el("span", { class: "badge" }, a.type), " ", locationLink(a.location), " ", el("span", { class: "muted" }, label(a)))),
+          annotations.slice(0, 100).map(item),
           annotations.length > 100 ? el("li", { class: "muted" }, `… ${annotations.length - 100} more`) : null,
         ),
       );
@@ -193,7 +205,8 @@ let meta = { species: [], crossings: [], tags: [] };
 let sourceTaxon;
 
 /** Loaded species (and assemblies, shown only when a species has several) for the scope selectors. */
-const speciesReady = api("/v1/meta").then(({ species = [], assemblies = [], crossings = [], tags = [] }) => {
+const speciesReady = api("/v1/meta").then(({ species = [], assemblies = [], crossings = [], tags = [], annotationNamespaces = [] }) => {
+  for (const n of annotationNamespaces) assemblyNames.set(n.toLowerCase(), n); // examples needing e.g. fanta
   meta = { species, crossings, tags };
   taxonSelect.append(
     ...species.map((s) => el("option", { value: String(s.taxon), dataset: { name: s.organism ?? `taxon ${s.taxon}` } }, s.organism ?? `taxon ${s.taxon}`)),
@@ -301,7 +314,10 @@ async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
     $("#input-id").textContent = info.id;
     $("#input-kind").textContent = `${info.unit === "aa" ? "protein" : "nucleotide"}${info.kind === "order" ? " · order" : ""}`;
     // Species and assembly of the input; the name as written (hg19:chr7:...) when it was given that way.
-    const scope = [info.organism, info.assembly, info.written && `written as ${info.written.name}`].filter(Boolean).join(" · ");
+    const written = info.written?.annotation
+      ? `${info.written.annotation.id} (${[info.written.annotation.type, info.written.annotation.name].filter(Boolean).join(" ")})`
+      : info.written?.name && `written as ${info.written.name}`;
+    const scope = [info.organism, info.assembly, written].filter(Boolean).join(" · ");
     $("#input-scope").textContent = scope;
     $("#input-scope").hidden = !scope;
     $("#segments").replaceChildren(...segmentRows(info.segments));

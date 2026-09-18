@@ -237,3 +237,66 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.equal(post.headers.get("access-control-allow-origin"), "*");
   });
 });
+
+describe("annotation IDs as input and annotations of another assembly (fanta.bio CREs on mm10)", () => {
+  let base = "";
+  let close = () => {};
+  const OLD = "refseq:NC_000075.6";
+  const NEW = "refseq:NC_000075.7";
+  before(async () => {
+    const make = (name: string, meta: Record<string, string>, fill: (sink: SqliteSink) => void) => {
+      const path = join(dir, `${name}.sqlite`);
+      const sink = new SqliteSink(path);
+      fill(sink);
+      sink.close(meta);
+      return new TogoCoordStore(path);
+    };
+    const dna = (ref: string) => ({ ref, moltype: "DNA" as const, unit: "nt" as const, length: 10_000, taxon: 10090, provenance: { adapter: "assembly-report" as const } });
+    const lift = (from: string, to: string, src: number, tgt: number) => ({
+      kind: "liftover" as const, directional: true, from, to, blocks: [{ srcRef: from, src, tgtRef: to, tgt, len: 5000, rev: false }],
+      attributes: {}, provenance: { adapter: "chain" as const }, validation: { status: "ok" as const },
+    });
+    const stores = new StoreSet()
+      .add(make("mm39", { assembly: "GRCm39", taxon: "10090" }, (s) => s.sequence(dna(NEW))))
+      .add(make("mm10", { assembly: "GRCm38.p6", taxon: "10090" }, (s) => s.sequence(dna(OLD))))
+      .add(make("cre", { id_namespace: "fanta", link: "https://fanta.bio/cre/{id}" }, (s) =>
+        s.annotation({
+          location: `${OLD}:1201..1300`, type: "CRE", attributes: { ID: ["FCMM_1"], Name: ["p1@Gene"], class: ["PLA"] },
+          extent: { ref: OLD, start: 1200, end: 1300 }, provenance: { adapter: "bed" },
+        })))
+      .add(make("lifts", {}, (s) => {
+        s.edge(lift(OLD, NEW, 1000, 2000));
+        s.edge(lift(NEW, OLD, 2000, 1000));
+      }));
+    const server = createApi(stores, { base: "https://t/" });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    close = () => {
+      server.close();
+      stores.close();
+    };
+  });
+  after(() => close());
+  const get = async (path: string) => {
+    const res = await fetch(base + path);
+    return { status: res.status, body: await res.json() };
+  };
+
+  it("takes fanta:FCMM_1 for the CRE's region", async () => {
+    const { body } = await get("/v1/location?loc=fanta:FCMM_1");
+    assert.equal(body.id, `${OLD}:1201..1300`);
+    assert.deepEqual(body.written.annotation, { id: "fanta:FCMM_1", type: "CRE", name: "p1@Gene", link: "https://fanta.bio/cre/FCMM_1" });
+    assert.equal((await get("/v1/location?loc=fanta:FCMM_999")).status, 404);
+    const lifted = await get(`/v1/convert?loc=fanta:FCMM_1&to=genome&assembly=GRCm39`);
+    assert.deepEqual(lifted.body.results.map((r: { location: string }) => r.location), [`${NEW}:2201..2300`]);
+  });
+
+  it("lists the annotations of the other assembly at the lifted position", async () => {
+    const { body } = await get(`/v1/annotations?loc=${encodeURIComponent(`${NEW}:2251`)}`);
+    const [cre] = body.annotations;
+    assert.deepEqual(
+      [body.assembly, cre.id, cre.assembly, cre.location, cre.lifted, cre.via],
+      ["GRCm39", "fanta:FCMM_1", "GRCm38.p6", `${OLD}:1201..1300`, `${NEW}:2201..2300`, `${OLD}:1251`],
+    );
+  });
+});
