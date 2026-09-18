@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/ui/style.css" />
-    <script type="module" src="/ui/app.js"></script>
+    <link rel="stylesheet" href="ui/style.css" />
+    <script type="module" src="ui/app.js"></script>
   </head>
   <body>
     <header>
@@ -36,6 +36,12 @@
           <option value="transcript">transcript</option>
           <option value="protein">protein</option>
           <option value="structure">structure</option>
+        </select>
+        <select id="taxon" name="taxon" title="species of the targets; another species is reached through liftOver chains or identical sequences">
+          <option value="">same species</option>
+        </select>
+        <select id="assembly" name="assembly" title="genome assembly of the targets" hidden>
+          <option value="">same assembly</option>
         </select>
         <button type="submit">Convert</button>
         <label class="option"><input id="codon" type="checkbox" checked /> codon positions</label>
@@ -67,7 +73,7 @@
     </main>
 
     <footer>
-      <a href="/v1/meta">stores</a> · REST API: <code>/v1/convert?loc=…&amp;to=…</code> ·
+      <a href="v1/meta">stores</a> · REST API: <code>/v1/convert?loc=…&amp;to=…</code> ·
       coordinates are Location IDs (INSDC location syntax, codon positions as <code>60c2</code>)
     </footer>
   </body>

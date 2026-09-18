@@ -290,6 +290,106 @@ describe("layer rules (spec-service §2.1)", () => {
   });
 });
 
+describe("orientation", () => {
+  it("composes strands along a path: protein -> minus-strand genome -> protein is forward", () => {
+    const A = "refseq:NP_000021.1";
+    const B = "refseq:NP_000022.1";
+    const G = "refseq:NC_000021.1";
+    const e = (from: string): Edge => ({
+      kind: "annotation",
+      from,
+      to: G,
+      blocks: [{ srcRef: from, src: 0, tgtRef: G, tgt: 100, len: 30, rev: true }],
+      attributes: {},
+      provenance: { adapter: "gff3" },
+      validation: { status: "ok" },
+    });
+    const stores = new StoreSet().add(store("strands", { sequences: [], annotations: [], warnings: [], edges: [e(A), e(B)] }));
+    const ctx = stores.context();
+    const one = (loc: string, category: "protein" | "genome") => convert(stores, parseLocationId(loc, ctx), { to: { category } }, ctx)[0]!;
+    assert.deepEqual([one(`${A}:2`, "genome").id, one(`${A}:2`, "genome").orientation], [`${G}:complement(125..127)`, "reverse"]);
+    assert.deepEqual([one(`${A}:2`, "protein").id, one(`${A}:2`, "protein").orientation], [`${B}:2`, "forward"]);
+    assert.equal(one(`${G}:complement(125..127)`, "protein").orientation, "forward");
+    assert.equal(one(`${G}:125..127`, "protein").orientation, "reverse"); // antisense
+  });
+});
+
+describe("species and assembly scope (spec-service §2.2)", () => {
+  // Human genome GH with protein PH; mouse genome GM with protein PM (identical to UniProt UM); a liftOver chain GH -> GM;
+  // HX (human) and MX (mouse) are identical proteins, e.g. a conserved histone.
+  const GH = "refseq:NC_000091.1";
+  const GM = "refseq:NC_000092.1";
+  const PH = "refseq:NP_000091.1";
+  const PM = "refseq:NP_000092.1";
+  const UM = "uniprot:Q00092";
+  const HX = "refseq:NP_000093.1";
+  const MX = "refseq:NP_000094.1";
+  const seq = (ref: string, taxon: number, unit: "nt" | "aa", digest?: string) => ({
+    ref,
+    moltype: unit === "nt" ? ("DNA" as const) : ("protein" as const),
+    unit,
+    length: unit === "nt" ? 10_000 : 10,
+    taxon,
+    ...(digest && { digest }),
+    provenance: { adapter: "fasta" as const },
+  });
+  const cds = (from: string, to: string, tgt: number): Edge => ({
+    kind: "annotation",
+    from,
+    to,
+    blocks: [{ srcRef: from, src: 0, tgtRef: to, tgt, len: 30, rev: false }],
+    attributes: {},
+    provenance: { adapter: "gff3" },
+    validation: { status: "ok" },
+  });
+  const chain: Edge = {
+    kind: "liftover",
+    directional: true,
+    from: GH,
+    to: GM,
+    blocks: [{ srcRef: GH, src: 0, tgtRef: GM, tgt: 5000, len: 2000, rev: false }],
+    attributes: {},
+    provenance: { adapter: "chain" },
+    validation: { status: "ok" },
+  };
+  const none = { annotations: [], warnings: [] };
+  const stores = new StoreSet()
+    .add(store("scope-human", { ...none, sequences: [seq(GH, 9606, "nt"), seq(PH, 9606, "aa"), seq(HX, 9606, "aa", "SQ.x")], edges: [cds(PH, GH, 100)] }))
+    .add(store("scope-mouse", { ...none, sequences: [seq(GM, 10090, "nt"), seq(PM, 10090, "aa", "SQ.m"), seq(UM, 10090, "aa", "SQ.m"), seq(MX, 10090, "aa", "SQ.x")], edges: [cds(PM, GM, 5100)] }))
+    .add(store("scope-chain", { ...none, sequences: [], edges: [chain] }));
+  const ctx = stores.context();
+  const ids = (loc: string, options: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(loc, ctx), options, ctx).map((r) => r.id);
+
+  it("stays in the input's species by default: no liftOver, no identical sequence of another species", () => {
+    assert.deepEqual(ids(`${PH}:2`, { to: { category: "protein" } }), []);
+    assert.deepEqual(ids(`${GH}:101..103`, {}), [`${PH}:1`]);
+    assert.deepEqual(ids(`${HX}:2`, { to: { category: "protein" } }), []);
+  });
+
+  it("crosses into the requested species, up to its UniProt entry", () => {
+    const [hit] = convert(stores, parseLocationId(`${PH}:2`, ctx), { to: { namespace: "uniprot" }, taxon: 10090 }, ctx);
+    assert.equal(hit!.id, `${UM}:2`);
+    assert.equal(hit!.taxon, 10090);
+    assert.deepEqual(hit!.path.map((s) => s.kind), ["annotation", "liftover", "annotation", "identity"]);
+    assert.deepEqual(ids(`${HX}:2`, { to: { category: "protein" }, taxon: 10090 }), [`${MX}:2`]);
+    assert.deepEqual(ids(`${GH}:101..103`, { taxon: 10090 }), [`${GM}:5101..5103`]);
+  });
+
+  it("returns nothing for a species without a crossing, and the chain is not used backwards", () => {
+    assert.deepEqual(ids(`${PH}:2`, { to: { category: "protein" }, taxon: 3702 }), []);
+    assert.deepEqual(ids(`${PM}:2`, { to: { category: "protein" }, taxon: 9606 }), []);
+  });
+
+  it("naming the input's own species changes nothing", () => {
+    assert.deepEqual(ids(`${GH}:101..103`, { taxon: 9606 }), [`${PH}:1`]);
+  });
+
+  it("lists species and resolves the taxon of sequences", () => {
+    assert.equal(stores.taxonOf(UM), 10090);
+    assert.deepEqual(stores.species().map((s) => s.taxon).sort((a, b) => a - b), [9606, 10090]);
+  });
+});
+
 describe("MANE transcripts: RefSeq NM and Ensembl ENST are identical sequences (GPX1, real data)", async () => {
   const mane = new MemorySink();
   await ingestManeSummary(fileURLToPath(fixture("MANE.GRCh38.v1.5.summary_GPX1_RYBP.txt")), mane);

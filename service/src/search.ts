@@ -9,7 +9,7 @@ export type Target = { ref: string } | { category: Category } | { namespace: str
 export interface ConvertOptions {
   /** Where to go; without it every sequence reached within `maxHops` is returned. */
   to?: Target | Target[];
-  /** Default: 4 with a target, 1 without. */
+  /** Default: 4 with a target, 1 without; plus CROSSING_HOPS when crossing species or assemblies. */
   maxHops?: number;
   /** Stop after this many results (default: unlimited). */
   maxResults?: number;
@@ -18,6 +18,14 @@ export interface ConvertOptions {
    * intermediate sequences win; among results of equal cost, preferred targets come first. Costs are unchanged.
    */
   prefer?: string[];
+  /**
+   * Species of the targets (NCBI taxon). Default: the species of the input. Steps into another species (liftOver
+   * chains, identical sequences of another species) are taken only when this names a species other than the input's
+   * (spec-service §2.2).
+   */
+  taxon?: number;
+  /** Assembly of genome targets (e.g. GRCm39). Default: the input's; another assembly is reached only when named. */
+  assembly?: string;
 }
 
 export interface Step {
@@ -48,12 +56,18 @@ export interface Conversion {
   category: Category;
   /** Tags of the target sequence (e.g. "MANE Select"). */
   tags: string[];
+  /** Species of the target: tracked along the path (its own record may not carry one, e.g. Ensembl). */
+  taxon?: number;
   cost: number;
   /**
    * The path uses an edge that failed self-validation or that NCBI flags with /exception without full verification:
    * positions may be shifted by indels between the sequences.
    */
   approximate: boolean;
+  /**
+   * Strand of the target: for nucleotides, the strand of its segments; for proteins (always written N->C), `reverse`
+   * when the input corresponds to the antisense strand of the coding sequence.
+   */
   orientation: "forward" | "reverse" | "mixed";
   path: Step[];
 }
@@ -97,9 +111,24 @@ interface State {
   turns: number;
   /** Intermediate sequences without a preferred tag (secondary key after cost). */
   detours: number;
+  /** Species and genome assembly the path is in (undefined until known). */
+  taxon: number | undefined;
+  assembly: string | undefined;
+  /** The path has stepped into another species or assembly (at most once). */
+  crossed: boolean;
   /** Insertion order, for deterministic tie-breaking. */
   seq: number;
 }
+
+/**
+ * Extra hops allowed when crossing species or assemblies: the crossing step and the way back to the target's layer.
+ * Without a target the search stops where it lands in the other species: the result is what the input corresponds to
+ * there (spec-service §2.2).
+ */
+export const CROSSING_HOPS = 2;
+
+/** Edge kinds whose ends are in different species or assemblies. */
+const CROSSING_KINDS = new Set<Step["kind"]>(["liftover"]);
 
 /**
  * Convert `input` to the requested targets along the cheapest chain of edges (Dijkstra over sequences).
@@ -108,7 +137,15 @@ interface State {
  */
 export function convert(stores: StoreSet, input: Location, options: ConvertOptions = {}, ctx: CoordContext = stores.context()): Conversion[] {
   const targets = options.to === undefined ? undefined : Array.isArray(options.to) ? options.to : [options.to];
-  const maxHops = options.maxHops ?? (targets ? 4 : 1);
+  // Scope (spec-service §2.2): stay in the input's species and assembly unless another one is requested.
+  const inputTaxon = stores.taxonOf(input.outer);
+  const inputAssembly = stores.assemblyOf(input.outer);
+  const crossing =
+    (options.taxon !== undefined && options.taxon !== inputTaxon) || (options.assembly !== undefined && options.assembly !== inputAssembly);
+  const maxHops = options.maxHops ?? (targets ? 4 : 1) + (crossing ? CROSSING_HOPS : 0);
+  const inScope = (s: State) =>
+    (options.taxon === undefined || s.taxon === options.taxon || (s.taxon === undefined && !crossing)) &&
+    (options.assembly === undefined || stores.category(s.location.outer) !== "genome" || stores.assemblyOf(s.location.outer) === options.assembly);
   const matches = (ref: string) =>
     !targets ||
     targets.some((t) =>
@@ -118,10 +155,22 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
   const layerOf = (ref: string) => LAYER[stores.category(ref)];
   const cap = depthCap(stores, input.outer, targets, layerOf);
   // A sequence may be worth reaching in several layer states (trend, turns); keep the cheapest per state.
-  const key = (s: Pick<State, "location" | "trend" | "turns">) => `${s.location.outer}|${s.trend}|${s.turns}`;
+  const key = (s: Pick<State, "location" | "trend" | "turns" | "crossed">) => `${s.location.outer}|${s.trend}|${s.turns}|${s.crossed}`;
   const prefer = new Set(options.prefer ?? []);
   const preferred = (ref: string) => prefer.size > 0 && stores.tags(ref).some((t) => prefer.has(t));
-  const start: State = { location: input, cost: 0, path: [], orientation: "forward", trend: 0, turns: 0, detours: 0, seq: 0 };
+  const start: State = {
+    location: input,
+    cost: 0,
+    path: [],
+    orientation: ctx.unitOf(input.outer) === "aa" ? "forward" : strandOrientation(input),
+    trend: 0,
+    turns: 0,
+    detours: 0,
+    taxon: inputTaxon,
+    assembly: inputAssembly,
+    crossed: false,
+    seq: 0,
+  };
   const best = new Map<string, [number, number]>([[key(start), [0, 0]]]);
   const better = (s: State, b: [number, number] | undefined) => !b || s.cost < b[0] || (s.cost === b[0] && s.detours < b[1]);
   const queue = new MinHeap<State>((a, b) => a.cost - b.cost || a.detours - b.detours || a.seq - b.seq);
@@ -135,7 +184,8 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     const ref = state.location.outer;
     const recorded = best.get(key(state));
     if (recorded && (state.cost > recorded[0] || (state.cost === recorded[0] && state.detours > recorded[1]))) continue;
-    if (state.path.length > 0 && matches(ref)) {
+    const target = state.path.length > 0 && matches(ref);
+    if (target && inScope(state)) {
       if (reached.has(ref)) continue; // already returned through a cheaper state
       reached.add(ref);
       results.push({
@@ -143,6 +193,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         id: formatLocationId(state.location, ctx),
         category: stores.category(ref),
         tags: stores.tags(ref),
+        ...(state.taxon !== undefined && { taxon: state.taxon }),
         cost: state.cost,
         approximate: state.path.some(isApproximate),
         orientation: state.orientation,
@@ -152,6 +203,9 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       if (targets) continue; // a reached target is terminal
     }
     if (state.path.length >= maxHops) continue;
+    if (!targets && state.crossed) continue; // landed in the other species (see CROSSING_HOPS)
+    // A target outside the requested scope (e.g. the human protein when mouse is asked for) only leads on by crossing.
+    const crossingOnly = target;
 
     const here = layerOf(ref);
     const withinCap = (r: string) => (layerOf(r) ?? -Infinity) <= cap;
@@ -165,9 +219,11 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         trend = dir as -1 | 1;
       }
       if (turns > MAX_TURNS) continue; // rule 2
+      const scope = nextScope(state, next);
+      if (!scope || (crossingOnly && !(scope.crossed && !state.crossed))) continue;
       // The sequence being left becomes an intermediate node of the path (the source is not counted).
       const detours = state.detours + (state.path.length > 0 && prefer.size > 0 && !preferred(ref) ? 1 : 0);
-      const candidate = { ...next, trend, turns, detours, seq: seq++ };
+      const candidate = { ...next, ...scope, trend, turns, detours, seq: seq++ };
       const k = key(candidate);
       if (better(candidate, best.get(k))) {
         best.set(k, [candidate.cost, candidate.detours]);
@@ -175,6 +231,25 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       }
     }
   }
+  // Where a step leads in species and assembly; undefined when the step leaves the requested scope.
+  function nextScope(state: State, next: { location: Location; path: Step[] }): Pick<State, "taxon" | "assembly" | "crossed"> | undefined {
+    const ref = next.location.outer;
+    const taxon = stores.taxonOf(ref);
+    const assembly = stores.assemblyOf(ref);
+    const across =
+      CROSSING_KINDS.has(next.path.at(-1)!.kind) ||
+      (taxon !== undefined && state.taxon !== undefined && taxon !== state.taxon) ||
+      (assembly !== undefined && state.assembly !== undefined && assembly !== state.assembly);
+    if (!across) return { taxon: state.taxon ?? taxon, assembly: assembly ?? state.assembly, crossed: state.crossed };
+    if (!crossing || state.crossed) return undefined;
+    // Only into the requested species / assembly.
+    const toTaxon = taxon ?? options.taxon ?? state.taxon;
+    if (options.taxon !== undefined && toTaxon !== options.taxon) return undefined;
+    if (options.taxon === undefined && toTaxon !== state.taxon) return undefined;
+    if (options.assembly !== undefined && assembly !== undefined && assembly !== options.assembly) return undefined;
+    return { taxon: toTaxon, assembly, crossed: true };
+  }
+
   // Equal-cost results: preferred targets first (stable otherwise).
   if (prefer.size > 0) results.sort((a, b) => a.cost - b.cost || Number(preferred(b.location.outer)) - Number(preferred(a.location.outer)));
   return results;
@@ -244,7 +319,7 @@ function expand(
   state: State,
   ctx: CoordContext,
   allowed: (ref: string) => boolean = () => true,
-): Array<Omit<State, "seq" | "trend" | "turns" | "detours">> {
+): Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossed">> {
   const loc = state.location;
   const byEdge = new Map<string, SetBlock[]>();
   for (const seg of loc.segments) {
@@ -257,7 +332,7 @@ function expand(
       } else byEdge.set(blk.key, [blk]);
     }
   }
-  const out: Array<Omit<State, "seq" | "trend" | "turns" | "detours">> = [];
+  const out: Array<Omit<State, "seq" | "trend" | "turns" | "detours" | "taxon" | "assembly" | "crossed">> = [];
   const inputId = formatLocationId(loc, ctx);
 
   // Identity: the same coordinates on every sequence with identical residues.
@@ -312,7 +387,9 @@ function expand(
         location: t.location,
         cost: state.cost + cost,
         path: [...state.path, step],
-        orientation: combine(state.orientation, t.orientation),
+        // Nucleotide segments carry their strand, so the step reports the true strand of its output; protein segments
+        // are kept N->C (strand +), so a protein reached antisense keeps that in the state.
+        orientation: ctx.unitOf(loc.outer) === "aa" ? combine(state.orientation, t.orientation) : t.orientation,
       });
     }
   }
@@ -321,6 +398,11 @@ function expand(
 
 function pairKey(e: StoredEdge): string {
   return e.from < e.to ? `${e.from}\t${e.to}` : `${e.to}\t${e.from}`;
+}
+
+function strandOrientation(loc: Location): Conversion["orientation"] {
+  const minus = loc.segments.filter((s) => s.strand === -1).length;
+  return minus === 0 ? "forward" : minus === loc.segments.length ? "reverse" : "mixed";
 }
 
 function combine(a: Conversion["orientation"], b: Conversion["orientation"]): Conversion["orientation"] {

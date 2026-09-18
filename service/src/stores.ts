@@ -14,7 +14,9 @@ export class StoreSet {
   /** Merged sequence records and identity lists are looked up for every node of every search: keep them. */
   readonly #sequences = new Lru<string, ReturnType<TogoCoordStore["sequence"]> | null>(100_000);
   readonly #identical = new Lru<string, string[]>(100_000);
+  readonly #scope = new Lru<string, { taxon: number | null; assembly: string | null }>(100_000);
   #meta: Array<Record<string, unknown>> | undefined;
+  #species: Array<{ taxon: number; organism?: string; names: string[]; assemblies: string[] }> | undefined;
 
   constructor(paths: string[] = [], options: StoreOptions & { registry?: NamespaceRegistry } = {}) {
     this.registry = options.registry ?? new NamespaceRegistry();
@@ -25,7 +27,9 @@ export class StoreSet {
     this.stores.push(store);
     this.#sequences.clear();
     this.#identical.clear();
+    this.#scope.clear();
     this.#meta = undefined;
+    this.#species = undefined;
     return this;
   }
 
@@ -130,6 +134,75 @@ export class StoreSet {
       return { file: s.path.split(/[\\/]/).pop()!, ...meta, summary: s.summary() };
     });
     return this.#meta;
+  }
+
+  /**
+   * Species of a sequence: its own record, else the recorded taxon of a store holding it (e.g. an Ensembl store built
+   * with --taxon), else an identical sequence of a single species.
+   */
+  taxonOf(ref: string): number | undefined {
+    return this.#scopeOf(ref).taxon ?? undefined;
+  }
+
+  /** Assembly of a genome sequence: the recorded assembly of the first store holding it (spec-service §2.2). */
+  assemblyOf(ref: string): string | undefined {
+    return this.#scopeOf(ref).assembly ?? undefined;
+  }
+
+  #scopeOf(ref: string): { taxon: number | null; assembly: string | null } {
+    let out = this.#scope.get(ref);
+    if (!out) {
+      out = { taxon: this.#taxon(ref) ?? null, assembly: this.#assembly(ref) ?? null };
+      this.#scope.set(ref, out);
+    }
+    return out;
+  }
+
+  #taxon(ref: string): number | undefined {
+    const own = this.sequence(ref)?.taxon;
+    if (own !== undefined && own !== null) return Number(own);
+    const meta = this.meta();
+    for (const [i, s] of this.stores.entries()) {
+      const t = meta[i]!.taxon;
+      if (t && s.sequence(ref)) return Number(t);
+    }
+    const taxa = new Set(this.identical(ref).map((r) => this.sequence(r)?.taxon).filter((t) => t !== undefined && t !== null));
+    return taxa.size === 1 ? Number([...taxa][0]) : undefined;
+  }
+
+  #assembly(ref: string): string | undefined {
+    if (this.category(ref) !== "genome") return undefined;
+    const meta = this.meta();
+    for (const [i, s] of this.stores.entries()) {
+      const a = meta[i]!.assembly;
+      if (typeof a === "string" && s.sequence(ref)) return a;
+    }
+    return undefined;
+  }
+
+  /** Loaded species with their names and genome assemblies (from store metadata and content summaries). */
+  species(): Array<{ taxon: number; organism?: string; names: string[]; assemblies: string[] }> {
+    if (this.#species) return this.#species;
+    const out = new Map<number, { taxon: number; organism?: string; names: string[]; assemblies: string[] }>();
+    // Names as recorded ("Mus musculus", "Mus musculus (house mouse)"); the shortest is shown.
+    const add = (taxon: number, organism?: string, assembly?: string) => {
+      const e = out.get(taxon) ?? { taxon, names: [], assemblies: [] };
+      if (organism && !e.names.includes(organism)) e.names.push(organism);
+      if (organism && (!e.organism || organism.length < e.organism.length)) e.organism = organism;
+      if (assembly && !e.assemblies.includes(assembly)) e.assemblies.push(assembly);
+      out.set(taxon, e);
+    };
+    for (const m of this.meta()) {
+      if (m.taxon) add(Number(m.taxon), m.organism as string | undefined, m.assembly as string | undefined);
+      const taxa = (m.summary as { taxa?: Array<{ taxon: number; organism?: string }> } | undefined)?.taxa ?? [];
+      for (const t of taxa) add(t.taxon, t.organism);
+    }
+    this.#species = [...out.values()];
+    return this.#species;
+  }
+
+  organismName(taxon: number): string | undefined {
+    return this.species().find((s) => s.taxon === taxon)?.organism;
   }
 
   edge(key: string): StoredEdge | undefined {

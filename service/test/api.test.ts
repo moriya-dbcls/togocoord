@@ -175,11 +175,26 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     for (const id of mt.summary.examples) assert.equal((await get(`/v1/location?loc=${encodeURIComponent(id)}`)).status, 200);
   });
 
+  it("scopes results to a species: taxon by ID or name, results carry their species", async () => {
+    const loc = encodeURIComponent("uniprot:P07203:49");
+    const same = await get(`/v1/convert?loc=${loc}&to=protein`);
+    assert.equal(same.body.inputTaxon, 9606);
+    assert.ok(same.body.results.every((r: { taxon: number }) => r.taxon === 9606));
+    for (const taxon of ["9606", "taxon:9606", "Homo%20sapiens", "homo%20sapiens"]) {
+      assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&taxon=${taxon}`)).body.results.length, same.body.results.length, taxon);
+    }
+    assert.deepEqual((await get(`/v1/convert?loc=${loc}&to=protein&taxon=10090`)).body.results, []); // no chain loaded
+    assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&taxon=dog`)).status, 400);
+    assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&assembly=CHM13`)).status, 400);
+    const meta = await get("/v1/meta");
+    assert.equal(meta.body.species[0].taxon, 9606);
+  });
+
   it("serves the web UI", async () => {
     const index = await get("/", "text/html");
     assert.equal(index.status, 200);
     assert.match(index.type!, /text\/html/);
-    assert.match(index.body, /<script type="module" src="\/ui\/app.js">/);
+    assert.match(index.body, /<script type="module" src="ui\/app.js">/); // relative: works under a subdirectory
     assert.match((await get("/ui/app.js")).type!, /javascript/);
     assert.match((await get("/ui/style.css")).type!, /text\/css/);
     assert.equal((await get("/ui/../src/api.ts")).status, 404);

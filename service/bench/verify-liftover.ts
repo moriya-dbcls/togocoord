@@ -29,7 +29,7 @@ const toRef = (id: string) => accessionRef(id, stores.registry);
 const human = new FaiSequenceSource(humanFna, toRef);
 const mouse = new FaiSequenceSource(mouseFna, toRef);
 const isMouse = (ref: string) => mouse.length(ref) !== undefined;
-const taxonOf = (ref: string) => stores.sequence(ref)?.taxon;
+const MOUSE = 10090;
 
 let seed = Number(seedArg) >>> 0 || 1;
 const random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
@@ -52,10 +52,8 @@ for (let i = 0; i < Number(samplesArg); i++) {
   }
   const aaHuman = translate(extract(humanCodon.location, human) ?? "");
   const start = performance.now();
-  const lifted = convert(stores, humanCodon.location, { to: { category: "genome" }, prefer: DEFAULT_PREFER }, ctx).find((h) => isMouse(h.location.outer));
-  const proteins = convert(stores, parseLocationId(`${g.np}:${r}`, ctx), { to: { category: "protein" }, prefer: DEFAULT_PREFER }, ctx).filter(
-    (h) => taxonOf(h.location.outer) === 10090,
-  );
+  const lifted = convert(stores, humanCodon.location, { to: { category: "genome" }, taxon: MOUSE, prefer: DEFAULT_PREFER }, ctx).find((h) => isMouse(h.location.outer));
+  const proteins = convert(stores, parseLocationId(`${g.np}:${r}`, ctx), { to: { category: "protein" }, taxon: MOUSE, prefer: DEFAULT_PREFER }, ctx);
   ms.push(performance.now() - start);
   if (lifted) {
     t.mouseGenome++;
@@ -77,7 +75,7 @@ for (let i = 0; i < Number(samplesArg); i++) {
 const pct = (p: number) => [...ms].sort((a, b) => a - b)[Math.min(ms.length - 1, Math.floor((p / 100) * ms.length))]?.toFixed(1);
 const rate = (n: number, d: number) => `${n}/${d} (${d ? ((100 * n) / d).toFixed(1) : "-"}%)`;
 console.log(JSON.stringify(t));
-console.log(`human codon lifted to mouse genome: ${rate(t.mouseGenome, t.samples - t.noHumanGenome)}`);
+console.log(`human codon lifted to mouse genome (taxon=10090): ${rate(t.mouseGenome, t.samples - t.noHumanGenome)}`);
 console.log(`  same amino acid at the lifted codon: ${rate(t.sameAminoAcid, t.mouseGenome)}`);
 console.log(`human residue reaches a mouse protein: ${rate(t.mouseProtein, t.samples - t.noHumanGenome)}`);
 console.log(`  of the same gene symbol: ${rate(t.sameGeneSymbol, t.mouseProtein)}`);

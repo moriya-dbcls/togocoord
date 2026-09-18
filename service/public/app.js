@@ -9,13 +9,15 @@ const EXAMPLES = [
   ["RefSeq protein", "refseq:NP_036366.3:20"],
   ["whole protein", "refseq:NP_000572.2"],
   ["overlapping genes (mtDNA)", "refseq:NC_012920.1:8527..8529"],
-  ["human → mouse protein", "refseq:NP_000572.2:49", "protein"],
-  ["mouse → human genome", "refseq:NC_000075.7:106312500..106312550", "genome"],
+  ["human → mouse UniProt", "uniprot:P07203:49", "uniprot", "10090"],
+  ["mouse → human genome", "refseq:NC_000075.7:106312500..106312550", "genome", "9606"],
 ];
 
 const form = $("#query");
 const locInput = $("#loc");
 const toSelect = $("#to");
+const taxonSelect = $("#taxon");
+const assemblySelect = $("#assembly");
 const codonBox = $("#codon");
 const maneBox = $("#mane");
 
@@ -31,8 +33,15 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+/**
+ * Root of the service, from where this script is served (`<root>/ui/app.js`): the UI also works when a reverse proxy
+ * mounts the service under a subdirectory (e.g. https://example.org/togocoord/).
+ */
+const ROOT = new URL("..", import.meta.url);
+const endpoint = (path) => new URL(path.replace(/^\//, ""), ROOT);
+
 async function api(path) {
-  const res = await fetch(path, { headers: { accept: "application/json" } });
+  const res = await fetch(endpoint(path), { headers: { accept: "application/json" } });
   const body = await res.json();
   if (!res.ok) throw Object.assign(new Error(body.error ?? res.statusText), { body });
   return body;
@@ -89,7 +98,7 @@ async function toggleExtra(card, kind, id) {
   box.hidden = false;
   try {
     if (kind === "faldo") {
-      const res = await fetch(`/v1/location/faldo?${qs({ loc: id })}`);
+      const res = await fetch(endpoint(`/v1/location/faldo?${qs({ loc: id })}`));
       box.replaceChildren(el("pre", {}, JSON.stringify(await res.json(), null, 2)));
     } else {
       const all = (await api(`/v1/annotations?${qs({ loc: id })}`)).annotations;
@@ -164,19 +173,36 @@ function renderResult(r) {
   return card;
 }
 
-async function run(loc, to, push = true) {
+/** Loaded species (and assemblies, shown only when a species has several) for the scope selectors. */
+const speciesReady = api("/v1/meta").then(({ species = [] }) => {
+  taxonSelect.append(...species.map((s) => el("option", { value: String(s.taxon) }, s.organism ?? `taxon ${s.taxon}`)));
+  assemblySelect.append(
+    ...species.flatMap((s) => s.assemblies.map((a) => el("option", { value: a }, `${a}${s.organism ? ` (${s.organism})` : ""}`))),
+  );
+  assemblySelect.hidden = !species.some((s) => s.assemblies.length > 1);
+}).catch(() => {});
+
+/** The target selectors' values; `to` must also be one of the options of the category selector ("" otherwise). */
+const current = () => [toSelect.value, taxonSelect.value, assemblySelect.value];
+
+async function run(loc, to, push = true, taxon = "", assembly = "") {
   loc = loc.trim();
   locInput.value = loc;
+  if (![...toSelect.options].some((o) => o.value === (to ?? ""))) {
+    toSelect.append(el("option", { value: to }, to)); // a namespace or sequence target, e.g. from an example or a URL
+  }
   toSelect.value = to ?? "";
+  taxonSelect.value = taxon;
+  assemblySelect.value = assembly;
   $("#error").hidden = true;
   if (!loc) return;
   const codon = codonBox.checked ? "" : "never";
   const tag = maneBox.checked ? "MANE Select" : "";
-  if (push) history.pushState(null, "", `?${qs({ loc, to, codon, tag })}`);
+  if (push) history.pushState(null, "", `?${qs({ loc, to, taxon, assembly, codon, tag })}`);
   try {
     const [info, conv] = await Promise.all([
       api(`/v1/location?${qs({ loc, codon })}`),
-      api(`/v1/convert?${qs({ loc, to, codon, tag })}`),
+      api(`/v1/convert?${qs({ loc, to, taxon, assembly, codon, tag })}`),
     ]);
     $("#input-id").textContent = info.id;
     $("#input-kind").textContent = `${info.unit === "aa" ? "protein" : "nucleotide"}${info.kind === "order" ? " · order" : ""}`;
@@ -188,7 +214,7 @@ async function run(loc, to, push = true) {
     $("#results").replaceChildren(...conv.results.map(renderResult));
     $("#count").textContent = conv.results.length
       ? `(${conv.results.length}${conv.truncated ? ", truncated — narrow the target or the input" : ""})`
-      : tag ? "— none with this tag" : "— none reachable";
+      : tag ? "— none with this tag" : taxon || assembly ? "— none reachable in the selected species / assembly" : "— none reachable";
     $("#output").hidden = false;
   } catch (err) {
     $("#input").hidden = true;
@@ -199,18 +225,20 @@ async function run(loc, to, push = true) {
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
-  run(locInput.value, toSelect.value);
+  run(locInput.value, ...current());
 });
-toSelect.addEventListener("change", () => locInput.value && run(locInput.value, toSelect.value));
-codonBox.addEventListener("change", () => locInput.value && run(locInput.value, toSelect.value));
-maneBox.addEventListener("change", () => locInput.value && run(locInput.value, toSelect.value));
+for (const control of [toSelect, taxonSelect, assemblySelect, codonBox, maneBox]) {
+  control.addEventListener("change", () => locInput.value && run(locInput.value, ...current()));
+}
 $("#input .card").addEventListener("click", (e) => {
   const action = e.target.dataset?.action;
   if (action) toggleExtra($("#input .card"), action, $("#input-id").textContent);
 });
 $("#examples").append(
   "Examples: ",
-  ...EXAMPLES.map(([label, id, to]) => el("button", { type: "button", class: "small", title: id, onclick: () => run(id, to ?? toSelect.value) }, label)),
+  ...EXAMPLES.map(([label, id, to, taxon]) =>
+    el("button", { type: "button", class: "small", title: id, onclick: () => (to ? run(id, to, true, taxon ?? "") : run(id, ...current())) }, label),
+  ),
 );
 
 // ---- Loaded data view ------------------------------------------------------------------------------------------
@@ -285,7 +313,7 @@ document.querySelectorAll("nav a").forEach((a) =>
   }),
 );
 
-function fromUrl(push = false) {
+async function fromUrl(push = false) {
   const p = new URLSearchParams(location.search);
   if (p.get("view") === "data") {
     showData().catch((err) => showError(err));
@@ -294,7 +322,8 @@ function fromUrl(push = false) {
   showConvert();
   codonBox.checked = p.get("codon") !== "never";
   maneBox.checked = p.get("tag") === "MANE Select";
-  if (p.get("loc")) run(p.get("loc"), p.get("to") ?? "", push);
+  await speciesReady;
+  if (p.get("loc")) run(p.get("loc"), p.get("to") ?? "", push, p.get("taxon") ?? "", p.get("assembly") ?? "");
 }
 window.addEventListener("popstate", () => fromUrl(false));
 fromUrl(false);

@@ -81,36 +81,74 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     });
   };
 
-  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode, tags: string[] = []) => {
+  /** `taxon`: an NCBI taxon ID (`10090`, `taxon:10090`) or the name of a loaded species (`Mus musculus`, `mouse`). */
+  const taxonParam = (v: unknown): number | undefined => {
+    if (v === undefined || v === null || v === "") return undefined;
+    const text = String(v).trim();
+    const id = /^(?:taxon:|ncbitaxon:)?(\d+)$/i.exec(text);
+    if (id) return Number(id[1]);
+    const name = text.toLowerCase();
+    // Scientific name, or the common name in parentheses ("Mus musculus (house mouse)": "house mouse", "mouse").
+    const named = (n: string) => {
+      const [, scientific, common] = /^(.*?)(?:\s*\((.*)\))?$/.exec(n.toLowerCase())!;
+      return n.toLowerCase() === name || scientific === name || (common !== undefined && (common === name || common.endsWith(` ${name}`)));
+    };
+    const hit = stores.species().find((s) => s.names.some(named));
+    if (!hit) throw new HttpError(400, `unknown species '${text}' (an NCBI taxon ID or a loaded organism name)`);
+    return hit.taxon;
+  };
+  const assemblyParam = (v: unknown): string | undefined => {
+    if (v === undefined || v === null || v === "") return undefined;
+    const name = String(v).trim().toLowerCase();
+    const hit = stores.species().flatMap((s) => s.assemblies).find((a) => a.toLowerCase() === name);
+    if (!hit) throw new HttpError(400, `unknown assembly '${String(v)}' (loaded: ${stores.species().flatMap((s) => s.assemblies).join(", ")})`);
+    return hit;
+  };
+
+  interface Scope {
+    taxon?: number;
+    assembly?: string;
+  }
+
+  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode, tags: string[] = [], scope: Scope = {}) => {
     const loc = parse(text);
     const length = loc.segments.reduce((n, s) => n + (s.end - s.start) / (ctx.unitOf(s.ref) === "aa" ? 3 : 1), 0);
     if (length > maxInputLength) {
       throw new HttpError(413, `input location spans ${length} bases/residues; at most ${maxInputLength} are converted per request`);
     }
     const t = targets(to);
-    const found = convert(stores, loc, { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && { maxResults: maxResults + 1 }) }, ctx);
+    const found = convert(
+      stores,
+      loc,
+      { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && { maxResults: maxResults + 1 }), ...scope },
+      ctx,
+    );
     // `tag` keeps only targets carrying one of the tags (e.g. tag=MANE Select).
     const results = tags.length ? found.filter((r) => r.tags.some((x) => tags.includes(x))) : found;
     return {
       input: formatLocationId(loc, ctx, codon),
-      ...(stores.sequence(loc.outer)?.taxon !== undefined && { inputTaxon: stores.sequence(loc.outer)!.taxon }),
+      ...(stores.taxonOf(loc.outer) !== undefined && { inputTaxon: stores.taxonOf(loc.outer) }),
       results: results.slice(0, maxResults).map((r) => conversionJson(r, ctx, base, codon, stores)),
       ...(results.length > maxResults && { truncated: true }),
     };
   };
 
   const routes: Array<[string, RegExp, (m: RegExpMatchArray, q: URLSearchParams, body: unknown, req: IncomingMessage) => unknown]> = [
-    ["GET", /^\/v1\/meta$/, () => ({ stores: stores.meta(), base })],
+    ["GET", /^\/v1\/meta$/, () => ({ stores: stores.meta(), species: stores.species(), base })],
     [
       "GET",
       /^\/v1\/convert$/,
-      (_m, q) => convertOne(q.get("loc") ?? "", q.getAll("to"), intParam(q, "maxHops"), codonParam(q), q.getAll("tag")),
+      (_m, q) =>
+        convertOne(q.get("loc") ?? "", q.getAll("to"), intParam(q, "maxHops"), codonParam(q), q.getAll("tag"), {
+          taxon: taxonParam(q.get("taxon")),
+          assembly: assemblyParam(q.get("assembly")),
+        }),
     ],
     [
       "POST",
       /^\/v1\/convert$/,
       (_m, q, body) => {
-        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown; tag?: unknown };
+        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown; tag?: unknown; taxon?: unknown; assembly?: unknown };
         if (!Array.isArray(b.locations) || !b.locations.every((x) => typeof x === "string")) {
           throw new HttpError(400, "body must be {\"locations\": [\"<Location ID>\", ...], \"to\"?: string | string[]}");
         }
@@ -118,10 +156,11 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         const to = b.to === undefined ? [] : Array.isArray(b.to) ? b.to.map(String) : [String(b.to)];
         const codon: CodonMode = b.codon === "never" ? "never" : codonParam(q);
         const hops = typeof b.maxHops === "number" ? b.maxHops : intParam(q, "maxHops");
+        const scope = { taxon: taxonParam(b.taxon ?? q.get("taxon")), assembly: assemblyParam(b.assembly ?? q.get("assembly")) };
         return {
           results: (b.locations as string[]).map((text) => {
             try {
-              return convertOne(text, to, hops, codon, b.tag === undefined ? [] : [b.tag].flat().map(String));
+              return convertOne(text, to, hops, codon, b.tag === undefined ? [] : [b.tag].flat().map(String), scope);
             } catch (e) {
               if (e instanceof HttpError) return { input: text, error: e.message, ...e.extra };
               throw e;
@@ -317,15 +356,15 @@ function segmentJson(s: Segment, ctx: CoordContext): Record<string, unknown> {
 }
 
 function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: CodonMode, stores: StoreSet): Record<string, unknown> {
-  const seq = stores.sequence(r.location.outer);
+  const organism = r.taxon !== undefined ? stores.organismName(r.taxon) : undefined;
   return {
     location: formatLocationId(r.location, ctx, codon),
     iri: locationIri(r.location, ctx, base),
     sequence: r.location.outer,
     category: r.category,
     ...(r.tags.length && { tags: r.tags }),
-    ...(seq?.taxon !== undefined && { taxon: seq.taxon }),
-    ...(seq?.organism && { organism: seq.organism }),
+    ...(r.taxon !== undefined && { taxon: r.taxon }),
+    ...(organism && { organism }),
     cost: r.cost,
     approximate: r.approximate,
     orientation: r.orientation,
