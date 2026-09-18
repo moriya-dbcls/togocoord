@@ -89,8 +89,14 @@ footer a { color: var(--accent-dark); }
 nav { margin-top: 10px; font-size: 15px; }
 nav a { color: var(--accent-dark); text-decoration: none; padding: 2px 6px; border-radius: 6px; }
 nav a.current { background: var(--paper); font-weight: 600; }
-.species { margin-bottom: 18px; }
-.species h3 { font-size: 16px; margin: 14px 0 6px; }
+.species { margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.species summary { cursor: pointer; list-style: none; padding: 4px 0; }
+.species summary::-webkit-details-marker { display: none; }
+.species summary h3::before { content: "▸"; display: inline-block; width: 1.2em; color: var(--muted); transition: transform 0.15s; }
+.species[open] summary h3::before { transform: rotate(90deg); }
+.species h3 { font-size: 16px; margin: 8px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.species h3 .badge { font-weight: 400; }
+.species[open] { padding-bottom: 12px; }
 .species h3 .muted { font-size: 13px; }
 .store { margin-bottom: 8px; }
 .store .label { font-weight: 600; }

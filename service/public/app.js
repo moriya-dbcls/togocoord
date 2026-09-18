@@ -408,6 +408,11 @@ function sequenceFiles(s) {
   return Object.entries(md5).map(([f, h]) => el("div", {}, el("code", {}, f), el("span", { class: "muted md5" }, ` md5 ${h}`)));
 }
 
+/** Assemblies of a group's stores, in the order met. */
+function assembliesOf(g) {
+  return [...new Set(g.stores.map((s) => s.assembly).filter(Boolean))];
+}
+
 async function showData() {
   $("#convert-view").hidden = true;
   $("#data").hidden = false;
@@ -424,11 +429,16 @@ async function showData() {
     if (!groups.has(key)) groups.set(key, { ...o, stores: [] });
     groups.get(key).stores.push(s);
   }
-  $("#data-count").textContent = `(${stores.length} stores, ${groups.size} groups)`;
+  $("#data-count").textContent = `(${stores.length} datasets in ${groups.size} groups)`;
   $("#species").replaceChildren(
     ...[...groups.values()].map((g) =>
-      el("div", { class: "species" },
-        el("h3", {}, g.name, g.taxon ? el("span", { class: "muted" }, ` · taxon ${g.taxon}`) : null),
+      // Folded per species; the summary tells how many datasets (stores) and which assemblies it holds.
+      el("details", { class: "species" },
+        el("summary", {},
+          el("h3", {}, g.name,
+            el("span", { class: "muted" }, ` · ${g.stores.length} dataset${g.stores.length === 1 ? "" : "s"}`),
+            g.taxon ? el("span", { class: "muted" }, ` · taxon ${g.taxon}`) : null,
+            ...assembliesOf(g).map((a) => el("span", { class: "badge species" }, a)))),
         ...g.stores.map((s) =>
           el("div", { class: "card store" },
             el("div", { class: "label" }, s.label ?? s.file),
