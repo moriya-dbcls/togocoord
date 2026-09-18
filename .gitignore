@@ -3,3 +3,4 @@ node_modules/
 *.sqlite-*
 *.fai
 .DS_Store
+orig_docs/

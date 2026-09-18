@@ -16,7 +16,7 @@ TogoCoord は、ゲノム・転写産物・タンパク質・立体構造など�
 | `ingest/` | GenBank / GFF3 / FASTA / SIFTS / MANE のアダプタ、自己検証、SQLite（R*Tree）の保存先、CLI `togocoord-ingest` |
 | `service/` | 複数の保存先をまたぐ経路探索、REST API、Web UI（`togocoord-serve`） |
 | `docs/` | 設計書と仕様（[design.md](docs/design.md)、[spec-core.md](docs/spec-core.md)、[spec-ingest.md](docs/spec-ingest.md)、[spec-service.md](docs/spec-service.md)、[scaling.md](docs/scaling.md)） |
-| `html/`、`sparqlist/`、`orig_docs/` | コンセプト検証版の実装とポスター（参考） |
+| `poc/` | コンセプト検証版の実装（Web UI と SPARQList。参考） |
 
 ## 使い方
 
@@ -40,4 +40,4 @@ node service/src/serve.ts --port 8080 human.sqlite human_uniprot.sqlite
 
 ## ライセンス
 
-MIT（[LICENSE](LICENSE)）。`orig_docs/` のポスターは CC-BY 4.0。
+MIT（[LICENSE](LICENSE)）。
