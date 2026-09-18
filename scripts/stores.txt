@@ -1,0 +1,44 @@
+# Stores served, in order (togocoord-serve --stores scripts/stores.txt --store-dir data/stores).
+# Where several stores describe one sequence, the first one's values are used: annotated assemblies before the others,
+# alignments last. Built by `node scripts/data.ts build` (docs/data.md).
+
+# Human (GRCh38, then GRCh37)
+human
+human_rna
+human_ensembl
+human_uniprot
+human_mane
+grch38_names
+grch37
+
+# Mouse (GRCm39, then GRCm38)
+mouse
+mouse_rna
+mouse_uniprot
+grcm39_names
+grcm38
+
+# Arabidopsis
+arabidopsis
+arabidopsis_rna
+arabidopsis_uniprot
+
+# Marchantia (MpTak v7.1, then v3.1)
+marchantia_v71
+marchantia
+marchantia_uniprot
+
+# Structures, regulatory elements
+sifts
+fanta_human_hg38
+fanta_mouse_mm10
+
+# Alignments between assemblies and species
+chain_hg38ToMm39
+chain_mm39ToHg38
+chain_hg19ToHg38
+chain_hg38ToHg19
+chain_mm10ToMm39
+chain_mm39ToMm10
+mp_v31_to_v71
+mp_v71_to_v31

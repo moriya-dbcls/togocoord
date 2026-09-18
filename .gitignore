@@ -4,3 +4,4 @@ node_modules/
 *.fai
 .DS_Store
 orig_docs/
+data/

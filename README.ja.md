@@ -17,7 +17,8 @@ TogoCoord は、ゲノム・転写産物・タンパク質・立体構造など�
 | `core/` | Location ID のパース・正規形・FALDO JSON-LD、ブロック列による写像（依存なし） |
 | `ingest/` | GenBank / GFF3 / FASTA / SIFTS / MANE / UCSC chain / PAF / BED / NCBI assembly report のアダプタ、自己検証、SQLite（R*Tree）の保存先、CLI `togocoord-ingest` |
 | `service/` | 複数の保存先をまたぐ経路探索、REST API、Web UI（`togocoord-serve`） |
-| `docs/` | 設計書と仕様（[design.md](docs/design.md)、[spec-core.md](docs/spec-core.md)、[spec-ingest.md](docs/spec-ingest.md)、[spec-service.md](docs/spec-service.md)、[scaling.md](docs/scaling.md)） |
+| `docs/` | 設計書、仕様、データ（[design.md](docs/design.md)、[data.md](docs/data.md)、[spec-core.md](docs/spec-core.md)、[spec-ingest.md](docs/spec-ingest.md)、[spec-service.md](docs/spec-service.md)、[scaling.md](docs/scaling.md)） |
+| `scripts/` | データの取得・構築・配信（[data.md](docs/data.md)） |
 | `poc/` | コンセプト検証版の実装（Web UI と SPARQList。参考） |
 
 ## 使い方
@@ -39,6 +40,8 @@ node service/src/serve.ts --port 8080 human.sqlite human_uniprot.sqlite
 # 種をまたぐ（UCSC chain を読み込んだとき）: /v1/convert?loc=uniprot:P07203:49&to=protein&db=uniprot&taxon=10090
 # アセンブリの配列名で入力（GRCh37 と chain を読み込んだとき）: /v1/convert?loc=hg19:chr7:140453136&to=genome&assembly=GRCh38
 ```
+
+デモのデータ（ヒト、マウス、シロイヌナズナ、ゼニゴケ、SIFTS、fanta.bio、chain とアライメント）は、`node scripts/data.ts build` で取得・構築し、`node scripts/data.ts serve` で配信できます。[docs/data.md](docs/data.md) を参照してください。
 
 リバースプロキシでサブディレクトリに置く場合は、[spec-service §6](docs/spec-service.md) を参照してください。
 
