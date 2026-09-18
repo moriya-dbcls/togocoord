@@ -199,6 +199,9 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.equal((await get(`/v1/convert?loc=${loc}&to=protein&assembly=CHM13`)).status, 400);
     const meta = await get("/v1/meta");
     assert.equal(meta.body.species[0].taxon, 9606);
+    // What the UI needs to disable selectors that do nothing: tagged species and chain crossings (none loaded here).
+    assert.deepEqual(meta.body.tags.find((t: { tag: string }) => t.tag === "MANE Select").taxa, [9606]);
+    assert.deepEqual(meta.body.crossings, []);
   });
 
   it("accepts a location written with an assembly's own sequence names (hg38:chrM:...)", async () => {

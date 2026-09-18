@@ -173,6 +173,8 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         stores: stores.meta(),
         species: stores.species(),
         assemblies: stores.assemblies().map(({ aliases: _aliases, accessions: _accessions, ...a }) => a),
+        crossings: stores.crossings(),
+        tags: stores.tagSpecies(),
         base,
       }),
     ],

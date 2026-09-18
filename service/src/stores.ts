@@ -42,6 +42,8 @@ export class StoreSet {
   #meta: Array<Record<string, unknown>> | undefined;
   #species: Species[] | undefined;
   #assemblies: Assembly[] | undefined;
+  #crossings: ReturnType<StoreSet["crossings"]> | undefined;
+  #tagSpecies: ReturnType<StoreSet["tagSpecies"]> | undefined;
 
   constructor(paths: string[] = [], options: StoreOptions & { registry?: NamespaceRegistry } = {}) {
     this.registry = options.registry ?? new NamespaceRegistry();
@@ -56,6 +58,8 @@ export class StoreSet {
     this.#meta = undefined;
     this.#species = undefined;
     this.#assemblies = undefined;
+    this.#crossings = undefined;
+    this.#tagSpecies = undefined;
     return this;
   }
 
@@ -273,6 +277,47 @@ export class StoreSet {
     if (this.assemblyOf(ref) === name) return true;
     const accession = ref.startsWith("refseq:") ? ref.slice("refseq:".length) : undefined;
     return accession !== undefined && (this.assemblies().find((a) => a.name === name)?.accessions.has(accession) ?? false);
+  }
+
+  /**
+   * What the liftOver chains connect: species and assemblies (from a sample of each chain store's edges). Used to
+   * tell which species can be reached beyond identical sequences.
+   */
+  crossings(): Array<{ fromTaxon?: number; toTaxon?: number; fromAssembly?: string; toAssembly?: string }> {
+    this.#crossings ??= this.stores.flatMap((s) => {
+      const seen = new Set<string>();
+      return s.edgeEnds("liftover").flatMap(({ from, to }) => {
+        const c = {
+          ...(this.taxonOf(from) !== undefined && { fromTaxon: this.taxonOf(from) }),
+          ...(this.taxonOf(to) !== undefined && { toTaxon: this.taxonOf(to) }),
+          ...(this.assemblyOf(from) && { fromAssembly: this.assemblyOf(from) }),
+          ...(this.assemblyOf(to) && { toAssembly: this.assemblyOf(to) }),
+        };
+        const k = JSON.stringify(c);
+        if (seen.has(k)) return [];
+        seen.add(k);
+        return [c];
+      });
+    });
+    return this.#crossings;
+  }
+
+  /** Tags (e.g. MANE Select) and the species whose sequences carry them. */
+  tagSpecies(): Array<{ tag: string; taxa: number[] }> {
+    if (this.#tagSpecies) return this.#tagSpecies;
+    const out = new Map<string, Set<number>>();
+    for (const s of this.stores) {
+      for (const [tag, refs] of s.tagged()) {
+        const taxa = out.get(tag) ?? new Set<number>();
+        for (const r of refs) {
+          const t = this.taxonOf(r);
+          if (t !== undefined) taxa.add(t);
+        }
+        out.set(tag, taxa);
+      }
+    }
+    this.#tagSpecies = [...out].map(([tag, taxa]) => ({ tag, taxa: [...taxa] }));
+    return this.#tagSpecies;
   }
 
   defaultAssembly(taxon: number | undefined): string | undefined {

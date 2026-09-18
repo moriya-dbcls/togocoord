@@ -443,6 +443,30 @@ export class TogoCoordStore {
     return (this.#s.edgesOf!.all(id, id) as Array<Record<string, unknown>>).map((r) => this.#edgeRow(r));
   }
 
+  /** Sequence pairs joined by edges of a kind (a sample, e.g. which assemblies liftOver chains connect). */
+  edgeEnds(kind: Edge["kind"], limit = 20): Array<{ from: string; to: string }> {
+    return this.#db
+      .prepare(
+        "SELECT f.ref AS f, t.ref AS t FROM edge e JOIN sequence f ON f.id = e.from_seq JOIN sequence t ON t.id = e.to_seq " +
+          "WHERE e.kind = ? LIMIT ?",
+      )
+      .all(kind, limit)
+      .map((r) => ({ from: String((r as { f: string }).f), to: String((r as { t: string }).t) }));
+  }
+
+  /** Tags in the store, each with a few sequences carrying it. */
+  tagged(perTag = 5): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    for (const r of this.#db.prepare("SELECT ref, tags FROM sequence WHERE tags IS NOT NULL").iterate() as Iterable<{ ref: string; tags: string }>) {
+      for (const tag of JSON.parse(r.tags) as string[]) {
+        const list = out.get(tag) ?? [];
+        if (list.length < perTag) list.push(r.ref);
+        out.set(tag, list);
+      }
+    }
+    return out;
+  }
+
   /** One edge by id (cached). */
   edge(id: number): StoredEdge | undefined {
     const cached = this.#edges.get(id);

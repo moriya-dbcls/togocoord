@@ -184,9 +184,17 @@ const multiAssembly = new Set();
 /** Loaded assemblies by name, UCSC name and name without patch level (for examples and URLs: hg19, GRCh37). */
 const assemblyNames = new Map();
 
+/** Loaded species, assemblies, what liftOver chains connect and which species carry tags (from /v1/meta). */
+let meta = { species: [], crossings: [], tags: [] };
+/** Species of the current input (from /v1/location), to tell which species and assemblies apply. */
+let sourceTaxon;
+
 /** Loaded species (and assemblies, shown only when a species has several) for the scope selectors. */
-const speciesReady = api("/v1/meta").then(({ species = [], assemblies = [] }) => {
-  taxonSelect.append(...species.map((s) => el("option", { value: String(s.taxon) }, s.organism ?? `taxon ${s.taxon}`)));
+const speciesReady = api("/v1/meta").then(({ species = [], assemblies = [], crossings = [], tags = [] }) => {
+  meta = { species, crossings, tags };
+  taxonSelect.append(
+    ...species.map((s) => el("option", { value: String(s.taxon), dataset: { name: s.organism ?? `taxon ${s.taxon}` } }, s.organism ?? `taxon ${s.taxon}`)),
+  );
   for (const s of species) if (s.assemblies.length > 1) multiAssembly.add(s.taxon);
   for (const a of assemblies) for (const n of [a.name, a.name.replace(/\.p\d+$/, ""), a.ucsc]) if (n) assemblyNames.set(n.toLowerCase(), a.name);
   // Only species with a choice; the UCSC name helps those who know hg19 / hg38.
@@ -201,9 +209,65 @@ const speciesReady = api("/v1/meta").then(({ species = [], assemblies = [] }) =>
       }),
   );
   assemblySelect.hidden = multiAssembly.size === 0;
+  updateControls();
   // Examples that need data not loaded here (e.g. GRCh37) are left out.
   for (const b of $("#examples").querySelectorAll("button[data-needs]")) b.hidden = !assemblyNames.has(b.dataset.needs.toLowerCase());
 }).catch(() => {});
+
+/** Databases holding sequences of each target layer ("" = directly connected: any). */
+const DATABASES = {
+  genome: ["refseq", "insdc"],
+  gene_region: ["refseq"],
+  transcript: ["refseq", "ensembl", "insdc"],
+  protein: ["refseq", "ensembl", "uniprot", "insdc"],
+  structure: ["pdb"],
+};
+for (const c of [dbSelect, taxonSelect, assemblySelect, maneBox]) c.dataset.title = c.title ?? "";
+
+function setUsable(control, usable, why) {
+  control.disabled = !usable;
+  const holder = control.closest("label") ?? control;
+  holder.title = usable ? control.dataset.title : why;
+  holder.classList.toggle("unusable", !usable);
+}
+
+/**
+ * Selectors that cannot change the result for the current target and species are disabled (with the reason as a
+ * tooltip) and reset, so that the form never suggests a choice that does nothing.
+ */
+function updateControls() {
+  const to = toSelect.value;
+  // Databases: only those with sequences of the target layer; none to choose for structures (PDB only).
+  const dbs = DATABASES[to];
+  for (const o of dbSelect.options) if (o.value) o.disabled = dbs !== undefined && !dbs.includes(o.value);
+  if (dbSelect.selectedOptions[0]?.disabled) dbSelect.value = "";
+  const oneDb = dbs?.length === 1;
+  if (oneDb) dbSelect.value = "";
+  setUsable(dbSelect, !oneDb, `${to} results are all in ${dbs?.[0]}`);
+  // Species: those reached by liftOver chains from the input's species, others by identical sequences only.
+  for (const o of taxonSelect.options) {
+    if (!o.value) continue;
+    const t = Number(o.value);
+    const chain = sourceTaxon === undefined || t === sourceTaxon || meta.crossings.some((c) => c.fromTaxon === sourceTaxon && c.toTaxon === t);
+    o.textContent = `${o.dataset.name}${chain ? "" : " (identical sequences only)"}`;
+    o.hidden = t === sourceTaxon; // that is "same species"
+  }
+  if (taxonSelect.selectedOptions[0]?.hidden) taxonSelect.value = "";
+  // Assembly: of genome results, for a target species with several assemblies; only that species' assemblies.
+  const targetTaxon = taxonSelect.value ? Number(taxonSelect.value) : sourceTaxon;
+  const own = targetTaxon === undefined ? null : meta.species.find((s) => s.taxon === targetTaxon)?.assemblies ?? [];
+  for (const o of assemblySelect.options) if (o.value) o.hidden = o.disabled = own !== null && !own.includes(o.value);
+  const genome = to === "" || to === "genome";
+  const several = own === null ? multiAssembly.size > 0 : own.length > 1;
+  if (!genome || !several || assemblySelect.selectedOptions[0]?.disabled) assemblySelect.value = "";
+  setUsable(assemblySelect, genome && several, !genome ? "the assembly applies to genome results" : "one assembly is loaded for this species");
+  // MANE Select: transcripts and proteins of species carrying the tag.
+  const mane = meta.tags.find((t) => t.tag === "MANE Select");
+  const layer = ["", "transcript", "protein"].includes(to);
+  const maneUsable = !!mane && layer && (targetTaxon === undefined || mane.taxa.includes(targetTaxon));
+  if (!maneUsable) maneBox.checked = false;
+  setUsable(maneBox, maneUsable, !layer ? "MANE Select marks transcripts and proteins" : "no MANE Select data for this species");
+}
 
 async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
   loc = loc.trim();
@@ -217,15 +281,20 @@ async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
   assemblySelect.value = assembly;
   dbSelect.value = db;
   $("#error").hidden = true;
-  if (!loc) return;
+  if (!loc) {
+    updateControls();
+    return;
+  }
   const codon = codonBox.checked ? "" : "never";
-  const tag = maneBox.checked ? "MANE Select" : "";
-  if (push) history.pushState(null, "", `?${qs({ loc, to, db, taxon, assembly, codon, tag })}`);
   try {
-    const [info, conv] = await Promise.all([
-      api(`/v1/location?${qs({ loc, codon })}`),
-      api(`/v1/convert?${qs({ loc, to, db, taxon, assembly, codon, tag })}`),
-    ]);
+    // The input's species decides which selectors apply; they may reset choices that do nothing here.
+    const info = await api(`/v1/location?${qs({ loc, codon })}`);
+    sourceTaxon = info.taxon;
+    updateControls();
+    [to, taxon, assembly, db] = [toSelect.value, taxonSelect.value, assemblySelect.value, dbSelect.value];
+    const tag = maneBox.checked ? "MANE Select" : "";
+    if (push) history.pushState(null, "", `?${qs({ loc, to, db, taxon, assembly, codon, tag })}`);
+    const conv = await api(`/v1/convert?${qs({ loc, to, db, taxon, assembly, codon, tag })}`);
     $("#input-id").textContent = info.id;
     $("#input-kind").textContent = `${info.unit === "aa" ? "protein" : "nucleotide"}${info.kind === "order" ? " · order" : ""}`;
     // Species and assembly of the input; the name as written (hg19:chr7:...) when it was given that way.
@@ -255,7 +324,10 @@ form.addEventListener("submit", (e) => {
 });
 const rerun = () => run(locInput.value, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value);
 for (const control of [toSelect, dbSelect, taxonSelect, assemblySelect, codonBox, maneBox]) {
-  control.addEventListener("change", () => locInput.value && rerun());
+  control.addEventListener("change", () => {
+    updateControls();
+    if (locInput.value) rerun();
+  });
 }
 $("#input .card").addEventListener("click", (e) => {
   const action = e.target.dataset?.action;

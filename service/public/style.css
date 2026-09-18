@@ -101,3 +101,6 @@ nav a.current { background: var(--paper); font-weight: 600; }
   form#query .targets { flex-basis: 100%; }
   form#query button[type="submit"] { flex: 1 1 100%; }
 }
+/* Selectors that do not apply to the current target / species (reason in the tooltip). */
+select:disabled, .option.unusable { opacity: 0.45; cursor: not-allowed; }
+.option.unusable input { cursor: not-allowed; }
