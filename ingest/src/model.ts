@@ -2,7 +2,7 @@
 import { Mapping, type Block, type Unit } from "@togocoord/core";
 
 export interface Provenance {
-  adapter: "gbff" | "gff3" | "fasta" | "sifts" | "mane";
+  adapter: "gbff" | "gff3" | "fasta" | "sifts" | "mane" | "chain";
   /** Source file or stream label. */
   file?: string;
   /** Record accession.version (GBFF) or seqid (GFF3). */
@@ -40,13 +40,15 @@ export interface SequenceRecord {
 }
 
 export interface Edge {
-  kind: "annotation" | "alignment";
+  kind: "annotation" | "alignment" | "liftover";
   from: string;
   to: string;
   /** Blocks in internal units (core §4.1); from -> to. */
   blocks: Block[];
   /** Canonical Location ID of the source feature on `to`, for display. */
   location?: string;
+  /** Usable only from `from` to `to` (e.g. liftOver chains, filtered on the source side). Stored in compact chunks. */
+  directional?: boolean;
   attributes: Record<string, string>;
   provenance: Provenance;
   validation: Validation;

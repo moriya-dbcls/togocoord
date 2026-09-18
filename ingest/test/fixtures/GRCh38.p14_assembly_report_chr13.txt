@@ -1,0 +1,6 @@
+# Assembly name:  GRCh38.p14
+# Organism name:  Homo sapiens (human)
+# Taxid:          9606
+# RefSeq assembly accession: GCF_000001405.40
+# Sequence-Name	Sequence-Role	Assigned-Molecule	Assigned-Molecule-Location/Type	GenBank-Accn	Relationship	RefSeq-Accn	Assembly-Unit	Sequence-Length	UCSC-style-name
+13	assembled-molecule	13	Chromosome	CM000675.2	=	NC_000013.11	Primary Assembly	114364328	chr13

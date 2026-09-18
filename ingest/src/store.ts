@@ -16,7 +16,12 @@ import { ownString } from "./common.ts";
 import { Lru } from "./lru.ts";
 import type { Annotation, Edge, Provenance, SequenceRecord, Sink, Validation } from "./model.ts";
 
-export const STORE_SCHEMA_VERSION = "4";
+export const STORE_SCHEMA_VERSION = "5";
+/** Versions the reader accepts (5 added chunked storage for directional edges; 4 simply has none). */
+export const READABLE_SCHEMA_VERSIONS: readonly string[] = ["4", "5"];
+
+/** Blocks per chunk of a directional edge (spec-ingest §14). */
+export const CHUNK_SIZE = 256;
 
 const SCHEMA = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
@@ -33,6 +38,10 @@ CREATE TABLE annotation(
   id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, start INTEGER NOT NULL, "end" INTEGER NOT NULL,
   type TEXT, location TEXT, attributes TEXT, provenance TEXT);
 CREATE TABLE warning(id INTEGER PRIMARY KEY, message TEXT);
+CREATE TABLE chunk(
+  id INTEGER PRIMARY KEY, edge INTEGER NOT NULL, src_seq INTEGER NOT NULL, tgt_seq INTEGER NOT NULL,
+  lo INTEGER NOT NULL, hi INTEGER NOT NULL, src0 INTEGER NOT NULL, tgt0 INTEGER NOT NULL, rev INTEGER NOT NULL,
+  n INTEGER NOT NULL, data BLOB NOT NULL);
 `;
 
 /** Built after bulk loading, from rows sorted by position. Intervals are stored half-open as [lo, hi). */
@@ -41,6 +50,8 @@ CREATE VIRTUAL TABLE block_src USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
 INSERT INTO block_src SELECT id, src_seq, src_seq, src, src + len FROM block ORDER BY src_seq, src;
 CREATE VIRTUAL TABLE block_tgt USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
 INSERT INTO block_tgt SELECT id, tgt_seq, tgt_seq, tgt, tgt + len FROM block ORDER BY tgt_seq, tgt;
+CREATE VIRTUAL TABLE chunk_src USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
+INSERT INTO chunk_src SELECT id, src_seq, src_seq, lo, hi FROM chunk ORDER BY src_seq, lo;
 CREATE VIRTUAL TABLE annotation_idx USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
 INSERT INTO annotation_idx SELECT id, seq, seq, start, max("end", start + 1) FROM annotation ORDER BY seq, start;
 CREATE INDEX sequence_digest ON sequence(digest) WHERE digest IS NOT NULL;
@@ -64,10 +75,10 @@ export class SqliteSink implements Sink {
   readonly #seqIds = new Map<string, number>();
   readonly #batch: number;
   #pending = 0;
-  readonly counts = { sequence: 0, edge: 0, block: 0, annotation: 0, warning: 0 };
+  readonly counts = { sequence: 0, edge: 0, block: 0, chunk: 0, annotation: 0, warning: 0 };
   readonly validation: Record<string, number> = {};
   readonly mismatches: string[] = [];
-  readonly #s: Record<"newSeq" | "fillSeq" | "edge" | "block" | "annotation" | "warning", StatementSync>;
+  readonly #s: Record<"newSeq" | "fillSeq" | "edge" | "block" | "chunk" | "annotation" | "warning", StatementSync>;
 
   constructor(path: string, options: SqliteSinkOptions = {}) {
     if (existsSync(path)) {
@@ -90,6 +101,7 @@ export class SqliteSink implements Sink {
         "INSERT INTO edge(kind, from_seq, to_seq, location, attributes, provenance, status, detail, basis) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
       ),
       block: this.#db.prepare("INSERT INTO block(edge, src_seq, src, tgt_seq, tgt, len, rev) VALUES (?,?,?,?,?,?,?)"),
+      chunk: this.#db.prepare("INSERT INTO chunk(edge, src_seq, tgt_seq, lo, hi, src0, tgt0, rev, n, data) VALUES (?,?,?,?,?,?,?,?,?,?)"),
       annotation: this.#db.prepare('INSERT INTO annotation(seq, start, "end", type, location, attributes, provenance) VALUES (?,?,?,?,?,?,?)'),
       warning: this.#db.prepare("INSERT INTO warning(message) VALUES (?)"),
     };
@@ -131,6 +143,23 @@ export class SqliteSink implements Sink {
       e.kind, this.#seq(e.from), this.#seq(e.to), e.location ?? null, JSON.stringify(e.attributes), JSON.stringify(e.provenance),
       e.validation.status, e.validation.detail ?? null, e.validation.basis ?? null,
     ) as { id: number };
+    if (e.directional) {
+      // Millions of blocks (whole-genome chains): compact chunks indexed by their source extent.
+      const sorted = [...e.blocks].sort((a, b) => a.src - b.src);
+      for (let i = 0; i < sorted.length; i += CHUNK_SIZE) {
+        const part = sorted.slice(i, i + CHUNK_SIZE);
+        const first = part[0]!;
+        if (part.some((b) => b.srcRef !== first.srcRef || b.tgtRef !== first.tgtRef || b.rev !== first.rev)) {
+          throw new Error(`directional edge ${e.from} -> ${e.to}: blocks must share sequences and orientation`);
+        }
+        const hi = Math.max(...part.map((b) => b.src + b.len));
+        this.#s.chunk.run(row.id, this.#seq(first.srcRef), this.#seq(first.tgtRef), first.src, hi, first.src, first.tgt, first.rev ? 1 : 0, part.length, encodeChunk(part));
+        this.counts.chunk++;
+      }
+      this.counts.block += e.blocks.length;
+      this.#tick(1 + Math.ceil(e.blocks.length / CHUNK_SIZE));
+      return;
+    }
     for (const b of e.blocks) {
       this.#s.block.run(row.id, this.#seq(b.srcRef), b.src, this.#seq(b.tgtRef), b.tgt, b.len, b.rev ? 1 : 0);
     }
@@ -163,6 +192,53 @@ export class SqliteSink implements Sink {
     this.#db.exec("COMMIT");
     this.#db.close();
   }
+}
+
+// ---- chunk encoding: per block zigzag LEB128 varints of (src - previous src, tgt - previous tgt, len) ----------------
+function encodeChunk(blocks: ReadonlyArray<{ src: number; tgt: number; len: number }>): Uint8Array {
+  const out: number[] = [];
+  const put = (v: number) => {
+    let z = v >= 0 ? v * 2 : -v * 2 - 1;
+    while (z >= 0x80) {
+      out.push((z % 0x80) | 0x80);
+      z = Math.floor(z / 0x80);
+    }
+    out.push(z);
+  };
+  let src = blocks[0]!.src;
+  let tgt = blocks[0]!.tgt;
+  for (const b of blocks) {
+    put(b.src - src);
+    put(b.tgt - tgt);
+    put(b.len);
+    src = b.src;
+    tgt = b.tgt;
+  }
+  return Uint8Array.from(out);
+}
+
+export function decodeChunk(data: Uint8Array, n: number, src0: number, tgt0: number): Array<{ src: number; tgt: number; len: number }> {
+  let i = 0;
+  const get = () => {
+    let z = 0;
+    let scale = 1;
+    for (;;) {
+      const byte = data[i++]!;
+      z += (byte & 0x7f) * scale;
+      if (byte < 0x80) break;
+      scale *= 0x80;
+    }
+    return z % 2 === 0 ? z / 2 : -(z + 1) / 2;
+  };
+  const out: Array<{ src: number; tgt: number; len: number }> = [];
+  let src = src0;
+  let tgt = tgt0;
+  for (let k = 0; k < n; k++) {
+    src += get();
+    tgt += get();
+    out.push({ src, tgt, len: get() });
+  }
+  return out;
 }
 
 /** What a store holds: counts, organisms and example locations to try (shown by the service's /v1/meta). */
@@ -200,11 +276,17 @@ export function summarize(db: DatabaseSync): StoreSummary {
     const aa = (db.prepare("SELECT unit FROM sequence WHERE ref = ?").get(aln.ref) as { unit: string | null } | undefined)?.unit === "aa";
     examples.push(`${aln.ref}:${aa ? Math.floor(aln.src / 3) + 1 : aln.src + 1}`);
   }
+  const hasChunks = !!db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'chunk'").get();
+  if (hasChunks) {
+    const c = db.prepare("SELECT s.ref, c.lo FROM chunk c JOIN sequence s ON s.id = c.src_seq ORDER BY c.id LIMIT 1 OFFSET 1000").get() as { ref: string; lo: number } | undefined;
+    if (c) examples.push(`${c.ref}:${c.lo + 1}..${c.lo + 30}`);
+  }
   if (!examples.length) {
     const seq = db.prepare("SELECT ref FROM sequence WHERE length > 0 ORDER BY id LIMIT 1").get() as { ref: string } | undefined;
     if (seq) examples.push(seq.ref);
   }
-  return { sequences, edges, blocks: one("SELECT count(*) AS n FROM block"), annotations: one("SELECT count(*) AS n FROM annotation"), taxa, examples };
+  const chunked = hasChunks ? one("SELECT coalesce(sum(n), 0) AS n FROM chunk") : 0;
+  return { sequences, edges, blocks: one("SELECT count(*) AS n FROM block") + chunked, annotations: one("SELECT count(*) AS n FROM annotation"), taxa, examples };
 }
 
 export interface StoredEdge {
@@ -254,7 +336,7 @@ export class TogoCoordStore {
     this.path = path;
     this.#db = new DatabaseSync(path, { readOnly: true });
     const schema = (this.#db.prepare("SELECT value FROM meta WHERE key = 'schema'").get() as { value: string } | undefined)?.value;
-    if (schema !== STORE_SCHEMA_VERSION) {
+    if (!schema || !READABLE_SCHEMA_VERSIONS.includes(schema)) {
       this.#db.close();
       throw new Error(`${path}: store schema ${schema ?? "?"} is not supported (expected ${STORE_SCHEMA_VERSION}); rebuild it with togocoord-ingest`);
     }
@@ -280,6 +362,11 @@ export class TogoCoordStore {
         'SELECT a.* FROM annotation_idx r JOIN annotation a ON a.id = r.id WHERE r.seq_lo = ? AND r.seq_hi = ? AND r.lo < ? AND r.hi > ? ORDER BY a.start',
       ),
       meta: this.#db.prepare("SELECT key, value FROM meta"),
+      ...(this.#db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'chunk_src'").get() && {
+        chunks: this.#db.prepare(
+          "SELECT c.edge, c.src_seq, c.tgt_seq, c.src0, c.tgt0, c.rev, c.n, c.data FROM chunk_src r JOIN chunk c ON c.id = r.id WHERE r.seq_lo = ? AND r.seq_hi = ? AND r.lo < ? AND r.hi > ?",
+        ),
+      }),
       byDigest: this.#db.prepare("SELECT ref FROM sequence WHERE digest = ?"),
       byMd5: this.#db.prepare("SELECT ref FROM sequence WHERE md5 = ?"),
     };
@@ -394,6 +481,17 @@ export class TogoCoordStore {
     if (direction !== "inverse") {
       for (const r of this.#s.bySrc!.all(id, id, end, start) as unknown as BlockRow[]) {
         out.push({ edge: r.edge, srcRef: this.#ref(r.src_seq), src: r.src, tgtRef: this.#ref(r.tgt_seq), tgt: r.tgt, len: r.len, rev: r.rev === 1 });
+      }
+    }
+    // Directional edges (chunked) are only used forward.
+    if (direction !== "inverse" && this.#s.chunks) {
+      type ChunkRow = { edge: number; src_seq: number; tgt_seq: number; src0: number; tgt0: number; rev: number; n: number; data: Uint8Array };
+      for (const c of this.#s.chunks.all(id, id, end, start) as unknown as ChunkRow[]) {
+        const srcRef = this.#ref(c.src_seq);
+        const tgtRef = this.#ref(c.tgt_seq);
+        for (const b of decodeChunk(c.data, c.n, c.src0, c.tgt0)) {
+          if (b.src < end && b.src + b.len > start) out.push({ edge: c.edge, srcRef, src: b.src, tgtRef, tgt: b.tgt, len: b.len, rev: c.rev === 1 });
+        }
       }
     }
     if (direction !== "forward") {

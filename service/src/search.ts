@@ -64,6 +64,9 @@ export interface Conversion {
  */
 export const IDENTITY_COST = 0;
 
+/** Cross-assembly / cross-species liftOver: dearer than any edge within one assembly, so those paths win. */
+export const LIFTOVER_COST = 2;
+
 /**
  * Extra cost of edges taken only as a last resort: those that failed self-validation, and those NCBI marks with
  * /exception unless validation against the actual sequence succeeded (e.g. a transcript that differs from the genome
@@ -72,8 +75,9 @@ export const IDENTITY_COST = 0;
 export const EXCEPTION_PENALTY = 10;
 export const MISMATCH_PENALTY = 10;
 
-export function edgeCost(e: { attributes: Record<string, string>; validation: StoredEdge["validation"] }): number {
-  return isApproximate(e) ? 1 + (e.validation.status === "mismatch" ? MISMATCH_PENALTY : EXCEPTION_PENALTY) : 1;
+export function edgeCost(e: { kind?: StoredEdge["kind"]; attributes: Record<string, string>; validation: StoredEdge["validation"] }): number {
+  const base = e.kind === "liftover" ? LIFTOVER_COST : 1;
+  return isApproximate(e) ? base + (e.validation.status === "mismatch" ? MISMATCH_PENALTY : EXCEPTION_PENALTY) : base;
 }
 
 export function isApproximate(e: { attributes: Record<string, string>; validation: StoredEdge["validation"] }): boolean {

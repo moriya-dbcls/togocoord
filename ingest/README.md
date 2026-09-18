@@ -23,6 +23,7 @@ node --max-old-space-size=512 ingest/src/cli.ts \
 | `--db FILE` | SQLite に保存する（なければ JSON Lines を出力する）。既存のファイルは `--overwrite` で置き換える |
 | `--fasta FILE` | 自己検証に使う配列（ゲノム、転写産物、タンパク質）。何度でも指定できる。64MB を超えるか `.fai` があるファイルは、ランダムアクセスで読む |
 | `--all-annotations` | exon も annotation として保存する |
+| `--from-report FILE`、`--to-report FILE` | UCSC の chain ファイル（`.chain(.gz)`）の変換元と変換先のアセンブリの NCBI assembly report。`chr1` などの名前を RefSeq の accession に読み替える（spec-ingest §14） |
 
 出力する JSON Lines では、各行の `record` が `sequence` / `edge` / `annotation` / `warning` のいずれかになる。
 
@@ -57,6 +58,7 @@ mapLocation(parseLocationId("refseq:YP_003024037.1:174", ctx), edgeMapping(nd6),
 |---|---|
 | `src/gbff.ts`、`src/gff3.ts`、`src/fasta.ts` | パーサ |
 | `src/adapter-gbff.ts`、`src/adapter-gff3.ts` | アダプタ（spec-ingest §3, §4） |
+| `src/adapter-fasta.ts`、`src/adapter-sifts.ts`、`src/adapter-mane.ts`、`src/adapter-chain.ts` | FASTA、SIFTS、MANE、UCSC chain のアダプタ（spec-ingest §9〜§11, §14） |
 | `src/validate.ts` | 自己検証（§6）とタンパク質長の推定（§5） |
 | `src/sequence.ts` | 配列の取得、相補鎖、翻訳、refget ダイジェスト |
 | `src/stream.ts` | ストリーミング読み込み（`.gz` 対応）、`JsonlSink` |

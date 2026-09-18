@@ -9,6 +9,8 @@ const EXAMPLES = [
   ["RefSeq protein", "refseq:NP_036366.3:20"],
   ["whole protein", "refseq:NP_000572.2"],
   ["overlapping genes (mtDNA)", "refseq:NC_012920.1:8527..8529"],
+  ["human → mouse protein", "refseq:NP_000572.2:49", "protein"],
+  ["mouse → human genome", "refseq:NC_000075.7:106312500..106312550", "genome"],
 ];
 
 const form = $("#query");
@@ -135,6 +137,9 @@ function renderPath(result) {
   return el("div", { class: "path" }, nodes);
 }
 
+/** Taxon of the input sequence, to mark results from other species. */
+let inputTaxon;
+
 function renderResult(r) {
   const card = el("li", { class: "card" });
   const unmapped = r.path.filter((s) => s.unmapped).map((s) => `${s.unmapped} (at ${s.kind} step)`);
@@ -143,6 +148,9 @@ function renderResult(r) {
       locationLink(r.location),
       el("span", { class: "badge" }, r.category),
       ...(r.tags ?? []).map((t) => el("span", { class: "badge tag", title: "curated tag of the target sequence" }, t)),
+      r.taxon !== undefined && r.taxon !== inputTaxon
+        ? el("span", { class: "badge species", title: `taxon ${r.taxon}` }, r.organism ?? `taxon ${r.taxon}`)
+        : null,
       el("span", { class: "badge", title: "path cost" }, `cost ${r.cost}`),
       r.approximate ? el("span", { class: "badge warn", title: "the path uses an edge not verified against the sequences; positions may be shifted" }, "approximate") : null,
       r.orientation !== "forward" ? el("span", { class: "badge" }, r.orientation) : null,
@@ -176,6 +184,7 @@ async function run(loc, to, push = true) {
     const inputCard = $("#input .card");
     $(".extra", inputCard).hidden = true;
     $("#input").hidden = false;
+    inputTaxon = conv.inputTaxon;
     $("#results").replaceChildren(...conv.results.map(renderResult));
     $("#count").textContent = conv.results.length
       ? `(${conv.results.length}${conv.truncated ? ", truncated — narrow the target or the input" : ""})`
@@ -201,7 +210,7 @@ $("#input .card").addEventListener("click", (e) => {
 });
 $("#examples").append(
   "Examples: ",
-  ...EXAMPLES.map(([label, id]) => el("button", { type: "button", class: "small", title: id, onclick: () => run(id, toSelect.value) }, label)),
+  ...EXAMPLES.map(([label, id, to]) => el("button", { type: "button", class: "small", title: id, onclick: () => run(id, to ?? toSelect.value) }, label)),
 );
 
 // ---- Loaded data view ------------------------------------------------------------------------------------------

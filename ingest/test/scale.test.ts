@@ -17,6 +17,8 @@ import { SqliteSink, TogoCoordStore } from "../src/store.ts";
 import { ingestGenBankFile, ingestGff3File } from "../src/stream.ts";
 import { defaultFastaRef, ingestFastaFile } from "../src/adapter-fasta.ts";
 import { ingestSiftsFile } from "../src/adapter-sifts.ts";
+import { ingestChainFile } from "../src/adapter-chain.ts";
+import { assemblyReportSeqids } from "../src/common.ts";
 import { parseFastaHeaders } from "../src/fasta.ts";
 import { MemorySequenceSource } from "../src/sequence.ts";
 import { fixture, genbankSource } from "./helpers.ts";
@@ -204,5 +206,60 @@ describe("SIFTS (UniProt P07203 <-> PDB 2F8A, real data)", () => {
     const r = mapLocation(parseLocationId("uniprot:P07203:49", ctx), edgeMapping(a!), ctx);
     assert.deepEqual(r.targets.map((t) => formatLocationId(t.location, ctx)), ["pdb:2F8A.A:59"]);
     assert.equal(source.get("pdb:2F8A.A", 58, 59), "G");
+  });
+});
+
+describe("UCSC liftOver chain (hg38 -> mm39, chain 8179: human chr13 + to mouse chr3 -, real data)", () => {
+  const human = assemblyReportSeqids(fixture("GRCh38.p14_assembly_report_chr13.txt"));
+  const mouse = assemblyReportSeqids(fixture("GRCm39_assembly_report_chr3.txt"));
+  const source = new MemorySequenceSource();
+  for (const [, s] of parseFastaHeaders(fixture("NC_000013.11_65787513-65788763.fa"))) source.add("refseq:NC_000013.11", s, 65787512);
+  for (const [, s] of parseFastaHeaders(fixture("NC_000069.7_54389129-54390378.fa"))) source.add("refseq:NC_000069.7", s, 54389128);
+
+  it("converts '-' query coordinates to forward coordinates and validates by sequence identity", async () => {
+    const sink = new MemorySink();
+    const stats = await ingestChainFile(fixturePath("hg38ToMm39_chain8179.chain"), sink, {
+      source,
+      fromRef: (n) => human.get(n),
+      toRef: (n) => mouse.get(n),
+    });
+    assert.deepEqual([stats.chains, stats.blocks, stats.skipped], [1, 2, 0]);
+    const [e] = sink.result.edges;
+    assert.deepEqual([e!.kind, e!.directional, e!.from, e!.to], ["liftover", true, "refseq:NC_000013.11", "refseq:NC_000069.7"]);
+    // qSize 159745316: reverse block [105354938, +16) is forward [54390362, 54390378).
+    assert.deepEqual(e!.blocks, [
+      { srcRef: "refseq:NC_000013.11", src: 65787512, tgtRef: "refseq:NC_000069.7", tgt: 54390362, len: 16, rev: true },
+      { srcRef: "refseq:NC_000013.11", src: 65787529, tgtRef: "refseq:NC_000069.7", tgt: 54389128, len: 1234, rev: true },
+    ]);
+    assert.equal(e!.validation.status, "ok");
+    const [same, total] = e!.validation.detail!.match(/\d+/g)!.map(Number);
+    assert.ok(same! / total! > 0.6, e!.validation.detail); // orthologous DNA; misplaced coordinates would give ~0.25
+
+    // Stored in chunks, used forward only.
+    const path = join(dir, "chain.sqlite");
+    const sq = new SqliteSink(path);
+    sq.edge(e!);
+    sq.close();
+    const store = new TogoCoordStore(path);
+    const fwd = store.blocksAt("refseq:NC_000013.11", 65787520, 65787540, "forward");
+    assert.deepEqual(fwd.map(({ edge: _e, ...b }) => b), e!.blocks);
+    assert.deepEqual(store.blocksAt("refseq:NC_000069.7", 54389128, 54390378), []); // not used in reverse
+    assert.equal(store.summary().blocks, 2);
+    const ctx = createContext({ units: () => "nt" });
+    const r = mapLocation(parseLocationId("refseq:NC_000013.11:65787530..65787532", ctx), store.mappingFor(parseLocationId("refseq:NC_000013.11:65787530..65787532", ctx)), ctx);
+    assert.deepEqual(r.targets.map((t) => formatLocationId(t.location, ctx)), ["refseq:NC_000069.7:complement(54390360..54390362)"]);
+    store.close();
+  });
+
+  it("round-trips chunk encoding for many blocks with negative target steps", async () => {
+    const blocks = Array.from({ length: 700 }, (_, i) => ({ srcRef: "refseq:NC_000001.1", src: 1000 + 10 * i, tgtRef: "refseq:NC_000002.1", tgt: 900000 - 12 * i, len: 5 + (i % 4), rev: true }));
+    const path = join(dir, "chunks.sqlite");
+    const sq = new SqliteSink(path);
+    sq.edge({ kind: "liftover", directional: true, from: "refseq:NC_000001.1", to: "refseq:NC_000002.1", blocks, attributes: {}, provenance: { adapter: "chain" }, validation: { status: "skipped" } });
+    sq.close();
+    const store = new TogoCoordStore(path);
+    assert.deepEqual(store.blocksAt("refseq:NC_000001.1", 0, 10_000_000, "forward").map(({ edge: _e, ...b }) => b), blocks);
+    assert.deepEqual(store.blocksAt("refseq:NC_000001.1", 3500, 3501, "forward").map((b) => b.src), [3500]);
+    store.close();
   });
 });

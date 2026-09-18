@@ -16,12 +16,14 @@ import { MemorySequenceSource, type SequenceSource } from "./sequence.ts";
 import { defaultFastaRef, ingestFastaFile } from "./adapter-fasta.ts";
 import { ingestSiftsFile } from "./adapter-sifts.ts";
 import { ingestManeSummary } from "./adapter-mane.ts";
+import { ingestChainFile } from "./adapter-chain.ts";
 import { SqliteSink } from "./store.ts";
 import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 
 const USAGE =
   "usage: togocoord-ingest [--db OUT.sqlite [--overwrite]] [--fasta FILE]... [--seqid-map ASSEMBLY_REPORT] [--assembly-report FILE]\n" +
-  "                        [--label TEXT] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations] FILE...\n";
+  "                        [--label TEXT] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations]\n" +
+  "                        [--from-report ASSEMBLY_REPORT --to-report ASSEMBLY_REPORT (for .chain files)] FILE...\n";
 const args = process.argv.slice(2);
 if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
   process.stderr.write(USAGE);
@@ -50,6 +52,9 @@ let siftsKnownOnly = false;
 let seqids: Map<string, string> | undefined;
 /** Store metadata shown by the service (label, organism, assembly). */
 const meta: Record<string, string> = {};
+/** Sequence names of the two assemblies of a liftOver chain file. */
+let fromNames: Map<string, string> | undefined;
+let toNames: Map<string, string> | undefined;
 for (let i = 0; i < args.length; i++) {
   const a = args[i]!;
   if (a === "--db") db = args[++i];
@@ -61,6 +66,10 @@ for (let i = 0; i < args.length; i++) {
     if (a === "--seqid-map") seqids = assemblyReportSeqids(text);
     const info = assemblyReportInfo(text);
     for (const [k, v] of Object.entries(info)) meta[k] ??= v;
+  } else if (a === "--from-report" || a === "--to-report") {
+    const names = assemblyReportSeqids(readFileSync(args[++i]!, "utf8"));
+    if (a === "--from-report") fromNames = names;
+    else toNames = names;
   } else if (["--label", "--taxon", "--organism", "--assembly"].includes(a)) meta[a.slice(2)] = args[++i]!;
   else if (a === "--fasta") sources.push(openFasta(args[++i]));
   else if (a.startsWith("--")) {
@@ -113,6 +122,13 @@ for (const file of inputs) {
     ...(seqids && { seqidToRef: (seqid: string) => seqids!.get(seqid) ?? accessionRef(seqid, registry) }),
   };
   const name = file.replace(/\.gz$/, "");
+  if (/\.chain$/i.test(name)) {
+    if (!fromNames || !toNames) throw new Error(`${file}: chain files need --from-report and --to-report (NCBI assembly reports of both assemblies)`);
+    const s = await ingestChainFile(file, sink, { file: basename(file), registry, source, fromRef: (n) => fromNames!.get(n), toRef: (n) => toNames!.get(n) });
+    const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(1) : "-";
+    process.stderr.write(`${file}: ${s.chains} chains, ${s.blocks} blocks, ${s.skipped} skipped; sampled identity ${identity}%\n`);
+    continue;
+  }
   if (/MANE.*summary\.txt$/i.test(name)) {
     const s = await ingestManeSummary(file, sink, { file: basename(file), registry });
     process.stderr.write(`${file}: ${s.genes} MANE genes, ${s.sequences} tagged sequences\n`);

@@ -1,0 +1,6 @@
+# Assembly name:  GRCm39
+# Organism name:  Mus musculus (house mouse)
+# Taxid:          10090
+# RefSeq assembly accession: GCF_000001635.27
+# Sequence-Name	Sequence-Role	Assigned-Molecule	Assigned-Molecule-Location/Type	GenBank-Accn	Relationship	RefSeq-Accn	Assembly-Unit	Sequence-Length	UCSC-style-name
+3	assembled-molecule	3	Chromosome	CM000996.3	=	NC_000069.7	C57BL/6J	159745316	chr3

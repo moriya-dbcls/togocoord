@@ -13,7 +13,7 @@ TogoCoord は、ゲノム・転写産物・タンパク質・立体構造など�
 | ディレクトリ | 内容 |
 |---|---|
 | `core/` | Location ID のパース・正規形・FALDO JSON-LD、ブロック列による写像（依存なし） |
-| `ingest/` | GenBank / GFF3 / FASTA / SIFTS / MANE のアダプタ、自己検証、SQLite（R*Tree）の保存先、CLI `togocoord-ingest` |
+| `ingest/` | GenBank / GFF3 / FASTA / SIFTS / MANE / UCSC chain のアダプタ、自己検証、SQLite（R*Tree）の保存先、CLI `togocoord-ingest` |
 | `service/` | 複数の保存先をまたぐ経路探索、REST API、Web UI（`togocoord-serve`） |
 | `docs/` | 設計書と仕様（[design.md](docs/design.md)、[spec-core.md](docs/spec-core.md)、[spec-ingest.md](docs/spec-ingest.md)、[spec-service.md](docs/spec-service.md)、[scaling.md](docs/scaling.md)） |
 | `poc/` | コンセプト検証版の実装（Web UI と SPARQList。参考） |

@@ -93,7 +93,8 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     const results = tags.length ? found.filter((r) => r.tags.some((x) => tags.includes(x))) : found;
     return {
       input: formatLocationId(loc, ctx, codon),
-      results: results.slice(0, maxResults).map((r) => conversionJson(r, ctx, base, codon)),
+      ...(stores.sequence(loc.outer)?.taxon !== undefined && { inputTaxon: stores.sequence(loc.outer)!.taxon }),
+      results: results.slice(0, maxResults).map((r) => conversionJson(r, ctx, base, codon, stores)),
       ...(results.length > maxResults && { truncated: true }),
     };
   };
@@ -315,13 +316,16 @@ function segmentJson(s: Segment, ctx: CoordContext): Record<string, unknown> {
   return out;
 }
 
-function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: CodonMode): Record<string, unknown> {
+function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: CodonMode, stores: StoreSet): Record<string, unknown> {
+  const seq = stores.sequence(r.location.outer);
   return {
     location: formatLocationId(r.location, ctx, codon),
     iri: locationIri(r.location, ctx, base),
     sequence: r.location.outer,
     category: r.category,
     ...(r.tags.length && { tags: r.tags }),
+    ...(seq?.taxon !== undefined && { taxon: seq.taxon }),
+    ...(seq?.organism && { organism: seq.organism }),
     cost: r.cost,
     approximate: r.approximate,
     orientation: r.orientation,

@@ -4,8 +4,9 @@ export { Gff3Ingestor, ingestGff3, ingestGff3Document, type Gff3Options } from "
 export { accessionRef, assemblyReportInfo, assemblyReportSeqids, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, extent, VersionResolver, type AdapterOptions } from "./common.ts";
 export { ingestSiftsFile, type SiftsOptions } from "./adapter-sifts.ts";
 export { ingestManeSummary } from "./adapter-mane.ts";
+export { chainBlocks, ingestChainFile, readChains, type Chain, type ChainOptions, type ChainStats } from "./adapter-chain.ts";
 export { buildFai, FaiSequenceSource, loadOrBuildFai, readFai, writeFai, type FaiEntry } from "./fasta-index.ts";
-export { SqliteSink, STORE_SCHEMA_VERSION, summarize, TogoCoordStore, type StoreSummary, type SqliteSinkOptions, type StoreOptions, type StoredBlock, type StoredEdge } from "./store.ts";
+export { CHUNK_SIZE, decodeChunk, READABLE_SCHEMA_VERSIONS, SqliteSink, STORE_SCHEMA_VERSION, summarize, TogoCoordStore, type StoreSummary, type SqliteSinkOptions, type StoreOptions, type StoredBlock, type StoredEdge } from "./store.ts";
 export { Lru } from "./lru.ts";
 export { ingestGenBankFile, ingestGff3File, JsonlSink, readLines, type StreamStats } from "./stream.ts";
 export { parseFasta, parseFastaHeaders } from "./fasta.ts";
