@@ -1,0 +1,18 @@
+{
+  "name": "togocoord",
+  "private": true,
+  "workspaces": [
+    "core",
+    "ingest",
+    "service"
+  ],
+  "scripts": {
+    "test": "npm test --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "fast-check": "^4.10.1",
+    "typescript": "^7.0.2"
+  }
+}

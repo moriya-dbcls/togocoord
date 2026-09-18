@@ -1,0 +1,816 @@
+LOCUS       NM_014739               7494 bp    mRNA    linear   PRI 28-APR-2025
+DEFINITION  Homo sapiens BCL2 associated transcription factor 1 (BCLAF1),
+            transcript variant 1, mRNA.
+ACCESSION   NM_014739
+VERSION     NM_014739.3
+KEYWORDS    RefSeq; MANE Select.
+SOURCE      Homo sapiens (human)
+  ORGANISM  Homo sapiens
+            Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi;
+            Mammalia; Eutheria; Euarchontoglires; Primates; Haplorrhini;
+            Catarrhini; Hominidae; Homo.
+REFERENCE   1  (bases 1 to 7494)
+  AUTHORS   Li,Y., Sun,Y., Jia,B., Ma,Z. and Zhou,R.
+  TITLE     MED23 depletion induces premature senescence in NSCLC cells by
+            interacting with BCLAF1 and then suppressing NUPR1 expression
+  JOURNAL   Biochem Biophys Res Commun 734, 150754 (2024)
+   PUBMED   39366174
+  REMARK    GeneRIF: MED23 depletion induces premature senescence in NSCLC
+            cells by interacting with BCLAF1 and then suppressing NUPR1
+            expression.
+REFERENCE   2  (bases 1 to 7494)
+  AUTHORS   Zhou,Y., Ran,X. and Han,M.
+  TITLE     BCLAF1 is Expressed as a Potential Anti-oncogene in Bile Duct
+            Cancer
+  JOURNAL   Biochem Genet 62 (5), 3681-3694 (2024)
+   PUBMED   38198022
+  REMARK    GeneRIF: BCLAF1 is Expressed as a Potential Anti-oncogene in Bile
+            Duct Cancer.
+REFERENCE   3  (bases 1 to 7494)
+  AUTHORS   Chen,J., Wang,H., Xu,J., Chen,E., Meng,Q., Wang,J., Xiang,H.,
+            Zhou,W., Shan,G., Ju,Z. and Song,Z.
+  TITLE     CircZFR promotes colorectal cancer progression via stabilizing
+            BCLAF1 and regulating the miR-3127-5p/RTKN2 axis
+  JOURNAL   Sci China Life Sci 67 (9), 1881-1898 (2024)
+   PUBMED   38805063
+  REMARK    GeneRIF: CircZFR promotes colorectal cancer progression via
+            stabilizing BCLAF1 and regulating the miR-3127-5p/RTKN2 axis.
+REFERENCE   4  (bases 1 to 7494)
+  AUTHORS   Zhang,P., Zhang,W., Wang,X., Li,L., Lin,Y., Wu,N., Mao,R., Lin,J.,
+            Kang,M. and Ding,C.
+  TITLE     BCLAF1 drives esophageal squamous cell carcinoma progression
+            through regulation of YTHDF2-dependent SIX1 mRNA degradation
+  JOURNAL   Cancer Lett 591, 216874 (2024)
+   PUBMED   38636894
+  REMARK    GeneRIF: BCLAF1 drives esophageal squamous cell carcinoma
+            progression through regulation of YTHDF2-dependent SIX1 mRNA
+            degradation.
+REFERENCE   5  (bases 1 to 7494)
+  AUTHORS   Yu,Z., Wu,X., Zhu,J., Yan,H., Li,Y., Zhang,H., Zhong,Y., Lin,M.,
+            Ye,G., Li,X., Jin,J., Li,K., Wang,J., Zhuang,H., Lin,T., He,J.,
+            Lu,C., Xu,Z., Zhang,X., Li,H. and Jin,X.
+  TITLE     BCLAF1 binds SPOP to stabilize PD-L1 and promotes the development
+            and immune escape of hepatocellular carcinoma
+  JOURNAL   Cell Mol Life Sci 81 (1), 82 (2024)
+   PUBMED   38340178
+  REMARK    GeneRIF: BCLAF1 binds SPOP to stabilize PD-L1 and promotes the
+            development and immune escape of hepatocellular carcinoma.
+REFERENCE   6  (bases 1 to 7494)
+  AUTHORS   Beausoleil,S.A., Jedrychowski,M., Schwartz,D., Elias,J.E.,
+            Villen,J., Li,J., Cohn,M.A., Cantley,L.C. and Gygi,S.P.
+  TITLE     Large-scale characterization of HeLa cell nuclear phosphoproteins
+  JOURNAL   Proc Natl Acad Sci U S A 101 (33), 12130-12135 (2004)
+   PUBMED   15302935
+REFERENCE   7  (bases 1 to 7494)
+  AUTHORS   Haraguchi,T., Holaska,J.M., Yamane,M., Koujin,T., Hashiguchi,N.,
+            Mori,C., Wilson,K.L. and Hiraoka,Y.
+  TITLE     Emerin binding to Btf, a death-promoting transcriptional repressor,
+            is disrupted by a missense mutation that causes Emery-Dreifuss
+            muscular dystrophy
+  JOURNAL   Eur J Biochem 271 (5), 1035-1045 (2004)
+   PUBMED   15009215
+  REMARK    GeneRIF: These results suggest that Btf localization is regulated
+            by apoptotic signals, and that loss of emerin binding to Btf may be
+            relevant to muscle wasting in Emery-Dreifuss muscular dystrophy.
+REFERENCE   8  (bases 1 to 7494)
+  AUTHORS   Mungall,A.J., Palmer,S.A., Sims,S.K., Edwards,C.A., Ashurst,J.L.,
+            Wilming,L., Jones,M.C., Horton,R., Hunt,S.E., Scott,C.E.,
+            Gilbert,J.G., Clamp,M.E., Bethel,G., Milne,S., Ainscough,R.,
+            Almeida,J.P., Ambrose,K.D., Andrews,T.D., Ashwell,R.I.,
+            Babbage,A.K., Bagguley,C.L., Bailey,J., Banerjee,R., Barker,D.J.,
+            Barlow,K.F., Bates,K., Beare,D.M., Beasley,H., Beasley,O.,
+            Bird,C.P., Blakey,S., Bray-Allen,S., Brook,J., Brown,A.J.,
+            Brown,J.Y., Burford,D.C., Burrill,W., Burton,J., Carder,C.,
+            Carter,N.P., Chapman,J.C., Clark,S.Y., Clark,G., Clee,C.M.,
+            Clegg,S., Cobley,V., Collier,R.E., Collins,J.E., Colman,L.K.,
+            Corby,N.R., Coville,G.J., Culley,K.M., Dhami,P., Davies,J.,
+            Dunn,M., Earthrowl,M.E., Ellington,A.E., Evans,K.A., Faulkner,L.,
+            Francis,M.D., Frankish,A., Frankland,J., French,L., Garner,P.,
+            Garnett,J., Ghori,M.J., Gilby,L.M., Gillson,C.J., Glithero,R.J.,
+            Grafham,D.V., Grant,M., Gribble,S., Griffiths,C., Griffiths,M.,
+            Hall,R., Halls,K.S., Hammond,S., Harley,J.L., Hart,E.A.,
+            Heath,P.D., Heathcott,R., Holmes,S.J., Howden,P.J., Howe,K.L.,
+            Howell,G.R., Huckle,E., Humphray,S.J., Humphries,M.D., Hunt,A.R.,
+            Johnson,C.M., Joy,A.A., Kay,M., Keenan,S.J., Kimberley,A.M.,
+            King,A., Laird,G.K., Langford,C., Lawlor,S., Leongamornlert,D.A.,
+            Leversha,M., Lloyd,C.R., Lloyd,D.M., Loveland,J.E., Lovell,J.,
+            Martin,S., Mashreghi-Mohammadi,M., Maslen,G.L., Matthews,L.,
+            McCann,O.T., McLaren,S.J., McLay,K., McMurray,A., Moore,M.J.,
+            Mullikin,J.C., Niblett,D., Nickerson,T., Novik,K.L., Oliver,K.,
+            Overton-Larty,E.K., Parker,A., Patel,R., Pearce,A.V., Peck,A.I.,
+            Phillimore,B., Phillips,S., Plumb,R.W., Porter,K.M., Ramsey,Y.,
+            Ranby,S.A., Rice,C.M., Ross,M.T., Searle,S.M., Sehra,H.K.,
+            Sheridan,E., Skuce,C.D., Smith,S., Smith,M., Spraggon,L.,
+            Squares,S.L., Steward,C.A., Sycamore,N., Tamlyn-Hall,G., Tester,J.,
+            Theaker,A.J., Thomas,D.W., Thorpe,A., Tracey,A., Tromans,A.,
+            Tubby,B., Wall,M., Wallis,J.M., West,A.P., White,S.S.,
+            Whitehead,S.L., Whittaker,H., Wild,A., Willey,D.J., Wilmer,T.E.,
+            Wood,J.M., Wray,P.W., Wyatt,J.C., Young,L., Younger,R.M.,
+            Bentley,D.R., Coulson,A., Durbin,R., Hubbard,T., Sulston,J.E.,
+            Dunham,I., Rogers,J. and Beck,S.
+  TITLE     The DNA sequence and analysis of human chromosome 6
+  JOURNAL   Nature 425 (6960), 805-811 (2003)
+   PUBMED   14574404
+REFERENCE   9  (bases 1 to 7494)
+  AUTHORS   Bae,J., Leo,C.P., Hsu,S.Y. and Hsueh,A.J.
+  TITLE     MCL-1S, a splicing variant of the antiapoptotic BCL-2 family member
+            MCL-1, encodes a proapoptotic protein possessing only the BH3
+            domain
+  JOURNAL   J Biol Chem 275 (33), 25255-25261 (2000)
+   PUBMED   10837489
+REFERENCE   10 (bases 1 to 7494)
+  AUTHORS   Kasof,G.M., Goyal,L. and White,E.
+  TITLE     Btf, a novel death-promoting transcriptional repressor that
+            interacts with Bcl-2-related proteins
+  JOURNAL   Mol Cell Biol 19 (6), 4390-4404 (1999)
+   PUBMED   10330179
+COMMENT     REVIEWED REFSEQ: This record has been curated by NCBI staff. The
+            reference sequence was derived from D79986.1, AL121713.24 and
+            BX107174.1.
+            
+            On May 17, 2019 this sequence version replaced NM_014739.2.
+            
+            Summary: This gene encodes a transcriptional repressor that
+            interacts with several members of the BCL2 family of proteins.
+            Overexpression of this protein induces apoptosis, which can be
+            suppressed by co-expression of BCL2 proteins. The protein localizes
+            to dot-like structures throughout the nucleus, and redistributes to
+            a zone near the nuclear envelope in cells undergoing apoptosis.
+            Multiple transcript variants encoding different isoforms have been
+            found for this gene. [provided by RefSeq, Jul 2008].
+            
+            Publication Note:  This RefSeq record includes a subset of the
+            publications that are available for this gene. Please see the Gene
+            record to access additional publications.
+            
+            ##Evidence-Data-START##
+            Transcript exon combination :: SRR1660803.249788.1,
+                                           SRR1803616.190790.1 [ECO:0000332]
+            RNAseq introns              :: mixed sample support SAMEA1965299,
+                                           SAMEA1966682 [ECO:0006172]
+            ##Evidence-Data-END##
+            
+            ##RefSeq-Attributes-START##
+            MANE Ensembl match     :: ENST00000531224.6/ ENSP00000435210.1
+            RefSeq Select criteria :: based on conservation, expression,
+                                      longest protein
+            ##RefSeq-Attributes-END##
+            COMPLETENESS: complete on the 3' end.
+PRIMARY     REFSEQ_SPAN         PRIMARY_IDENTIFIER PRIMARY_SPAN        COMP
+            1-5533              D79986.1           6-5538
+            5534-6794           AL121713.24        14525-15785         c
+            6795-7258           BX107174.1         15-478              c
+            7259-7494           AL121713.24        13825-14060         c
+FEATURES             Location/Qualifiers
+     source          1..7494
+                     /organism="Homo sapiens"
+                     /mol_type="mRNA"
+                     /db_xref="taxon:9606"
+                     /chromosome="6"
+                     /map="6q23.3"
+     gene            1..7494
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="BCL2 associated transcription factor 1"
+                     /db_xref="GeneID:9774"
+                     /db_xref="HGNC:HGNC:16863"
+                     /db_xref="MIM:612588"
+     exon            1..134
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            135..238
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     misc_feature    219..221
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="upstream in-frame stop codon"
+     exon            239..352
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     CDS             249..3011
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="isoform 1 is encoded by transcript variant 1;
+                     bcl-2-associated transcription factor 1; BCLAF1 and THRAP3
+                     family member 1"
+                     /codon_start=1
+                     /product="bcl-2-associated transcription factor 1 isoform
+                     1"
+                     /protein_id="NP_055554.1"
+                     /db_xref="CCDS:CCDS5177.1"
+                     /db_xref="GeneID:9774"
+                     /db_xref="HGNC:HGNC:16863"
+                     /db_xref="MIM:612588"
+                     /translation="MGRSNSRSHSSRSKSRSQSSSRSRSRSHSRKKRYSSRSRSRTYS
+                     RSRSRDRMYSRDYRRDYRNNRGMRRPYGYRGRGRGYYQGGGGRYHRGGYRPVWNRRHS
+                     RSPRRGRSRSRSPKRRSVSSQRSRSRSRRSYRSSRSPRSSSSRSSSPYSKSPVSKRRG
+                     SQEKQTKKAEGEPQEESPLKSKSQEEPKDTFEHDPSESIDEFNKSSATSGDIWPGLSA
+                     YDNSPRSPHSPSPIATPPSQSSSCSDAPMLSTVHSAKNTPSQHSHSIQHSPERSGSGS
+                     VGNGSSRYSPSQNSPIHHIPSRRSPAKTIAPQNAPRDESRGRSSFYPDGGDQETAKTG
+                     KFLKRFTDEESRVFLLDRGNTRDKEASKEKGSEKGRAEGEWEDQEALDYFSDKESGKQ
+                     KFNDSEGDDTEETEDYRQFRKSVLADQGKSFATASHRNTEEEGLKYKSKVSLKGNRES
+                     DGFREEKNYKLKETGYVVERPSTTKDKHKEEDKNSERITVKKETQSPEQVKSEKLKDL
+                     FDYSPPLHKNLDAREKSTFREESPLRIKMIASDSHRPEVKLKMAPVPLDDSNRPASLT
+                     KDRLLASTLVHSVKKEQEFRSIFDHIKLPQASKSTSESFIQHIVSLVHHVKEQYFKSA
+                     AMTLNERFTSYQKATEEHSTRQKSPEIHRRIDISPSTLRKHTRLAGEERVFKEENQKG
+                     DKKLRCDSADLRHDIDRRRKERSKERGDSKGSRESSGSRKQEKTPKDYKEYKSYKDDS
+                     KHKREQDHSRSSSSSASPSSPSSREEKESKKEREEEFKTHHEMKEYSGFAGVSRPRGT
+                     FFRIRGRGRARGVFAGTNTGPNNSNTTFQKRPKEEEWDPEYTPKSKKYFLHDDRDDGV
+                     DYWAKRGRGRGTFQRGRGRFNFKKSGSSPKWTHDKYQGDGIVEDEEETMENNEEKKDR
+                     RKEEKE"
+     misc_feature    249..1559
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     misc_feature    552..554
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    558..560
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    702..704
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="N6-acetyllysine.
+                     /evidence=ECO:0007744|PubMed:19608861; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); acetylation site"
+     misc_feature    777..779
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine. /evidence=ECO:0000269|Ref.6,
+                     ECO:0007744|PubMed:17081983, ECO:0007744|PubMed:18318008,
+                     ECO:0007744|PubMed:19690332, ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163,
+                     ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    789..791
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:18669648; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    834..836
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    840..842
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    903..905
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphotyrosine.
+                     /evidence=ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    912..914
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:18669648,
+                     ECO:0007744|PubMed:19690332, ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163,
+                     ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1023..1025
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163,
+                     ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1032..1034
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1038..1040
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:18669648,
+                     ECO:0007744|PubMed:23186163, ECO:0007744|PubMed:24275569;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    1050..1052
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine. /evidence=ECO:0000269|Ref.6,
+                     ECO:0007744|PubMed:18669648, ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    1098..1100
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphotyrosine.
+                     /evidence=ECO:0007744|PubMed:18669648; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1101..1103
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:21406692,
+                     ECO:0007744|PubMed:23186163, ECO:0007744|PubMed:24275569;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    1116..1118
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine. /evidence=ECO:0000269|Ref.6,
+                     ECO:0007744|PubMed:18669648, ECO:0007744|PubMed:19690332,
+                     ECO:0007744|PubMed:20068231, ECO:0007744|PubMed:21406692,
+                     ECO:0007744|PubMed:23186163, ECO:0007744|PubMed:24275569;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    1137..1139
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1146..1148
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1191..1193
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1242..1244
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="N6-acetyllysine, alternate.
+                     /evidence=ECO:0000250|UniProtKB:Q8K019; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); acetylation site"
+     misc_feature    1263..1265
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1269..1271
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphothreonine.
+                     /evidence=ECO:0007744|PubMed:18669648,
+                     ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1311..1313
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphothreonine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1395..1397
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphotyrosine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1401..1403
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:18669648,
+                     ECO:0007744|PubMed:19690332, ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163,
+                     ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1413..1415
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:17081983,
+                     ECO:0007744|PubMed:18669648, ECO:0007744|PubMed:24275569;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    1437..1439
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:17081983,
+                     ECO:0007744|PubMed:17487921, ECO:0007744|PubMed:18318008,
+                     ECO:0007744|PubMed:18669648, ECO:0007744|PubMed:19367720,
+                     ECO:0007744|PubMed:19690332, ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163,
+                     ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1452..1454
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphothreonine.
+                     /evidence=ECO:0007744|PubMed:17081983,
+                     ECO:0007744|PubMed:18669648, ECO:0007744|PubMed:19690332,
+                     ECO:0007744|PubMed:20068231, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    1509..1511
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="N6-acetyllysine, alternate.
+                     /evidence=ECO:0000250|UniProtKB:Q8K019; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); acetylation site"
+     misc_feature    1512..1514
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1527..1529
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1539..1541
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphothreonine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1557..1559
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="N6-acetyllysine, alternate.
+                     /evidence=ECO:0007744|PubMed:19608861; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); acetylation site"
+     misc_feature    1596..1598
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1638..1754
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     misc_feature    1662..1664
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1671..1673
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="N6-acetyllysine.
+                     /evidence=ECO:0000250|UniProtKB:Q8K019; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); acetylation site"
+     misc_feature    1728..1730
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphothreonine.
+                     /evidence=ECO:0007744|PubMed:21406692; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1734..1736
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    1752..1754
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1782..1784
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine. /evidence=ECO:0000269|Ref.6,
+                     ECO:0007744|PubMed:18669648, ECO:0007744|PubMed:19690332,
+                     ECO:0007744|PubMed:20068231, ECO:0007744|PubMed:21406692,
+                     ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1821..1823
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1839..1841
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine. /evidence=ECO:0000269|Ref.6,
+                     ECO:0007744|PubMed:17081983, ECO:0007744|PubMed:18669648,
+                     ECO:0007744|PubMed:20068231, ECO:0007744|PubMed:21406692,
+                     ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1923..1925
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1938..1940
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1944..1946
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphothreonine.
+                     /evidence=ECO:0007744|PubMed:20068231; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    1980..1982
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:18669648,
+                     ECO:0007744|PubMed:20068231, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     phosphorylation site"
+     misc_feature    2157..2636
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     misc_feature    2190..2192
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:17081983,
+                     ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    2220..2222
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine. /evidence=ECO:0000269|Ref.6,
+                     ECO:0007744|PubMed:18669648, ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163,
+                     ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    2226..2228
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:21406692,
+                     ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    2229..2231
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphothreonine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    2316..2318
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    2526..2528
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:21406692; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); phosphorylation site"
+     misc_feature    2673..2675
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="Omega-N-methylarginine.
+                     /evidence=ECO:0007744|PubMed:24129315; propagated from
+                     UniProtKB/Swiss-Prot (Q9NYF8.2); methylation site"
+     misc_feature    2676..2768
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     misc_feature    2832..3008
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q9NYF8.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     exon            353..1264
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            1265..1930
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            1931..2100
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            2101..2206
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            2207..2291
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            2292..2467
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            2468..2645
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            2646..2792
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            2793..3005
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     exon            3006..7494
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /inference="alignment:Splign:2.1.0"
+     regulatory      5514..5519
+                     /regulatory_class="polyA_signal_sequence"
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="hexamer: AATAAA"
+     polyA_site      5535
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="major polyA site"
+     regulatory      5805..5810
+                     /regulatory_class="polyA_signal_sequence"
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="hexamer: AATAAA"
+     polyA_site      5827
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+     regulatory      6195..6200
+                     /regulatory_class="polyA_signal_sequence"
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="hexamer: TATAAA"
+     polyA_site      6218
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+     regulatory      7236..7241
+                     /regulatory_class="polyA_signal_sequence"
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+                     /note="hexamer: AATAAA"
+     polyA_site      7260
+                     /gene="BCLAF1"
+                     /gene_synonym="bK211L9.1; BTF"
+ORIGIN      
+        1 agatcggaag tgacggagac gtgctagcgc gtcgaaggta gctctatggt tttcctcgcg
+       61 ttcttgagtc gggaaatggc cgctgtgtgg ttgcaacgga gataaattcc cggaaccgcg
+      121 attcggcgtg tcaggaattc gaatttagag tttaatttct cagagcattc tctccaggaa
+      181 gaatttttac agtatctcaa agacttcact tgacttcttg atcctgcata aaaccaagga
+      241 gaaaagaaat gggtcgctcc aattctagat cacattcttc aaggtcaaag tctagatcac
+      301 agtctagttc tcgatcaaga tcaagatctc attctagaaa gaagcgatac agttctaggt
+      361 ctcgttccag aacatattca aggtctcgta gtagagatcg tatgtattct agagattatc
+      421 gtcgcgatta cagaaataat agaggaatga gacgacctta tgggtacaga ggaaggggta
+      481 gagggtatta tcaaggagga ggaggtagat atcatcgagg tggttataga cctgtctgga
+      541 atagaaggca ctctaggagt cctagacgag gtcgttcacg ttccaggagt ccaaaaagaa
+      601 gatccgtttc ttctcaaaga tccagaagca gatctcgccg gtcatataga tcttctaggt
+      661 ctccaagatc atcctcttct cgttcttcat ccccatatag caaatctcct gtttctaaaa
+      721 gacgagggtc tcaggaaaaa caaaccaaaa aagctgaagg ggaaccccaa gaagagagtc
+      781 cgttgaaaag taaatcacag gaggaaccga aagatacatt tgaacatgac ccatctgagt
+      841 ctatcgatga atttaataag tcatcagcca catccggtga tatttggcct ggcctttcag
+      901 cttatgataa tagtcctaga tcaccccata gtccttcacc tattgctaca ccacctagtc
+      961 agagttcatc ttgctctgat gctcccatgc tcagtacagt tcactctgca aaaaatactc
+     1021 cttctcagca ttcacattcc attcagcata gtcctgaaag gtctgggtct ggttctgttg
+     1081 gaaatggatc tagtcgatac agtccttctc agaatagtcc aattcatcac atcccttcac
+     1141 gaagaagtcc tgcaaagaca atcgcaccac agaatgctcc aagagatgag tctaggggcc
+     1201 gttcctcgtt ttatcctgat ggtggagatc aggaaactgc aaagactggg aagttcttaa
+     1261 aaaggttcac agatgaagag tctagagtat tcctgcttga taggggtaat accagggata
+     1321 aagaggcttc aaaagagaaa ggatcagaga aagggagggc agagggagaa tgggaagatc
+     1381 aggaagctct agattacttc agtgataaag agtctggaaa acaaaagttt aatgattcag
+     1441 aaggggatga cacagaggag acagaggatt atagacagtt caggaagtca gtcctcgcag
+     1501 atcagggtaa aagttttgct actgcatctc accggaatac tgaggaggaa ggactcaagt
+     1561 acaagtccaa agtttcactg aaaggcaata gagaaagtga tggatttaga gaagaaaaaa
+     1621 attataaact taaagagact ggatatgtag tggaaaggcc tagcactaca aaagataagc
+     1681 acaaagaaga agacaaaaat tctgaaagaa taacagtaaa gaaagaaact cagtcacctg
+     1741 agcaggtaaa gtctgaaaag ctcaaagacc tctttgatta cagtccccct ctacacaaga
+     1801 atctggatgc acgagaaaag tctaccttca gagaggaaag cccacttagg atcaaaatga
+     1861 tagcgagtga ttctcaccgt cctgaagtca aactcaaaat ggcacctgtt cctcttgatg
+     1921 attctaacag acctgcttcc ttgactaaag acaggctgct tgctagtaca cttgtccatt
+     1981 ctgtcaagaa ggagcaagaa ttccgatcca tctttgacca cattaagttg ccacaggcca
+     2041 gcaaaagcac ttcagagtca tttattcaac acattgtgtc cttggttcat catgttaaag
+     2101 agcaatactt caagtcagct gcaatgaccc taaacgagcg gttcacttcg tatcagaaag
+     2161 ccactgaaga acatagtact cggcaaaaga gccctgaaat acacaggaga attgacatct
+     2221 caccaagtac cctgaggaag catacccgtt tagcagggga agagagagtt tttaaagaag
+     2281 aaaatcaaaa gggagataaa aaattaaggt gtgactctgc tgaccttcgg catgacattg
+     2341 atcgccgtag aaaagaaaga agtaaagaac ggggagattc caagggctcc agggaatcca
+     2401 gtggatcaag aaagcaggaa aaaactccaa aagattacaa ggaatacaaa tcttacaaag
+     2461 atgacagtaa acataaaaga gagcaagatc attctcgatc ttcatcctct tcagcatcac
+     2521 cttcttctcc cagttctcga gaagaaaagg agagtaagaa ggaaagagaa gaagaattta
+     2581 aaactcacca tgaaatgaaa gaatactcag gctttgcagg agttagccga ccacgaggaa
+     2641 ccttttttcg aattagaggc agaggaagag ccagaggagt ttttgctggg acaaatactg
+     2701 gtccaaacaa ctcaaatact acttttcaaa agagaccgaa ggaagaggaa tgggatccag
+     2761 aatatacccc aaagagcaag aagtacttct tgcatgacga cagagatgat ggtgtggatt
+     2821 attgggccaa aagaggaaga ggtcgtggta cttttcaacg tggcagaggg cgctttaact
+     2881 tcaaaaaatc aggtagcagt cctaaatgga ctcatgacaa ataccaaggg gatgggattg
+     2941 ttgaagatga agaagagacc atggaaaata atgaagaaaa gaaggacaga cgcaaggaag
+     3001 aaaaggaata ataaatatga agtaagatta caacagagca gaacttgcac ccaccatttt
+     3061 ttttacctga tttttgtttt caaataagaa tgtaagcatt ttacttaaat tttactgttt
+     3121 gcaagtagtc tatagaaatt ttgttttaag tcttcaaata tcttgagaaa tagtagactg
+     3181 tatgttgaaa attgtactga aataaagtag aaaattgtta cgtaccatat ttgtaactat
+     3241 caacttttaa aacttttaac gtttttgtta catgcattgt aattctgctt tgtctataag
+     3301 atatggtcaa gtacagctct gtgaaagttc tgattctctt ccttccctgt ttgtcaatgt
+     3361 tttattctga agtaaacgtt agctctacat ataaatcctg gaacagaaat tgtttataga
+     3421 gactacacta attattttaa ctgtatacat ctgtttaatt tgaacacact acatcgtagg
+     3481 gtgactgatt tttgaagtat accacagaca aaaagttgtt actatggtaa actaagctag
+     3541 tttaacactt gagcaaatgc ttaagaagga attaaaaaaa aaaagctttg ccaatagcta
+     3601 aaaagtacaa gctattaaaa atcagattga aaagttttga gaaaatgtta tttttactga
+     3661 aagcaagcag tggcctataa agaacattct taggagcctt ttctatttgc gttcaaaact
+     3721 gtgtgttctc tttctattcc tatttgatag tttgagtcat ggtcttagat attagctatt
+     3781 tgtgagagga aactggtttg taacaatact gcaaatagaa accccatttc tactgaacat
+     3841 cctagtttta aacagaagaa aaactgtaat cctggggttg gtatgtagga ggtctatcct
+     3901 gcagaataag ttgatacatt agtacctgat ttcatatctt acatatttat ttgagctgaa
+     3961 cattagtttg tagtgtaact attagtaaaa atagagaaac acagcatact gttcattaat
+     4021 agtattttaa aaaaattgtt tttcaaatgt caccaataaa agttttggca ggaagcttgt
+     4081 tgcggcattg atctaacctt tttccccccc atttcagttg cagtttttgt agaatggctt
+     4141 tttctttttc ctcttaagag ttctattctt caggtagata atttttcaaa tgtgaattat
+     4201 cttttgtgtc tatattgata gctcttaaag gagtgaaaat ctaaaatagt aaatttcaat
+     4261 gttaagtgtc tgctttatgg gcatatataa aagtagacac atttcatttg ttaatttagt
+     4321 tgtgtgtgtg tgttaaaagg agctaatgct tattctgtta atgtaaactt ttgaagatct
+     4381 taagtgtatt gctctttcat cttaaacact ttcgaggatt tgcagtgcgt ctagcaccta
+     4441 gattacagcc aggaacattg gttaagaact gttggaaaca aaactaaaag caaactcaac
+     4501 atatgtgatg tttatggccc tcagatcctt agtattgtgt gattttcccc cgttaacatg
+     4561 tctttctaaa attgtctatt aaagcagagg aaatacctgc caaaggaagt atgtattgca
+     4621 ttaatcaggg cataactaat attctcctgt tcagaataat acttatttac gtgtgaaagc
+     4681 aacatggatg tgattcccaa cacagaattt tcatgaccct tttattgtat acaaataaat
+     4741 accataacag ttacttggtt agacatcaaa tctgtgtgca tgactatgtg cttatccact
+     4801 taagacaata ggtaaaaggg gatctgagaa attatgtaat agggagtggg aataaaacta
+     4861 cttaattcct gtgggcaggt tatattttaa gttcaaatgc attgctttaa cctttggtta
+     4921 cttttattct gttaaacaga attgaagaaa gagtattata ccagagtgta gtaggctagg
+     4981 gtgattgtaa gaactctgta atagaatgtc attgtggatg ttaccttttt cagatccaag
+     5041 catataaaaa gcctgtatat tttttaaaaa cacatcttaa ctccacgctt tacgatatta
+     5101 taaaagttga atggttcctc ttggtaagga tatttgctta caagtgctag gaaataactc
+     5161 actgatacct gcgttaacat actttgtttt gcctagagag gggcaataaa aatgaaccaa
+     5221 aggatatttc cagaaaggat taagaaagct gtttaagaag gccatgactc tttaggtgtg
+     5281 tatgtgtacc tttcagcatc ctaggaattt ttatactaaa agcaaaatgt tttttccagt
+     5341 tagtcttctt caaggaatta ctattgttcc ttttgtcaca ggtaaaatca gtgttgggaa
+     5401 ttataatttg agaaaaatat tacccagtaa cattgaatgt agatggctaa acgattctta
+     5461 ctcagtgtga tgtataatga tgcaacaggg acccttgtaa attgtcatac gccaataaaa
+     5521 tgtcacaagt aataactgct gttgtttgtt tacctgtgtc tatttcacac atcttatttc
+     5581 tgtggcctat tttagaatat cagcgcatct gttaggaaga ttactggtgt ggtaaggctt
+     5641 gataaatgct ttataaactc cctcaaacct ttctttactg tttttttgtt ttgtcttgtt
+     5701 tttgtttttg tttttgtttt tgtttttgtt tttgtttttc ccttgtctcc cctgggaaaa
+     5761 tgggaaattt tacagttggt aaatctaagc caaaattatt ttgaaataaa ggaattctgg
+     5821 atgtccagtt tagtcctcgt tttcttacgt taatctggga ccttatcacc cataatatgg
+     5881 tgattacttc tctttctaaa aacatagtag ctagtaaata agtaaaaaga attgtctttt
+     5941 cattcacttt aagtaagatg tggtataatt cttaccatgt gccatcctgt cagttttaac
+     6001 aaagcatttt cacagaaatt tgtgtactaa gacaaactga cacattttga ctcatacaaa
+     6061 tggcaaatta gtccttaaaa attctgtgag agaaataact ctgtgtgtac atacatatgc
+     6121 atgtaaagtg ttgtgtaaga tcattggtag cttaattata ctggataatt gtaatgttat
+     6181 atacaaattt cttatataaa agtatgctgc attattaaca tttgtttaac ttttcttatt
+     6241 tttctttttc tgggtttcaa ctggaatccc attggtgggg atgtacctta agtttccttg
+     6301 tggaataata gactttcaca tccagaaaga gaagttcaga ggcctttctc aatttacaga
+     6361 gttgaagagg aaaggcaaat ggaggaataa acttcattgt cattgggatt aatttggcta
+     6421 gactcaatct cttgagcctt aaaatgagaa agtaatatcc attacatgtt tagagttctc
+     6481 aaatagttga tactattatt aaatgtttca aattttattg gggtagatac taaaaattag
+     6541 tacactgtcc taatgaagtt taaatgaaca agttttacat ttcttaggat tcaggaatat
+     6601 atggaatcta gttgtattta attgacttga gagccacaga gattgtgttg atttatgagc
+     6661 tggactccta ttgttttaga aacatgcagt aatgattaac ttgtgtcaat gatggtaatg
+     6721 agaccaaact tgtacattta attaagggta ccagttcttt ttatgttact agactatacc
+     6781 ttggccttta aaaatgaatc tcactgatta aagagaacag gcattattag gatagcattc
+     6841 caccacaact agaaacattc aaataatgtg tcttaattgt aatctgtata taggaaaatt
+     6901 tttcctatgg atatttttgg tgttttacca cagtgaactg atttgtagca cttatgaagt
+     6961 gcagaaggta atattcttga aaatagaaaa aggttgggtg agcaggcttt aatgcctttc
+     7021 ccccaagaat atacatcgaa tttttcttaa tcttttgggg ttggccagct tccagatttc
+     7081 attaataatg agctctgcct ttaataaaag tacatgatca tagctacact gtatgtttag
+     7141 gtggtgtgaa atgatttata atcacagctt gaactgtgtt tgcttggtac tgtcatagtg
+     7201 attacaaatt tcatggaatg cgaagagcaa caataaataa aaaataccac tcaccctcca
+     7261 gaatagtgga ttatttgcta ccttgagtcc ttcactatgg aaaataattt ttcagtctca
+     7321 tttgtactag aagggaaaac taaactttct gttgagttct caggatactt gtaaggtggc
+     7381 cgtgaaaaag aatgttaaat gcactttgaa ttatttattt atttatttat ttatttattt
+     7441 atttatttat tgagatggag tcttacccag actagagtgc agtggctcga gctc
+//
+

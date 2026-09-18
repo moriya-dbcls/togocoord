@@ -1,0 +1,332 @@
+LOCUS       NM_012234               4662 bp    mRNA    linear   PRI 12-SEP-2026
+DEFINITION  Homo sapiens RING1 and YY1 binding protein (RYBP), mRNA.
+ACCESSION   NM_012234
+VERSION     NM_012234.7
+KEYWORDS    RefSeq; MANE Select.
+SOURCE      Homo sapiens (human)
+  ORGANISM  Homo sapiens
+            Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi;
+            Mammalia; Eutheria; Euarchontoglires; Primates; Haplorrhini;
+            Catarrhini; Hominidae; Homo.
+REFERENCE   1  (bases 1 to 4662)
+  AUTHORS   Schaffer,L.V., Hu,M., Qian,G., Moon,K.M., Pal,A., Soni,N.,
+            Latham,A.P., Pontano Vaites,L., Tsai,D., Mattson,N.M., Licon,K.,
+            Bachelder,R., Cesnik,A., Gaur,I., Le,T., Leineweber,W., Palar,A.,
+            Pulido,E., Qin,Y., Zhao,X., Churas,C., Lenkiewicz,J., Chen,J.,
+            Ono,K., Pratt,D., Zage,P., Echeverria,I., Sali,A., Harper,J.W.,
+            Gygi,S.P., Foster,L.J., Huttlin,E.L., Lundberg,E. and Ideker,T.
+  TITLE     Multimodal cell maps as a foundation for structural and functional
+            genomics
+  JOURNAL   Nature 642 (8066), 222-231 (2025)
+   PUBMED   40205054
+  REMARK    Erratum:[Nature. 2025 Oct;646(8086):E16. doi:
+            10.1038/s41586-025-09648-x. PMID: 41039152]
+REFERENCE   2  (bases 1 to 4662)
+  AUTHORS   Chen,X., Liu,W., Li,T., Xia,W. and Chen,D.
+  TITLE     Glucose-induced RYBP suppresses tumor cell aerobic glycolysis and
+            migration
+  JOURNAL   Biochem Biophys Res Commun 719, 150089 (2024)
+   PUBMED   38735205
+  REMARK    GeneRIF: Glucose-induced RYBP suppresses tumor cell aerobic
+            glycolysis and migration.
+REFERENCE   3  (bases 1 to 4662)
+  AUTHORS   Ciapponi,M., Karlukova,E., Schkolziger,S., Benda,C. and Muller,J.
+  TITLE     Structural basis of the histone ubiquitination read-write mechanism
+            of RYBP-PRC1
+  JOURNAL   Nat Struct Mol Biol 31 (7), 1023-1027 (2024)
+   PUBMED   38528151
+  REMARK    GeneRIF: Structural basis of the histone ubiquitination read-write
+            mechanism of RYBP-PRC1.
+            Erratum:[Nat Struct Mol Biol. 2025 Sep;32(9):1840. doi:
+            10.1038/s41594-025-01674-7. PMID: 40866579]
+REFERENCE   4  (bases 1 to 4662)
+  AUTHORS   Araujo-Abad,S., Rizzuti,B., Vidal,M., Abian,O., Farez-Vidal,M.E.,
+            Velazquez-Campoy,A., de Juan Romero,C. and Neira,J.L.
+  TITLE     Unveiling the Binding between the Armadillo-Repeat Domain of
+            Plakophilin 1 and the Intrinsically Disordered Transcriptional
+            Repressor RYBP
+  JOURNAL   Biomolecules 14 (5), 561 (2024)
+   PUBMED   38785968
+  REMARK    GeneRIF: Unveiling the Binding between the Armadillo-Repeat Domain
+            of Plakophilin 1 and the Intrinsically Disordered Transcriptional
+            Repressor RYBP.
+REFERENCE   5  (bases 1 to 4662)
+  AUTHORS   Cui,W., Huang,Z., Jin,S.G., Johnson,J., Lau,K.H., Hostetter,G. and
+            Pfeifer,G.P.
+  TITLE     Deficiency of the Polycomb Protein RYBP and TET Methylcytosine
+            Oxidases Promotes Extensive CpG Island Hypermethylation and
+            Malignant Transformation
+  JOURNAL   Cancer Res 83 (15), 2480-2495 (2023)
+   PUBMED   37272752
+  REMARK    GeneRIF: Deficiency of the Polycomb Protein RYBP and TET
+            Methylcytosine Oxidases Promotes Extensive CpG Island
+            Hypermethylation and Malignant Transformation.
+REFERENCE   6  (bases 1 to 4662)
+  AUTHORS   Schlisio,S., Halperin,T., Vidal,M. and Nevins,J.R.
+  TITLE     Interaction of YY1 with E2Fs, mediated by RYBP, provides a
+            mechanism for specificity of E2F function
+  JOURNAL   EMBO J 21 (21), 5775-5786 (2002)
+   PUBMED   12411495
+  REMARK    GeneRIF: interacts specifically with the E2F2 and E2F3 family
+            members, dependent on the marked box domain in these proteins
+REFERENCE   7  (bases 1 to 4662)
+  AUTHORS   Sawa,C., Yoshikawa,T., Matsuda-Suzuki,F., Delehouzee,S., Goto,M.,
+            Watanabe,H., Sawada,J., Kataoka,K. and Handa,H.
+  TITLE     YEAF1/RYBP and YAF-2 are functionally distinct members of a
+            cofactor family for the YY1 and E4TF1/hGABP transcription factors
+  JOURNAL   J Biol Chem 277 (25), 22484-22490 (2002)
+   PUBMED   11953439
+  REMARK    GeneRIF: YEAF1/RYBP and YAF-2 are functionally distinct members of
+            a cofactor family for the YY1 and E4TF1/hGABP transcription
+            factors.
+REFERENCE   8  (bases 1 to 4662)
+  AUTHORS   Zheng,L., Schickling,O., Peter,M.E. and Lenardo,M.J.
+  TITLE     The death effector domain-associated factor plays distinct
+            regulatory roles in the nucleus and cytoplasm
+  JOURNAL   J Biol Chem 276 (34), 31945-31952 (2001)
+   PUBMED   11395500
+REFERENCE   9  (bases 1 to 4662)
+  AUTHORS   Trimarchi,J.M., Fairchild,B., Wen,J. and Lees,J.A.
+  TITLE     The E2F6 transcription factor is a component of the mammalian
+            Bmi1-containing polycomb complex
+  JOURNAL   Proc Natl Acad Sci U S A 98 (4), 1519-1524 (2001)
+   PUBMED   11171983
+REFERENCE   10 (bases 1 to 4662)
+  AUTHORS   Garcia,E., Marcos-Gutierrez,C., del Mar Lorente,M., Moreno,J.C. and
+            Vidal,M.
+  TITLE     RYBP, a new repressor protein that interacts with components of the
+            mammalian Polycomb complex, and with the transcription factor YY1
+  JOURNAL   EMBO J 18 (12), 3404-3418 (1999)
+   PUBMED   10369680
+COMMENT     VALIDATED REFSEQ: This record has undergone validation or
+            preliminary review. The reference sequence was derived from
+            AC255560.1.
+            
+            On Mar 30, 2023 this sequence version replaced NM_012234.6.
+            
+            Publication Note:  This RefSeq record includes a subset of the
+            publications that are available for this gene. Please see the Gene
+            record to access additional publications.
+            
+            ##Evidence-Data-START##
+            RNAseq introns :: single sample supports all introns SAMN03267754
+                              [ECO:0000348]
+            ##Evidence-Data-END##
+            
+            ##RefSeq-Attributes-START##
+            RefSeq Select criteria :: based on manual assertion, conservation,
+                                      expression, longest protein
+            ##RefSeq-Attributes-END##
+            COMPLETENESS: complete on the 3' end.
+PRIMARY     REFSEQ_SPAN         PRIMARY_IDENTIFIER PRIMARY_SPAN        COMP
+            1-215               AC255560.1         93389-93603         c
+            216-341             AC255560.1         92497-92622         c
+            342-518             AC255560.1         25388-25564         c
+            519-617             AC255560.1         25177-25275         c
+            618-4662            AC255560.1         20730-24774         c
+FEATURES             Location/Qualifiers
+     source          1..4662
+                     /organism="Homo sapiens"
+                     /mol_type="mRNA"
+                     /db_xref="taxon:9606"
+                     /chromosome="3"
+                     /map="3p13"
+     gene            1..4662
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="RING1 and YY1 binding protein"
+                     /db_xref="GeneID:23429"
+                     /db_xref="HGNC:HGNC:10480"
+                     /db_xref="MIM:607535"
+     exon            1..215
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /inference="alignment:Splign:2.1.0"
+     CDS             184..870
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="YY1 and E4TF1 associated factor 1; death effector
+                     domain-associated factor; ring1 interactor RYBP;
+                     apoptin-associating protein 1; DED-associated factor"
+                     /codon_start=1
+                     /product="RING1 and YY1-binding protein"
+                     /protein_id="NP_036366.3"
+                     /db_xref="GeneID:23429"
+                     /db_xref="HGNC:HGNC:10480"
+                     /db_xref="MIM:607535"
+                     /translation="MTMGDKKSPTRPKRQAKPAADEGFWDCSVCTFRNSAEAFKCSIC
+                     DVRKGTSTRKPRINSQLVAQQVAQQYATPPPPKKEKKEKVEKQDKEKPEKDKEISPSV
+                     TKKNTNKKTKPKSDILKDPPSEANSIQSANATTKTSETNHTSRPRLKNVDRSTAQQLA
+                     VTVGNVTVIITDFKEKTRSSSTSSSTVTSSAGSEQQNQSSSGSESTDKGSSRSSTPKG
+                     DMSAVNDESF"
+     misc_feature    184..246
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q8N488.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     misc_feature    376..651
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q8N488.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     misc_feature    478..480
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:20068231,
+                     ECO:0007744|PubMed:21406692, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q8N488.2);
+                     phosphorylation site"
+     misc_feature    550..552
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q8N488.2); phosphorylation site"
+     misc_feature    562..564
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:19690332,
+                     ECO:0007744|PubMed:23186163; propagated from
+                     UniProtKB/Swiss-Prot (Q8N488.2); phosphorylation site"
+     misc_feature    571..573
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:18669648,
+                     ECO:0007744|PubMed:19690332, ECO:0007744|PubMed:23186163;
+                     propagated from UniProtKB/Swiss-Prot (Q8N488.2);
+                     phosphorylation site"
+     misc_feature    610..861
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q8N488.2);
+                     Region: Interaction with GABPB1 and FANK1.
+                     /evidence=ECO:0000269|PubMed:11953439,
+                     ECO:0000269|PubMed:27060496"
+     misc_feature    697..867
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="propagated from UniProtKB/Swiss-Prot (Q8N488.2);
+                     Region: Disordered. /evidence=ECO:0000256|SAM:MobiDB-lite"
+     misc_feature    862..864
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:21406692; propagated from
+                     UniProtKB/Swiss-Prot (Q8N488.2); phosphorylation site"
+     exon            216..341
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /inference="alignment:Splign:2.1.0"
+     exon            342..518
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /inference="alignment:Splign:2.1.0"
+     exon            519..617
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /inference="alignment:Splign:2.1.0"
+     exon            618..4662
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /inference="alignment:Splign:2.1.0"
+     regulatory      4635..4640
+                     /regulatory_class="polyA_signal_sequence"
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="hexamer: AATAAA"
+     regulatory      4643..4648
+                     /regulatory_class="polyA_signal_sequence"
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="hexamer: AGTAAA"
+     polyA_site      4653
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+                     /note="major polyA site"
+     polyA_site      4662
+                     /gene="RYBP"
+                     /gene_synonym="AAP1; APAP-1; DEDAF; YEAF1"
+ORIGIN      
+        1 agtctcgtcc ggagactggc agcggcggcg gcggcggcgg ccggagctcg agccccagcg
+       61 gctgagggcg ggcgggcggg cgcgggggag ggaggggggc cggtccgcga cgactccccg
+      121 gacggcgttt ctcctccgag cggcgccggt ttcggcttgg ggggggcggg gtacagccca
+      181 tccatgacca tgggcgacaa gaagagcccg accaggccaa aaagacaagc gaaacctgcc
+      241 gcagacgaag ggttttggga ttgtagcgtc tgcaccttca gaaacagtgc tgaagccttt
+      301 aaatgcagca tctgcgatgt gaggaaaggc acctccacca gaaaacctcg gatcaattct
+      361 cagctggtgg cacaacaagt ggcacaacag tatgccaccc caccaccccc taaaaaggag
+      421 aagaaggaga aagttgaaaa gcaggacaaa gagaaacctg agaaagacaa ggaaattagt
+      481 cctagtgtta ccaagaaaaa taccaacaag aaaaccaaac caaagtctga cattctgaaa
+      541 gatcctccta gtgaagcaaa cagcatacag tctgcaaatg ctacaacaaa gaccagcgaa
+      601 acaaatcaca cctcaaggcc ccggctgaaa aacgtggaca ggagcactgc acagcagttg
+      661 gcagtaactg tgggcaacgt caccgtcatt atcacagact ttaaggaaaa gactcgctcc
+      721 tcatcgacat cctcatccac agtgacctcc agtgcagggt cagaacagca gaaccagagc
+      781 agctcggggt cagagagcac agacaagggc tcctcccgtt cctccacgcc aaagggcgac
+      841 atgtcagcag tcaatgatga atctttctga aattgcacat ggaattgtga aaactatgaa
+      901 tcagggtatg aaattcaaaa cctccacctg cccatgctgc ttgcatccct ggagaatctt
+      961 ctgtggacat cgacctctta gtgatgctgc caggataatt tctgcttgcc atgggcatct
+     1021 ggccaccaag gaatttcgca ccctgacgat tactcttgac acttttatgt attccattgt
+     1081 tttatatgat tttcctaaca atcatttata attggatgtg ctcctgaatc tactttttat
+     1141 aaaaaaaaaa aaaatctgct gtgcacaatt ttccatgtac attacaactg gttttttgtt
+     1201 tttgttttgt tgccggtggg gagggctggg agggggaggg aacttttatt tattgtgttc
+     1261 acaaactcca tcctttcagc atatcctttt aagtttagtt ctttcttcca gttatactat
+     1321 gtactatcag ttttgatata actatatata tataaatata aaattatata taaagggtta
+     1381 tttgaaacca atccatggca acgctggtgc ttgatacact gtgaagtgaa tacaacattg
+     1441 aacagttaca gatctgggac agtcccttct atgaaagtgc tgaaatttaa ttaaaatcag
+     1501 tcttacatga agtatgttcc aatccatgtg ggaacttgac tctctcatct gtctaaagag
+     1561 tactggacga tataaaaata tatatttttt aaacaatgtg atctcaaatt taaagactgc
+     1621 tccagatagc ctgcatttgc aatggaataa ctgacaaatc acaagtggtt tagttgggca
+     1681 gggctttgat cattcaaaag taactaaagt agctccagaa tgccaagtat tcgtgtaaat
+     1741 tacggttaca tgttatcatt tgctgttctt acataagcac tcatgaaaat atggtattct
+     1801 gtaacttgaa ttccatccat tttccagacg tctactcatg tctgaggtaa atctagaaat
+     1861 tgtcttagtt ttaggattga aacagtctat aaactgtatt tttggtccat ccaggaagct
+     1921 agtcccttgt ttctcctttc tacatgacat tgcagtggtg gtttctgtaa ttaaaatttg
+     1981 tttgcctcat gtccctttgt ctgataaacc ttcactctac cgattcagtt gtgagcattc
+     2041 tttttttcct tctcaaaacc tactatgatt tgttttactg aacaaaggtt atcaaccaca
+     2101 catccagtcc tgacatggag cttttcagtg tttggagaca tttctcaatc ccctgctgtg
+     2161 gtaggaactc cagtggtgaa cggcttgcgc gcctgcagcc agagttgcag ggaaagctcg
+     2221 tacttactgc gagcagcatg taatcttttt tcttcctgga cataaagata gcttgagtaa
+     2281 actgttctat ttcattctct tcactctttt tactgtcttg caaaaaaaaa aataataata
+     2341 ataataatca aagaccacta ataagattcc acctctcctt attaaaataa ttttttaaaa
+     2401 ttttgttttg cttttgtttg gatgtggggt ctctcttcta tttgactttt acatttagat
+     2461 acagagtttg tagtacttca gagacatttc aagcatgaga atttgaggtt acctctcttt
+     2521 atttgacctt tagggactca cgggagggca gcctgatttg taatgaagca ccacattttg
+     2581 gtgttaaaaa cctggtttgc ttaataatag cagtaatttc tgtctgtgga ggcaacaaat
+     2641 aaaaaaatta acagcttgaa ttgagtagcc aacaggaaag gttcctttca catttacatt
+     2701 aaaactattc tgtagtcact aatgtaccat aatttaaatt cttttctcaa aggtatagat
+     2761 tataaagcag tgccatttgt tgctgtggtc ctattctcaa atgcatggac aatgttcccc
+     2821 cctttttaaa ataatgcttg tgtctgggat gcaagctttg cttatctttt taaatacatt
+     2881 tttaaagtat ttattaatga accaaaggaa atcagatgct ttctataagc atcagaatat
+     2941 ataatacata gtgatttgac tatgaatttt aaatccacat tttaatattg gtgggatatt
+     3001 gcaaagacat tccttctaaa gttttaatat tccttttatt aagggtctca gggagggtaa
+     3061 attagtcagc catatttatt ttccagaggt ttaagaaatt gctgttttta actttttgaa
+     3121 aaaacttaaa tgccaccaaa ctcatgtagg ttgcactgct tattgaacca ataactgttg
+     3181 gtatgcactt tgttcagaca cactgtgtac tttttcaaaa actagtttca tgtaaagtga
+     3241 ttggacccca tagattagtg gaaaaagctg attaaccagc tactcatagg ctgctaattc
+     3301 attcatgcca atgttttggt ttttcagttt tgcctccgtg ataaattaaa gaatggggag
+     3361 gggtgaagga aggggaagaa gattgcttta gaacaagtgg catgaaatta ccatctttgt
+     3421 agaaaccgca gctaacagtg ggagttatct aagcaatcag atgttacagg gccagccctt
+     3481 tagctgctgt ggtgtattct gttgggtagt gaggtagtag gtactttata gacttttaat
+     3541 tttggaaatt gatgacatcc ctcaggcatg tattctggaa atggaattcc tgtaacttcc
+     3601 tgtgtctgca gtatgcccta caattagtag gcagcgtgta aaaacactag tgtagattat
+     3661 aaagatatac attaaaagag gaccagaaat acttggtatt cagtggcaca gaaagcaggt
+     3721 taaacaaaca aaaagcacag tgttacgctt gcaagtttcc atttgtttta ataccacgca
+     3781 atctttcaca ctcgtgcgtg tgcgcgcaca cagagcttac ctgacttgct ctgcttgagt
+     3841 catgcagtta caaaaaaaaa gacatcttga cacccacaca atattctaat caaaaccttt
+     3901 cagtttcaat ctggatattt aaaaacattg gcagaagctt ctgtgagttt agttccacta
+     3961 agatgtttca cctgccttat caagaccatt ctcagtctac ttttttaagc taccgtatct
+     4021 taaattattg aaaatttatt aattgctgaa tatataataa cctttgcttg tatgtaaccg
+     4081 aaaatggttt aagagccaac atttagagta tgacaatgga gctgaacagt ttttaatgcg
+     4141 caagcagttc tgttcttgtg tatgacttgt aaccttaatt tactgtgtaa agatggttac
+     4201 attatttcct tagctttgtt tgttggagac aaatagagaa tgcttgttaa gtatgtcaaa
+     4261 acaatcttat cttgtgaatt tttgttaatg tattatacga gctatatttt tcatttgccc
+     4321 agaaagacag cttgtataac gcttttggaa gtttctgctc tgtaatgtct ttagagctga
+     4381 cagtctgtta ggtttgtttt tttcttcatg ctaaagtgtc agttggtggt tttgtgaact
+     4441 ggtcaaaaat tcacaggtct taaatgtttt gggggaaatt tatattggac actgctcttt
+     4501 gtctagcaaa taaaagatgt taatatattc ctgttactgg catgtgcacg actatgttat
+     4561 tagaagccac tttatcattt tcctgcttta aatagaaatg tctatttatg aattctgctt
+     4621 gtagtttttt cacaaataaa atagtaaaat ttacattgga aa
+//
+

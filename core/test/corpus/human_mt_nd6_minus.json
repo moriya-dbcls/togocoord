@@ -1,0 +1,15 @@
+{
+  "id": "human_mt_nd6_minus",
+  "title": "Human mtDNA ND6 on the minus strand",
+  "source": "NCBI nuccore NC_012920.1 feature table (retrieved 2026-09-18): ND6 CDS complement(14149..14673), protein_id YP_003024037.1, 174 aa",
+  "mappings": [
+    { "kind": "cds", "protein": "refseq:YP_003024037.1", "location": "refseq:NC_012920.1:complement(14149..14673)", "codonStart": 1, "aaLength": 174 }
+  ],
+  "cases": [
+    { "input": "refseq:YP_003024037.1:1", "expect": { "targets": ["refseq:NC_012920.1:complement(14671..14673)"], "unmapped": null } },
+    { "input": "refseq:YP_003024037.1:174", "expect": { "targets": ["refseq:NC_012920.1:complement(14152..14154)"], "unmapped": null } },
+    { "note": "plus-strand genome range -> reverse protein; stop codon truncation becomes '>' on the protein", "input": "refseq:NC_012920.1:14150..14160", "direction": "inverse", "expect": { "targets": ["refseq:YP_003024037.1:172..>174"], "orientation": ["reverse"], "unmapped": "refseq:NC_012920.1:14150..14151" } },
+    { "input": "refseq:NC_012920.1:14153", "direction": "inverse", "expect": { "targets": ["refseq:YP_003024037.1:174c2"], "unmapped": null } },
+    { "note": "complement input on minus-strand gene -> forward protein", "input": "refseq:NC_012920.1:complement(14152..14157)", "direction": "inverse", "expect": { "targets": ["refseq:YP_003024037.1:173..174"], "orientation": ["forward"], "unmapped": null } }
+  ]
+}

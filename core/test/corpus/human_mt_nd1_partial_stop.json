@@ -1,0 +1,12 @@
+{
+  "id": "human_mt_nd1_partial_stop",
+  "title": "Human mtDNA ND1: stop codon completed by polyadenylation",
+  "source": "NCBI nuccore NC_012920.1 feature table (retrieved 2026-09-18): ND1 CDS 3307..4262, transl_except=(pos:4261..4262,aa:TERM), protein_id YP_003024026.1, 318 aa",
+  "mappings": [
+    { "kind": "cds", "protein": "refseq:YP_003024026.1", "location": "refseq:NC_012920.1:3307..4262", "codonStart": 1, "aaLength": 318 }
+  ],
+  "cases": [
+    { "input": "refseq:YP_003024026.1:318", "expect": { "targets": ["refseq:NC_012920.1:4258..4260"], "unmapped": null } },
+    { "input": "refseq:NC_012920.1:4255..4262", "direction": "inverse", "expect": { "targets": ["refseq:YP_003024026.1:317..>318"], "unmapped": "refseq:NC_012920.1:4261..4262" } }
+  ]
+}

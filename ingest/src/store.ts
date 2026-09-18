@@ -1,0 +1,384 @@
+// SQLite store (node:sqlite) with R*Tree interval indexes (scaling §4).
+import { existsSync, rmSync } from "node:fs";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
+import {
+  createContext,
+  Mapping,
+  mapLocation,
+  NamespaceRegistry,
+  type Block,
+  type CoordContext,
+  type Location,
+  type MapResult,
+  type Unit,
+} from "@togocoord/core";
+import { ownString } from "./common.ts";
+import { Lru } from "./lru.ts";
+import type { Annotation, Edge, Provenance, SequenceRecord, Sink, Validation } from "./model.ts";
+
+export const STORE_SCHEMA_VERSION = "2";
+
+const SCHEMA = `
+CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE sequence(
+  id INTEGER PRIMARY KEY, ref TEXT UNIQUE NOT NULL, moltype TEXT, unit TEXT, length INTEGER,
+  topology TEXT, taxon INTEGER, organism TEXT, digest TEXT, provenance TEXT);
+CREATE TABLE edge(
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, from_seq INTEGER NOT NULL, to_seq INTEGER NOT NULL,
+  location TEXT, attributes TEXT, provenance TEXT, status TEXT, detail TEXT, basis TEXT);
+CREATE TABLE block(
+  id INTEGER PRIMARY KEY, edge INTEGER NOT NULL, src_seq INTEGER NOT NULL, src INTEGER NOT NULL,
+  tgt_seq INTEGER NOT NULL, tgt INTEGER NOT NULL, len INTEGER NOT NULL, rev INTEGER NOT NULL);
+CREATE TABLE annotation(
+  id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, start INTEGER NOT NULL, "end" INTEGER NOT NULL,
+  type TEXT, location TEXT, attributes TEXT, provenance TEXT);
+CREATE TABLE warning(id INTEGER PRIMARY KEY, message TEXT);
+`;
+
+/** Built after bulk loading, from rows sorted by position. Intervals are stored half-open as [lo, hi). */
+const INDEXES = `
+CREATE VIRTUAL TABLE block_src USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
+INSERT INTO block_src SELECT id, src_seq, src_seq, src, src + len FROM block ORDER BY src_seq, src;
+CREATE VIRTUAL TABLE block_tgt USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
+INSERT INTO block_tgt SELECT id, tgt_seq, tgt_seq, tgt, tgt + len FROM block ORDER BY tgt_seq, tgt;
+CREATE VIRTUAL TABLE annotation_idx USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
+INSERT INTO annotation_idx SELECT id, seq, seq, start, max("end", start + 1) FROM annotation ORDER BY seq, start;
+CREATE INDEX edge_from ON edge(from_seq);
+CREATE INDEX edge_to ON edge(to_seq);
+CREATE INDEX block_edge ON block(edge);
+ANALYZE;
+`;
+
+export interface SqliteSinkOptions {
+  /** Replace an existing file (default: refuse). */
+  overwrite?: boolean;
+  /** Statements per transaction. */
+  batch?: number;
+}
+
+/** Bulk loader. Call `close()` to commit and build the indexes. */
+export class SqliteSink implements Sink {
+  readonly #db: DatabaseSync;
+  readonly #seqIds = new Map<string, number>();
+  readonly #batch: number;
+  #pending = 0;
+  readonly counts = { sequence: 0, edge: 0, block: 0, annotation: 0, warning: 0 };
+  readonly validation: Record<string, number> = {};
+  readonly mismatches: string[] = [];
+  readonly #s: Record<"newSeq" | "fillSeq" | "edge" | "block" | "annotation" | "warning", StatementSync>;
+
+  constructor(path: string, options: SqliteSinkOptions = {}) {
+    if (existsSync(path)) {
+      if (!options.overwrite) throw new Error(`${path} exists; pass overwrite to replace it`);
+      rmSync(path);
+    }
+    this.#batch = options.batch ?? 50_000;
+    this.#db = new DatabaseSync(path);
+    this.#db.exec("PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE; PRAGMA cache_size=-65536;");
+    this.#db.exec(SCHEMA);
+    this.#s = {
+      newSeq: this.#db.prepare("INSERT INTO sequence(ref) VALUES (?) RETURNING id"),
+      fillSeq: this.#db.prepare(
+        "UPDATE sequence SET moltype=?, unit=?, length=?, topology=?, taxon=?, organism=?, digest=?, provenance=? WHERE id=? AND moltype IS NULL",
+      ),
+      edge: this.#db.prepare(
+        "INSERT INTO edge(kind, from_seq, to_seq, location, attributes, provenance, status, detail, basis) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
+      ),
+      block: this.#db.prepare("INSERT INTO block(edge, src_seq, src, tgt_seq, tgt, len, rev) VALUES (?,?,?,?,?,?,?)"),
+      annotation: this.#db.prepare('INSERT INTO annotation(seq, start, "end", type, location, attributes, provenance) VALUES (?,?,?,?,?,?,?)'),
+      warning: this.#db.prepare("INSERT INTO warning(message) VALUES (?)"),
+    };
+    this.#db.exec("BEGIN");
+  }
+
+  #seq(ref: string): number {
+    let id = this.#seqIds.get(ref);
+    if (id === undefined) {
+      id = Number((this.#s.newSeq.get(ref) as { id: number }).id);
+      this.#seqIds.set(ownString(ref), id);
+    }
+    return id;
+  }
+
+  #tick(n = 1): void {
+    this.#pending += n;
+    if (this.#pending >= this.#batch) {
+      this.#db.exec("COMMIT; BEGIN");
+      this.#pending = 0;
+    }
+  }
+
+  sequence(r: SequenceRecord): void {
+    this.counts.sequence++;
+    this.#s.fillSeq.run(
+      r.moltype, r.unit, r.length, r.topology ?? null, r.taxon ?? null, r.organism ?? null, r.digest ?? null,
+      JSON.stringify(r.provenance), this.#seq(r.ref),
+    );
+    this.#tick();
+  }
+
+  edge(e: Edge): void {
+    this.counts.edge++;
+    this.validation[e.validation.status] = (this.validation[e.validation.status] ?? 0) + 1;
+    if (e.validation.status === "mismatch") this.mismatches.push(`${e.from} -> ${e.to}: ${e.validation.detail}`);
+    const row = this.#s.edge.get(
+      e.kind, this.#seq(e.from), this.#seq(e.to), e.location ?? null, JSON.stringify(e.attributes), JSON.stringify(e.provenance),
+      e.validation.status, e.validation.detail ?? null, e.validation.basis ?? null,
+    ) as { id: number };
+    for (const b of e.blocks) {
+      this.#s.block.run(row.id, this.#seq(b.srcRef), b.src, this.#seq(b.tgtRef), b.tgt, b.len, b.rev ? 1 : 0);
+    }
+    this.counts.block += e.blocks.length;
+    this.#tick(1 + e.blocks.length);
+  }
+
+  annotation(a: Annotation): void {
+    this.counts.annotation++;
+    this.#s.annotation.run(
+      this.#seq(a.extent.ref), a.extent.start, a.extent.end, a.type, a.location, JSON.stringify(a.attributes), JSON.stringify(a.provenance),
+    );
+    this.#tick();
+  }
+
+  warning(message: string): void {
+    this.counts.warning++;
+    this.#s.warning.run(message);
+    this.#tick();
+  }
+
+  /** Commit, build R*Tree and B-tree indexes, record metadata. */
+  close(meta: Record<string, string> = {}): void {
+    this.#db.exec("COMMIT");
+    this.#db.exec("BEGIN");
+    this.#db.exec(INDEXES);
+    const put = this.#db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)");
+    for (const [k, v] of Object.entries({ schema: STORE_SCHEMA_VERSION, created: new Date().toISOString(), ...meta })) put.run(k, v);
+    this.#db.exec("COMMIT");
+    this.#db.close();
+  }
+}
+
+export interface StoredEdge {
+  id: number;
+  kind: Edge["kind"];
+  from: string;
+  to: string;
+  location?: string;
+  attributes: Record<string, string>;
+  provenance: Provenance;
+  validation: Validation;
+}
+
+export interface StoredBlock extends Block {
+  edge: number;
+}
+
+interface BlockRow {
+  edge: number;
+  src_seq: number;
+  src: number;
+  tgt_seq: number;
+  tgt: number;
+  len: number;
+  rev: number;
+}
+
+export interface StoreOptions {
+  /** Entries per lookup cache (ref <-> id, units, edges); least recently used entries are dropped. */
+  cacheSize?: number;
+  /** SQLite page cache in KiB (reads beyond it are served by the OS file cache). */
+  pageCacheKiB?: number;
+}
+
+/** Read-only access for queries. Caches are bounded, so memory does not grow with the number of queries. */
+export class TogoCoordStore {
+  readonly path: string;
+  readonly #db: DatabaseSync;
+  readonly #refs: Lru<number, string>;
+  readonly #ids: Lru<string, number | null>;
+  readonly #units: Lru<string, Unit | null>;
+  readonly #edges: Lru<number, StoredEdge>;
+  readonly #s: Record<string, StatementSync>;
+
+  constructor(path: string, options: StoreOptions = {}) {
+    if (!existsSync(path)) throw new Error(`${path} does not exist`);
+    this.path = path;
+    this.#db = new DatabaseSync(path, { readOnly: true });
+    const schema = (this.#db.prepare("SELECT value FROM meta WHERE key = 'schema'").get() as { value: string } | undefined)?.value;
+    if (schema !== STORE_SCHEMA_VERSION) {
+      this.#db.close();
+      throw new Error(`${path}: store schema ${schema ?? "?"} is not supported (expected ${STORE_SCHEMA_VERSION}); rebuild it with togocoord-ingest`);
+    }
+    this.#db.exec(`PRAGMA cache_size=-${options.pageCacheKiB ?? 8192};`);
+    const n = options.cacheSize ?? 50_000;
+    this.#refs = new Lru(n);
+    this.#ids = new Lru(n);
+    this.#units = new Lru(n);
+    this.#edges = new Lru(n);
+    this.#s = {
+      edgeById: this.#db.prepare("SELECT * FROM edge WHERE id = ?"),
+      id: this.#db.prepare("SELECT id FROM sequence WHERE ref = ?"),
+      ref: this.#db.prepare("SELECT ref FROM sequence WHERE id = ?"),
+      seq: this.#db.prepare("SELECT * FROM sequence WHERE ref = ?"),
+      edgesOf: this.#db.prepare("SELECT * FROM edge WHERE from_seq = ? UNION ALL SELECT * FROM edge WHERE to_seq = ? AND from_seq <> to_seq"),
+      bySrc: this.#db.prepare(
+        "SELECT b.edge, b.src_seq, b.src, b.tgt_seq, b.tgt, b.len, b.rev FROM block_src r JOIN block b ON b.id = r.id WHERE r.seq_lo = ? AND r.seq_hi = ? AND r.lo < ? AND r.hi > ?",
+      ),
+      byTgt: this.#db.prepare(
+        "SELECT b.edge, b.src_seq, b.src, b.tgt_seq, b.tgt, b.len, b.rev FROM block_tgt r JOIN block b ON b.id = r.id WHERE r.seq_lo = ? AND r.seq_hi = ? AND r.lo < ? AND r.hi > ?",
+      ),
+      annotations: this.#db.prepare(
+        'SELECT a.* FROM annotation_idx r JOIN annotation a ON a.id = r.id WHERE r.seq_lo = ? AND r.seq_hi = ? AND r.lo < ? AND r.hi > ? ORDER BY a.start',
+      ),
+      meta: this.#db.prepare("SELECT key, value FROM meta"),
+    };
+  }
+
+  #id(ref: string): number | undefined {
+    let id = this.#ids.get(ref);
+    if (id === undefined) {
+      id = (this.#s.id!.get(ref) as { id: number } | undefined)?.id ?? null;
+      this.#ids.set(ref, id);
+    }
+    return id ?? undefined;
+  }
+
+  #ref(id: number): string {
+    let ref = this.#refs.get(id);
+    if (ref === undefined) {
+      ref = (this.#s.ref!.get(id) as { ref: string }).ref;
+      this.#refs.set(id, ref);
+    }
+    return ref;
+  }
+
+  meta(): Record<string, string> {
+    return Object.fromEntries((this.#s.meta!.all() as Array<{ key: string; value: string }>).map((r) => [r.key, r.value]));
+  }
+
+  sequence(ref: string): (Partial<SequenceRecord> & { ref: string }) | undefined {
+    const row = this.#s.seq!.get(ref) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    const out: Partial<SequenceRecord> & { ref: string } = { ref };
+    for (const k of ["moltype", "unit", "length", "topology", "taxon", "organism", "digest"] as const) {
+      if (row[k] !== null) (out as Record<string, unknown>)[k] = row[k];
+    }
+    if (typeof row.provenance === "string") out.provenance = JSON.parse(row.provenance);
+    return out;
+  }
+
+  unitOf(ref: string): Unit | undefined {
+    let unit = this.#units.get(ref);
+    if (unit === undefined) {
+      unit = (this.sequence(ref)?.unit as Unit | undefined) ?? null;
+      this.#units.set(ref, unit);
+    }
+    return unit ?? undefined;
+  }
+
+  /** Units from the store, then namespace defaults. */
+  context(registry = new NamespaceRegistry()): CoordContext {
+    return createContext({ registry, units: (ref) => this.unitOf(ref) });
+  }
+
+  /** Edges from or to `ref` (without blocks). */
+  edges(ref: string): StoredEdge[] {
+    const id = this.#id(ref);
+    if (id === undefined) return [];
+    return (this.#s.edgesOf!.all(id, id) as Array<Record<string, unknown>>).map((r) => this.#edgeRow(r));
+  }
+
+  /** One edge by id (cached). */
+  edge(id: number): StoredEdge | undefined {
+    const cached = this.#edges.get(id);
+    if (cached) return cached;
+    const row = this.#s.edgeById!.get(id) as Record<string, unknown> | undefined;
+    return row && this.#edgeRow(row);
+  }
+
+  #edgeRow(r: Record<string, unknown>): StoredEdge {
+    const e: StoredEdge = {
+      id: Number(r.id),
+      kind: r.kind as Edge["kind"],
+      from: this.#ref(Number(r.from_seq)),
+      to: this.#ref(Number(r.to_seq)),
+      attributes: JSON.parse(String(r.attributes)),
+      provenance: JSON.parse(String(r.provenance)),
+      validation: {
+        status: r.status as Validation["status"],
+        ...(r.detail !== null && { detail: String(r.detail) }),
+        ...(r.basis !== null && r.basis !== undefined && { basis: r.basis as NonNullable<Validation["basis"]> }),
+      },
+    };
+    if (r.location !== null) e.location = String(r.location);
+    this.#edges.set(e.id, e);
+    return e;
+  }
+
+  /**
+   * Blocks touching `[start, end)` of `ref`: `forward` blocks start on `ref`; `inverse` blocks end on `ref` and are
+   * returned inverted, so both kinds map away from `ref`.
+   */
+  blocksAt(ref: string, start: number, end: number, direction: "forward" | "inverse" | "both" = "both"): StoredBlock[] {
+    const id = this.#id(ref);
+    if (id === undefined) return [];
+    const out: StoredBlock[] = [];
+    if (direction !== "inverse") {
+      for (const r of this.#s.bySrc!.all(id, id, end, start) as unknown as BlockRow[]) {
+        out.push({ edge: r.edge, srcRef: this.#ref(r.src_seq), src: r.src, tgtRef: this.#ref(r.tgt_seq), tgt: r.tgt, len: r.len, rev: r.rev === 1 });
+      }
+    }
+    if (direction !== "forward") {
+      for (const r of this.#s.byTgt!.all(id, id, end, start) as unknown as BlockRow[]) {
+        out.push({ edge: r.edge, srcRef: this.#ref(r.tgt_seq), src: r.tgt, tgtRef: this.#ref(r.src_seq), tgt: r.src, len: r.len, rev: r.rev === 1 });
+      }
+    }
+    return out;
+  }
+
+  /** Mapping restricted to the blocks relevant for `loc` (one hop from its sequences). */
+  mappingFor(loc: Location, options: { direction?: "forward" | "inverse" | "both"; edges?: ReadonlySet<number> } = {}): Mapping {
+    const seen = new Set<string>();
+    const blocks: StoredBlock[] = [];
+    for (const seg of loc.segments) {
+      // A between-position needs both flanking units.
+      const [a, b] = seg.start === seg.end ? [seg.start - 1, seg.start + 1] : [seg.start, seg.end];
+      for (const blk of this.blocksAt(seg.ref, a, b, options.direction)) {
+        if (options.edges && !options.edges.has(blk.edge)) continue;
+        const key = `${blk.edge}|${blk.srcRef}|${blk.src}|${blk.tgtRef}|${blk.tgt}|${blk.len}|${blk.rev}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        blocks.push(blk);
+      }
+    }
+    return new Mapping(blocks);
+  }
+
+  /** Every sequence directly connected to `loc`, with the converted locations. */
+  neighbors(loc: Location, ctx: CoordContext = this.context()): MapResult {
+    return mapLocation(loc, this.mappingFor(loc), ctx);
+  }
+
+  annotations(ref: string, start: number, end: number): Array<Omit<Annotation, "extent">> {
+    const id = this.#id(ref);
+    if (id === undefined) return [];
+    return (this.#s.annotations!.all(id, id, Math.max(end, start + 1), start) as Array<Record<string, unknown>>).map((r) => ({
+      location: String(r.location),
+      type: String(r.type),
+      attributes: JSON.parse(String(r.attributes)),
+      provenance: JSON.parse(String(r.provenance)),
+    }));
+  }
+
+  counts(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const t of ["sequence", "edge", "block", "annotation", "warning"]) {
+      out[t] = Number((this.#db.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n);
+    }
+    return out;
+  }
+
+  close(): void {
+    this.#db.close();
+  }
+}

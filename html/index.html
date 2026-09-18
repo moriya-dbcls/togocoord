@@ -1,0 +1,50 @@
+<html>
+  <head>
+    <title>TogoCOORD</title>
+    <link rel="icon" href="assets/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="./assets/css/style.css">
+    <script language="javascript" src="./assets/js/togocoord.js" async></script>
+    <script type="module" src="https://togostanza.github.io/metastanza-devel/pagination-table.js" async></script>
+  </head>
+  <body>
+    <div id="header">
+      <h1 class="header_title"><span class="theme_color_font">T</span>ogo<span class="theme_color_font">C</span>OORD <span class="small theme_color_font">dev</span></h1>
+    </div>
+    <div id="main">
+      <div class="form">
+	<div class="input">
+	  <textarea cols="30" rows="10" placeholder="Input your location ID.&#10;e.g.&#10; Q9BYF1:60,&#10; AT2G33550:41..50" id="query" class="textarea_input"></textarea>
+	  <div class="buttons">
+	    <button id="submit" class="button button_1">Submit</button>
+	    <button id="reset" class="button button_2">Reset</button>
+	  </div>
+	</div>
+	<div class="example">
+	  <p class="example">Examples:</p>
+	  <button class="example" location="Q9BYF1-1:1..805">Protein</button>
+	  <button class="example" location="ENST00000531224:500..15000">Pre-mRNA</button>
+	  <button class="example" location="mrna#NM_014739:join(1..200,300..400)">mRNA</button>
+	</div>
+      </div>
+      <div id="tab">
+	<button class="tab tab_selected" id="convert">CONVERT</button>
+        <button class="tab tab_unselected" id="jsonld">JSON-LD</button>
+      </div>
+      <div id="result">
+	<div id="result_convert" class="result show">
+	  <div id="nested_div_0" class="flex margin_left_100">
+	  </div>
+	</div>
+	<div id="result_jsonld" class="result hidden">
+	  Prefix: <input id="prefix" type="text" size="30" placeholder="e.g. insdc">
+	  <div class="string_json margin_left_100">
+	    <pre id="output_jsonld" class="jsonld2"></pre>
+	  </div>
+	</div>
+      </div>
+    </div>
+  </body>
+</html>

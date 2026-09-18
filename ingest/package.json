@@ -1,0 +1,15 @@
+{
+  "name": "@togocoord/ingest",
+  "version": "0.1.0",
+  "description": "TogoCoord adapters: GenBank flat file / GFF3 -> sequences, mapping edges and annotations",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "bin": { "togocoord-ingest": "./src/cli.ts" },
+  "engines": { "node": ">=23.6" },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "@togocoord/core": "0.1.0" },
+  "license": "MIT"
+}

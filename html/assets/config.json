@@ -1,0 +1,51 @@
+{
+  "categories": [
+    {
+      "id": "genome",
+      "label": "Reference Genome"
+    },{
+      "id": "transcript",
+      "label": "Pre-mRNA"
+    },{
+      "id": "mrna",
+      "label": "mRNA"
+    },{
+      "id": "protein",
+      "label": "Protein"
+    },{
+      "id": "pdb",
+      "label": "PDB"
+    },{
+      "id": "exon",
+      "label": "EXON"
+    },{
+      "id": "contig",
+      "label": "Contig"
+    }
+  ],
+  "all": [
+    {"id": "genome"},
+    {"id": "contig"},
+    {"id": "transcript"},
+    {"id": "mrna"},
+    {"id": "protein"},
+    {"id": "pdb"},
+    {"id": "exon"}
+  ],
+  "protein": [
+    {"id": "genome", "api": "togocoord_convert_protein_genome"}, 
+    {"id": "transcript", "api": "togocoord_convert_protein_transcript"}, 
+    {"id": "mrna", "api": "togocoord_convert_protein_mrna"}, 
+    {"id": "pdb", "api": "togocoord_convert_protein_pdb"},
+    {"id": "exon", "api": "togocoord_convert_protein_exon"},
+    {"id": "contig", "api": "togocoord_convert_protein_contig"}
+  ],
+  "transcript": [
+     {"id": "protein", "api": "togocoord_convert_transcript_protein"}
+  ],
+  "mrna": [
+    {"id": "protein", "api": "togocoord_convert_mrna_protein"}
+  ]
+}
+
+    

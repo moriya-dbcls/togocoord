@@ -1,0 +1,279 @@
+LOCUS       NM_000581                899 bp    mRNA    linear   PRI 27-APR-2025
+DEFINITION  Homo sapiens glutathione peroxidase 1 (GPX1), transcript variant 1,
+            mRNA.
+ACCESSION   NM_000581
+VERSION     NM_000581.4
+KEYWORDS    RefSeq; MANE Select.
+SOURCE      Homo sapiens (human)
+  ORGANISM  Homo sapiens
+            Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi;
+            Mammalia; Eutheria; Euarchontoglires; Primates; Haplorrhini;
+            Catarrhini; Hominidae; Homo.
+REFERENCE   1  (bases 1 to 899)
+  AUTHORS   Panyard,D.J., Reus,L.M., Ali,M., Liu,J., Deming,Y.K., Lu,Q.,
+            Kollmorgen,G., Carboni,M., Wild,N., Visser,P.J., Bertram,L.,
+            Zetterberg,H., Blennow,K., Gobom,J., Western,D., Sung,Y.J.,
+            Carlsson,C.M., Johnson,S.C., Asthana,S., Cruchaga,C., Tijms,B.M.,
+            Engelman,C.D. and Snyder,M.P.
+  TITLE     Post-GWAS multiomic functional investigation of the TNIP1 locus in
+            Alzheimer's disease highlights a potential role for GPX3
+  JOURNAL   Alzheimers Dement 20 (7), 5044-5053 (2024)
+   PUBMED   38809917
+  REMARK    GeneRIF: Post-GWAS multiomic functional investigation of the TNIP1
+            locus in Alzheimer's disease highlights a potential role for GPX3.
+REFERENCE   2  (bases 1 to 899)
+  AUTHORS   Lei,F.J., Chiang,J.Y., Chang,H.J., Chen,D.C., Wang,H.L., Yang,H.A.,
+            Wei,K.Y., Huang,Y.C., Wang,C.C., Wei,S.T. and Hsieh,C.H.
+  TITLE     Cellular and exosomal GPx1 are essential for controlling hydrogen
+            peroxide balance and alleviating oxidative stress in hypoxic
+            glioblastoma
+  JOURNAL   Redox Biol 65, 102831 (2023)
+   PUBMED   37572455
+  REMARK    GeneRIF: Cellular and exosomal GPx1 are essential for controlling
+            hydrogen peroxide balance and alleviating oxidative stress in
+            hypoxic glioblastoma.
+REFERENCE   3  (bases 1 to 899)
+  AUTHORS   Fallah,F., Colagar,A.H., Saleh,H.A. and Ranjbar,M.
+  TITLE     Variation of the genes encoding antioxidant enzymes SOD2 (rs4880),
+            GPX1 (rs1050450), and CAT (rs1001179) and susceptibility to male
+            infertility: a genetic association study and in silico analysis
+  JOURNAL   Environ Sci Pollut Res Int 30 (36), 86412-86424 (2023)
+   PUBMED   37405601
+  REMARK    GeneRIF: Variation of the genes encoding antioxidant enzymes SOD2
+            (rs4880), GPX1 (rs1050450), and CAT (rs1001179) and susceptibility
+            to male infertility: a genetic association study and in silico
+            analysis.
+REFERENCE   4  (bases 1 to 899)
+  AUTHORS   Toczewska,J., Baczynska,D., Zalewska,A., Maciejczyk,M. and
+            Konopka,T.
+  TITLE     The mRNA expression of genes encoding selected antioxidant enzymes
+            and thioredoxin, and the concentrations of their protein products
+            in gingival crevicular fluid and saliva during periodontitis
+  JOURNAL   Dent Med Probl 60 (2), 255-265 (2023)
+   PUBMED   37390459
+  REMARK    GeneRIF: The mRNA expression of genes encoding selected antioxidant
+            enzymes and thioredoxin, and the concentrations of their protein
+            products in gingival crevicular fluid and saliva during
+            periodontitis.
+REFERENCE   5  (bases 1 to 899)
+  AUTHORS   Knight,J.A., Onay,U.V., Wells,S., Li,H., Shi,E.J., Andrulis,I.L.
+            and Ozcelik,H.
+  TITLE     Genetic variants of GPX1 and SOD2 and breast cancer risk at the
+            Ontario site of the Breast Cancer Family Registry
+  JOURNAL   Cancer Epidemiol Biomarkers Prev 13 (1), 146-149 (2004)
+   PUBMED   14744747
+  REMARK    GeneRIF: Observational study of gene-disease association. (HuGE
+            Navigator)
+REFERENCE   6  (bases 1 to 899)
+  AUTHORS   Moscow,J.A., Morrow,C.S., He,R., Mullenbach,G.T. and Cowan,K.H.
+  TITLE     Structure and function of the 5'-flanking sequence of the human
+            cytosolic selenium-dependent glutathione peroxidase gene (hgpx1)
+  JOURNAL   J Biol Chem 267 (9), 5949-5958 (1992)
+   PUBMED   1556108
+REFERENCE   7  (bases 1 to 899)
+  AUTHORS   Chada,S., Le Beau,M.M., Casey,L. and Newburger,P.E.
+  TITLE     Isolation and chromosomal localization of the human glutathione
+            peroxidase gene
+  JOURNAL   Genomics 6 (2), 268-271 (1990)
+   PUBMED   2307470
+REFERENCE   8  (bases 1 to 899)
+  AUTHORS   Mullenbach,G.T., Tabrizi,A., Irvine,B.D., Bell,G.I., Tainer,J.A.
+            and Hallewell,R.A.
+  TITLE     Selenocysteine's mechanism of incorporation and evolution revealed
+            in cDNAs of three glutathione peroxidases
+  JOURNAL   Protein Eng 2 (3), 239-246 (1988)
+   PUBMED   2976939
+REFERENCE   9  (bases 1 to 899)
+  AUTHORS   Sukenaga,Y., Ishida,K., Takeda,T. and Takagi,K.
+  TITLE     cDNA sequence coding for human glutathione peroxidase
+  JOURNAL   Nucleic Acids Res 15 (17), 7178 (1987)
+   PUBMED   3658677
+REFERENCE   10 (bases 1 to 899)
+  AUTHORS   Mullenbach,G.T., Tabrizi,A., Irvine,B.D., Bell,G.I. and
+            Hallewell,R.A.
+  TITLE     Sequence of a cDNA coding for human glutathione peroxidase confirms
+            TGA encodes active site selenocysteine
+  JOURNAL   Nucleic Acids Res 15 (13), 5484 (1987)
+   PUBMED   2955287
+COMMENT     REVIEWED REFSEQ: This record has been curated by NCBI staff. The
+            reference sequence was derived from DA730294.1 and BC007865.2.
+            This sequence is a reference standard in the RefSeqGene project.
+            
+            On Nov 22, 2018 this sequence version replaced NM_000581.3.
+            
+            Summary: The protein encoded by this gene belongs to the
+            glutathione peroxidase family, members of which catalyze the
+            reduction of organic hydroperoxides and hydrogen peroxide (H2O2) by
+            glutathione, and thereby protect cells against oxidative damage.
+            Other studies indicate that H2O2 is also essential for
+            growth-factor mediated signal transduction, mitochondrial function,
+            and maintenance of thiol redox-balance; therefore, by limiting H2O2
+            accumulation, glutathione peroxidases are also involved in
+            modulating these processes. Several isozymes of this gene family
+            exist in vertebrates, which vary in cellular location and substrate
+            specificity. This isozyme is the most abundant, is ubiquitously
+            expressed and localized in the cytoplasm, and whose preferred
+            substrate is hydrogen peroxide. It is also a selenoprotein,
+            containing the rare amino acid selenocysteine (Sec) at its active
+            site. Sec is encoded by the UGA codon, which normally signals
+            translation termination. The 3' UTRs of selenoprotein mRNAs contain
+            a conserved stem-loop structure, designated the Sec insertion
+            sequence (SECIS) element, that is necessary for the recognition of
+            UGA as a Sec codon, rather than as a stop signal. This gene
+            contains an in-frame GCG trinucleotide repeat in the coding region,
+            and three alleles with 4, 5 or 6 repeats have been found in the
+            human population. The allele with 4 GCG repeats has been
+            significantly associated with breast cancer risk in premenopausal
+            women. Alternatively spliced transcript variants have been found
+            for this gene. Pseudogenes of this locus have been identified on
+            chromosomes X and 21. [provided by RefSeq, Aug 2017].
+            
+            Transcript Variant: This variant (1) encodes the longest isoform
+            (1).
+            
+            Publication Note:  This RefSeq record includes a subset of the
+            publications that are available for this gene. Please see the Gene
+            record to access additional publications.
+            
+            ##Evidence-Data-START##
+            Transcript exon combination :: HM005391.1, SRR1163655.478345.1
+                                           [ECO:0000332]
+            RNAseq introns              :: single sample supports all introns
+                                           SAMEA1965299, SAMEA1966682
+                                           [ECO:0000348]
+            ##Evidence-Data-END##
+            
+            ##RefSeq-Attributes-START##
+            MANE Ensembl match              :: ENST00000419783.3/
+                                               ENSP00000407375.1
+            protein contains selenocysteine :: PMID: 2955287
+            RefSeq Select criteria          :: based on conservation,
+                                               expression, longest protein
+            ##RefSeq-Attributes-END##
+            COMPLETENESS: full length.
+PRIMARY     REFSEQ_SPAN         PRIMARY_IDENTIFIER PRIMARY_SPAN        COMP
+            1-65                DA730294.1         379-443
+            66-899              BC007865.2         1-834
+FEATURES             Location/Qualifiers
+     source          1..899
+                     /organism="Homo sapiens"
+                     /mol_type="mRNA"
+                     /db_xref="taxon:9606"
+                     /chromosome="3"
+                     /map="3p21.31"
+     gene            1..899
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="glutathione peroxidase 1"
+                     /db_xref="GeneID:2876"
+                     /db_xref="HGNC:HGNC:4553"
+                     /db_xref="MIM:138320"
+     exon            1..327
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /inference="alignment:Splign:2.1.0"
+     CDS             76..687
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /EC_number="1.11.1.9"
+                     /EC_number="1.11.1.12"
+                     /note="UGA stop codon recoded as selenocysteine; isoform 1
+                     is encoded by transcript variant 1; cellular glutathione
+                     peroxidase; GSHPx-1; selenoprotein GPX1;
+                     phospholipid-hydroperoxide glutathione peroxidase GPX1"
+                     /codon_start=1
+                     /transl_except=(pos:220..222,aa:Sec)
+                     /product="glutathione peroxidase 1 isoform 1"
+                     /protein_id="NP_000572.2"
+                     /db_xref="CCDS:CCDS43091.1"
+                     /db_xref="GeneID:2876"
+                     /db_xref="HGNC:HGNC:4553"
+                     /db_xref="MIM:138320"
+                     /translation="MCAARLAAAAAAAQSVYAFSARPLAGGEPVSLGSLRGKVLLIEN
+                     VASLUGTTVRDYTQMNELQRRLGPRGLVVLGFPCNQFGHQENAKNEEILNSLKYVRPG
+                     GGFEPNFMLFEKCEVNGAGAHPLFAFLREALPAPSDDATALMTDPKLITWSPVCRNDV
+                     AWNFEKFLVGPDGVPLRRYSRRFQTIDIEPDIEALLSQGPSCA"
+     misc_feature    175..177
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0000250|UniProtKB:P04041; propagated from
+                     UniProtKB/Swiss-Prot (P07203.4); phosphorylation site"
+     misc_feature    220..222
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="Selenocysteine; other site"
+     misc_feature    220..222
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="Subject to oxidation and hydroselenide loss to
+                     dehydroalanine. /evidence=ECO:0000250; propagated from
+                     UniProtKB/Swiss-Prot (P07203.4); other site"
+     misc_feature    337..339
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="N6-acetyllysine, alternate.
+                     /evidence=ECO:0000250|UniProtKB:P11352; propagated from
+                     UniProtKB/Swiss-Prot (P07203.4); acetylation site"
+     misc_feature    415..417
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="N6-acetyllysine, alternate.
+                     /evidence=ECO:0000250|UniProtKB:P11352; propagated from
+                     UniProtKB/Swiss-Prot (P07203.4); acetylation site"
+     misc_feature    517..519
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="N6-acetyllysine, alternate.
+                     /evidence=ECO:0000250|UniProtKB:P11352; propagated from
+                     UniProtKB/Swiss-Prot (P07203.4); acetylation site"
+     misc_feature    664..666
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0000250|UniProtKB:P04041; propagated from
+                     UniProtKB/Swiss-Prot (P07203.4); phosphorylation site"
+     misc_feature    676..678
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="Phosphoserine.
+                     /evidence=ECO:0007744|PubMed:24275569; propagated from
+                     UniProtKB/Swiss-Prot (P07203.4); phosphorylation site"
+     exon            328..899
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /inference="alignment:Splign:2.1.0"
+     regulatory      740..808
+                     /regulatory_class="recoding_stimulatory_region"
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="SECIS_element"
+                     /function="essential for recoding UGA to specify
+                     selenocysteine"
+     regulatory      875..880
+                     /regulatory_class="polyA_signal_sequence"
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="hexamer: AATAAA"
+     polyA_site      899
+                     /gene="GPX1"
+                     /gene_synonym="GPXD; GSHPX1"
+                     /note="major polyA site"
+ORIGIN      
+        1 aaaaggaggc gcctgctggc ctccccttac agtgcttgtt cggggcgctc cgctggcttc
+       61 ttggacaatt gcgccatgtg tgctgctcgg ctagcggcgg cggcggcggc ggcccagtcg
+      121 gtgtatgcct tctcggcgcg cccgctggcc ggcggggagc ctgtgagcct gggctccctg
+      181 cggggcaagg tactacttat cgagaatgtg gcgtccctct gaggcaccac ggtccgggac
+      241 tacacccaga tgaacgagct gcagcggcgc ctcggacccc ggggcctggt ggtgctcggc
+      301 ttcccgtgca accagtttgg gcatcaggag aacgccaaga acgaagagat tctgaattcc
+      361 ctcaagtacg tccggcctgg tggtgggttc gagcccaact tcatgctctt cgagaagtgc
+      421 gaggtgaacg gtgcgggggc gcaccctctc ttcgccttcc tgcgggaggc cctgccagct
+      481 cccagcgacg acgccaccgc gcttatgacc gaccccaagc tcatcacctg gtctccggtg
+      541 tgtcgcaacg atgttgcctg gaactttgag aagttcctgg tgggccctga cggtgtgccc
+      601 ctacgcaggt acagccgccg cttccagacc attgacatcg agcctgacat cgaagccctg
+      661 ctgtctcaag ggcccagctg tgcctagggc gcccctccta ccccggctgc ttggcagttg
+      721 cagtgctgct gtctcggggg ggttttcatc tatgagggtg tttcctctaa acctacgagg
+      781 gaggaacacc tgatcttaca gaaaatacca cctcgagatg ggtgctggtc ctgttgatcc
+      841 cagtctctgc cagaccaagg cgagtttccc cactaataaa gtgccgggtg tcagcagaa
+//
+

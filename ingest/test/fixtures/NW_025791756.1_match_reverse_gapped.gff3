@@ -1,0 +1,3 @@
+##gff-version 3
+##sequence-region NW_025791756.1 1 2000000
+NW_025791756.1	RefSeq	match	1186933	1187207	263	+	.	ID=1078ddfe-ef88-4c9a-8744-03a9aa81fab5;Target=NG_162589.1 1 270 -;bit_score=490.492;blast_aligner=1;blast_score=263;common_component=0;e_value=1.78245e-136;filter_score=0;for_remapping=1;gap_count=1;hsp_percent_coverage=100;matchable_bases=0;matched_bases=0;num_ident=270;num_mismatch=0;pct_coverage=100;pct_coverage_hiqual=100;pct_identity_gap=98.1818;pct_identity_gapopen_only=99.631;pct_identity_ungap=100;rank=1;weighted_identity=1;Gap=M217 D5 M53

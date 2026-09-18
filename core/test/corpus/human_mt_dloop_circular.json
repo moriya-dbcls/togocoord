@@ -1,0 +1,34 @@
+{
+  "id": "human_mt_dloop_circular",
+  "title": "Human mtDNA D-loop spanning the origin on the minus strand",
+  "source": "NCBI nuccore NC_012920.1 feature table (retrieved 2026-09-18): D-loop 576..1 / 16569..16024, i.e. complement(join(16024..16569,1..576))",
+  "mappings": [
+    {
+      "kind": "location",
+      "from": "test:DLOOP",
+      "location": "refseq:NC_012920.1:complement(join(16024..16569,1..576))"
+    }
+  ],
+  "cases": [
+    {
+      "input": "test:DLOOP:570..580",
+      "expect": {
+        "targets": [
+          "refseq:NC_012920.1:complement(join(16566..16569,1..7))"
+        ],
+        "unmapped": null
+      }
+    },
+    {
+      "input": "refseq:NC_012920.1:join(16560..16569,1..5)",
+      "direction": "inverse",
+      "expect": {
+        "targets": [
+          "test:DLOOP:complement(572..586)"
+        ],
+        "unmapped": null
+      },
+      "note": "input segments across the origin are contiguous on the feature and merge (spec-core v0.1.1 §5.4)"
+    }
+  ]
+}

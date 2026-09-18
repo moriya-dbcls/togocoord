@@ -1,0 +1,20 @@
+{
+  "id": "synthetic_aa_to_aa",
+  "title": "Synthetic protein-to-structure residue mapping with an unresolved gap",
+  "source": "synthetic (modelled on UniProt -> PDB SIFTS-like segments)",
+  "units": { "test:PROT3": "aa", "test:STRUCT3": "aa" },
+  "mappings": [
+    { "kind": "residueBlocks", "blocks": [
+      { "srcRef": "test:PROT3", "srcBegin": 3, "tgtRef": "test:STRUCT3", "tgtBegin": 1, "length": 201 },
+      { "srcRef": "test:PROT3", "srcBegin": 211, "tgtRef": "test:STRUCT3", "tgtBegin": 205, "length": 158 }
+    ] }
+  ],
+  "cases": [
+    { "note": "codon position passes through aa->aa", "input": "test:PROT3:100c2", "expect": { "targets": ["test:STRUCT3:98c2"], "unmapped": null } },
+    { "input": "test:PROT3:200..215", "expect": { "targets": ["test:STRUCT3:join(198..>201,<205..209)"], "unmapped": "test:PROT3:204..210" } },
+    { "input": "test:PROT3:1..2", "expect": { "targets": [], "unmapped": "test:PROT3:1..2" } },
+    { "input": "test:STRUCT3:60c1^60c2", "direction": "inverse", "expect": { "targets": ["test:PROT3:62c1^62c2"], "unmapped": null } },
+    { "input": "test:STRUCT3:60c1^60c2", "direction": "inverse", "codon": "never", "expect": { "targets": ["test:PROT3:62"], "unmapped": null } },
+    { "input": "test:PROT3:5^6", "expect": { "targets": ["test:STRUCT3:3^4"], "unmapped": null } }
+  ]
+}

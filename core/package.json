@@ -1,0 +1,15 @@
+{
+  "name": "@togocoord/core",
+  "version": "0.1.0",
+  "description": "TogoCoord core: Location ID parsing and block-based coordinate mapping",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT"
+}

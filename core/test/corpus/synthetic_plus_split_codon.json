@@ -1,0 +1,18 @@
+{
+  "id": "synthetic_plus_split_codon",
+  "title": "Synthetic plus-strand 3-exon CDS with a codon split across exons",
+  "source": "synthetic",
+  "units": { "test:PROT1": "aa" },
+  "mappings": [
+    { "kind": "cds", "protein": "test:PROT1", "location": "test:CHR1:join(11..20,31..40,51..57)", "codonStart": 1, "aaLength": 8 }
+  ],
+  "cases": [
+    { "note": "split codon", "input": "test:PROT1:4", "expect": { "targets": ["test:CHR1:join(20,31..32)"], "unmapped": null } },
+    { "input": "test:CHR1:20", "direction": "inverse", "expect": { "targets": ["test:PROT1:4c1"], "unmapped": null } },
+    { "note": "range over an intron is merged on the protein", "input": "test:CHR1:15..35", "direction": "inverse", "expect": { "targets": ["test:PROT1:2c2..5"], "unmapped": "test:CHR1:21..30" } },
+    { "input": "test:CHR1:15..35", "direction": "inverse", "codon": "never", "expect": { "targets": ["test:PROT1:2..5"], "unmapped": "test:CHR1:21..30" } },
+    { "note": "5' truncation", "input": "test:CHR1:5..12", "direction": "inverse", "expect": { "targets": ["test:PROT1:<1..1c2"], "unmapped": "test:CHR1:5..10" } },
+    { "note": "between inside a codon", "input": "test:CHR1:12^13", "direction": "inverse", "expect": { "targets": ["test:PROT1:1c2^1c3"], "unmapped": null } },
+    { "note": "between at an exon/intron boundary cannot be mapped", "input": "test:CHR1:20^21", "direction": "inverse", "expect": { "targets": [], "unmapped": "test:CHR1:20^21" } }
+  ]
+}

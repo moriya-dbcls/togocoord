@@ -1,0 +1,166 @@
+// Streaming readers, FASTA index and SQLite store (scaling plan): each must reproduce the in-memory results.
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
+import { describe, it } from "node:test";
+import { formatLocationId, mapLocation, parseLocationId } from "@togocoord/core";
+import { ingestGenBank } from "../src/adapter-gbff.ts";
+import { ingestGff3 } from "../src/adapter-gff3.ts";
+import { buildFai, FaiSequenceSource } from "../src/fasta-index.ts";
+import { FeatureGrouper, parseGffLine } from "../src/gff3.ts";
+import { edgeMapping, MemorySink } from "../src/model.ts";
+import { SqliteSink, TogoCoordStore } from "../src/store.ts";
+import { ingestGenBankFile, ingestGff3File } from "../src/stream.ts";
+import { fixture, genbankSource } from "./helpers.ts";
+
+const dir = mkdtempSync(join(tmpdir(), "togocoord-"));
+const fixturePath = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+
+describe("streaming readers reproduce the in-memory adapters", () => {
+  for (const name of ["NC_012920.1.gff3", "NC_001405.1.gff3", "NC_000003.12_cDNA_match.gff3", "NC_000003.12_RYBP_GPX1.gff3"]) {
+    it(`GFF3 ${name} (plain and gzip)`, async () => {
+      const expected = ingestGff3(fixture(name));
+      const gz = join(dir, `${name}.gz`);
+      writeFileSync(gz, gzipSync(fixture(name)));
+      for (const path of [fixturePath(name), gz]) {
+        const sink = new MemorySink();
+        await ingestGff3File(path, sink);
+        assert.deepEqual(sink.result, expected);
+      }
+    });
+  }
+
+  it("GenBank, several records in one gzipped file", async () => {
+    const text = ["NC_045512.2.gb", "NM_000581.4.gb", "NP_055554.1.gp"].map(fixture).join("");
+    const gz = join(dir, "multi.gb.gz");
+    writeFileSync(gz, gzipSync(text));
+    const sink = new MemorySink();
+    const stats = await ingestGenBankFile(gz, sink);
+    assert.deepEqual(sink.result, ingestGenBank(text));
+    assert.ok(stats.features > 100);
+  });
+
+  it("exon features are not stored as annotations by default", () => {
+    const withExons = ingestGff3(fixture("NC_001405.1.gff3"), { excludeAnnotations: new Set() });
+    const without = ingestGff3(fixture("NC_001405.1.gff3"));
+    const exons = withExons.annotations.filter((a) => a.type === "exon").length;
+    assert.ok(exons > 0);
+    assert.equal(without.annotations.length, withExons.annotations.length - exons);
+    assert.deepEqual(without.edges, withExons.edges);
+  });
+});
+
+describe("FeatureGrouper", () => {
+  const row = (id: string, n: number) => parseGffLine(`s\tx\tCDS\t${n}\t${n + 1}\t.\t+\t0\tID=${id}`, n)!;
+  it("groups adjacent rows and reports rows of an already emitted feature", () => {
+    const g = new FeatureGrouper(1);
+    const out = [...g.push(row("a", 1)), ...g.push(row("a", 3)), ...g.push(row("b", 5)), ...g.push(row("a", 7)), ...g.end()];
+    assert.deepEqual(out.map((f) => [f.id, f.rows.length]), [["a", 2], ["b", 1], ["a", 1]]);
+    assert.equal(g.violations.length, 1);
+    assert.match(g.violations[0]!, /line 7: rows of s a are not adjacent/);
+  });
+});
+
+describe("FASTA index", () => {
+  const residues = "ACGTACGTTTGCAACGTAGGGCATCGATCGAT"; // 32
+  const wrap = (s: string, w: number, eol: string) => s.match(new RegExp(`.{1,${w}}`, "g"))!.join(eol) + eol;
+  for (const eol of ["\n", "\r\n"]) {
+    it(`random access equals the in-memory sequence (${JSON.stringify(eol)} line ends)`, () => {
+      const fa = join(dir, `t${eol.length}.fa`);
+      writeFileSync(fa, `>NC_000001.1 first${eol}${wrap(residues, 7, eol)}>NC_000002.1${eol}${wrap("NNACGT", 4, eol)}`);
+      const entries = buildFai(fa);
+      assert.deepEqual(entries.map((e) => [e.name, e.length, e.lineBases, e.lineBytes]), [
+        ["NC_000001.1", 32, 7, 7 + eol.length],
+        ["NC_000002.1", 6, 4, 4 + eol.length],
+      ]);
+      const src = new FaiSequenceSource(fa, (n) => `refseq:${n}`, entries);
+      for (let a = 0; a <= 32; a++) for (let b = a; b <= 32; b++) assert.equal(src.get("refseq:NC_000001.1", a, b), residues.slice(a, b));
+      assert.equal(src.get("refseq:NC_000002.1", 1, 6), "NACGT");
+      assert.equal(src.get("refseq:NC_000001.1", 30, 33), undefined);
+      src.close();
+    });
+  }
+  it("rejects irregular line lengths", () => {
+    const fa = join(dir, "bad.fa");
+    writeFileSync(fa, ">x\nACGT\nAC\nACGT\n");
+    assert.throws(() => buildFai(fa), /irregular line length/);
+  });
+});
+
+describe("SQLite store", () => {
+  const path = join(dir, "mt.sqlite");
+  const sink = new SqliteSink(path);
+  const text = fixture("NC_012920.1.gb");
+  const memory = ingestGenBank(text);
+  for (const s of memory.sequences) sink.sequence(s);
+  for (const e of memory.edges) sink.edge(e);
+  for (const a of memory.annotations) sink.annotation(a);
+  sink.close({ source: "NC_012920.1.gb" });
+  const store = new TogoCoordStore(path);
+  const ctx = store.context();
+  const ids = (text: string) => store.neighbors(parseLocationId(text, ctx), ctx).targets.map((t) => formatLocationId(t.location, ctx)).sort();
+
+  it("stores everything and records metadata", () => {
+    assert.deepEqual(store.counts(), {
+      sequence: memory.sequences.length,
+      edge: memory.edges.length,
+      block: memory.edges.reduce((n, e) => n + e.blocks.length, 0),
+      annotation: memory.annotations.length,
+      warning: 0,
+    });
+    assert.equal(store.meta().source, "NC_012920.1.gb");
+    assert.equal(store.sequence("refseq:NC_012920.1")?.topology, "circular");
+    assert.equal(store.unitOf("refseq:YP_003024037.1"), "aa");
+  });
+
+  it("converts in both directions using only the blocks it fetches", () => {
+    assert.deepEqual(ids("refseq:YP_003024037.1:174"), ["refseq:NC_012920.1:complement(14152..14154)"]);
+    // ATP8 (8366..8572) and ATP6 (8527..9207) overlap in different reading frames:
+    // nt 8527 is unit 161 of ATP8 (residue 54, codon position 3) and the first base of ATP6.
+    assert.deepEqual(ids("refseq:NC_012920.1:8527..8529"), ["refseq:YP_003024030.1:54c3..55c2", "refseq:YP_003024031.1:1"]);
+    assert.deepEqual(ids("refseq:NC_012920.1:8526^8527"), ["refseq:YP_003024030.1:54c2^54c3"]);
+  });
+
+  it("agrees with the in-memory edge mapping for every residue of every protein", () => {
+    for (const e of memory.edges) {
+      const direct = edgeMapping(e);
+      for (let r = 1; r <= Number(e.attributes.aaLength); r++) {
+        const loc = parseLocationId(`${e.from}:${r}`, ctx);
+        const a = mapLocation(loc, direct, ctx).targets.map((t) => formatLocationId(t.location, ctx));
+        const b = mapLocation(loc, store.mappingFor(loc, { direction: "forward" }), ctx).targets.map((t) => formatLocationId(t.location, ctx));
+        assert.deepEqual(b, a, `${e.from}:${r}`);
+      }
+    }
+  });
+
+  it("finds annotations by interval, including origin-spanning ones", () => {
+    const types = store.annotations("refseq:NC_012920.1", 0, 10).map((a) => a.type);
+    assert.ok(types.includes("D-loop"));
+    assert.ok(store.edges("refseq:YP_003024037.1").some((e) => e.to === "refseq:NC_012920.1" && e.validation.status === "ok"));
+  });
+});
+
+it("togocoord-ingest --db builds a store from gzipped GFF3 with FASTA validation", () => {
+  const cli = fixturePath("../../src/cli.ts");
+  const gff = join(dir, "sars2.gff3.gz");
+  writeFileSync(gff, gzipSync(fixture("NC_045512.2.gff3")));
+  const fa = join(dir, "sars2.fa");
+  writeFileSync(fa, `>NC_045512.2\n${genbankSource("NC_045512.2.gb").get("refseq:NC_045512.2", 0, 29903)}\n`);
+  const db = join(dir, "sars2.sqlite");
+  const run = spawnSync(process.execPath, ["--no-warnings", cli, "--db", db, "--fasta", fa, gff], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stderr, /edges 12 \{"ok":12\}/);
+  const store = new TogoCoordStore(db);
+  const ctx = store.context();
+  const r = store.neighbors(parseLocationId("refseq:NC_045512.2:13468", ctx), ctx);
+  // nt 13468 is in ORF1ab (both sides of the slippage) and in ORF1a (266..13483).
+  assert.deepEqual(r.targets.map((t) => formatLocationId(t.location, ctx)).sort(), [
+    "refseq:YP_009724389.1:join(4401c3,4402c1)",
+    "refseq:YP_009725295.1:4401c3",
+  ]);
+  store.close();
+});

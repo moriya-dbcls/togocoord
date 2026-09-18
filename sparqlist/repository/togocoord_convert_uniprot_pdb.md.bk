@@ -1,0 +1,186 @@
+# TogoCoord - convert UniProt to PDB
+
+## Description
+
+* req.
+  * [./togocoord_location_decoder](./togocoord_location_decoder)
+  * [./togocoord_location_encoder](./togocoord_location_encoder)
+  * [./togocoord_coord_converter](./togocoord_coord_converter)
+* アミノ酸配列同士は complement は不要なので非対応
+
+## Parameters
+
+* `source`
+  * default: P12883
+* `location`
+  * default: join(30..300,400..960)
+  * example: 46, 100..230, <105..230, 1..>138, 102.110, 123^124, join(12..78,134..202)
+* `target` (Opt.)
+  * example: 4P7H
+
+## Endpoint
+
+https://rdfportal.org/pdb/sparql
+
+## `pdb`
+* UniProt と PDB の align range と座標のズレ
+* chian ID
+```sparql
+PREFIX pdbo: <http://rdf.wwpdb.org/schema/pdbx-v50.owl#>
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX up: <http://purl.uniprot.org/uniprot/>
+SELECT DISTINCT ?pdb ?db_align_begin ?auth_align_begin ?auth_align_end (GROUP_CONCAT(DISTINCT ?chain_id ;  separator=',') AS ?chains)
+WHERE {
+  VALUES ?uniprot { up:{{source}} }
+  {{#if target}}
+  VALUES ?pdb { "{{target}}" }
+  {{/if}}
+  [] dct:identifier ?pdb ;
+     pdbo:has_pdbx_audit_revision_historyCategory/pdbo:has_pdbx_audit_revision_history [
+       pdbo:pdbx_audit_revision_history.ordinal "1" ;
+       pdbo:pdbx_audit_revision_history.revision_date ?date 
+     ] ;
+     pdbo:has_entityCategory/pdbo:has_entity [
+       pdbo:referenced_by_struct_ref [
+         pdbo:link_to_uniprot ?uniprot ; # UniProt
+         pdbo:referenced_by_struct_ref_seq [
+           pdbo:struct_ref_seq.db_align_beg ?db_align_begin ;              # 配列 align の UniProt の begin
+           pdbo:struct_ref_seq.pdbx_auth_seq_align_beg ?auth_align_begin ; # 配列 align の PDB chain の begin
+           pdbo:struct_ref_seq.pdbx_auth_seq_align_end ?auth_align_end     # 配列 align の PDB chain の end
+         ]
+       ] ;
+       pdbo:referenced_by_struct_asym/pdbo:struct_asym.id ?chain_id
+     ] .
+  #OPTIONAL {
+  #  ?entry pdbo:has_refineCategory/pdbo:has_refine ?refine .
+  #  OPTIONAL {
+  #    ?refine pdbo:refine.ls_d_res_high ?resolution_high .
+  #  }
+  #  OPTIONAL {
+  #    ?refine pdbo:refine.ls_R_factor_R_free ?rfree .
+  #  }
+  #  OPTIONAL {
+  #    ?refine pdbo:refine.ls_R_factor_R_work ?rwork .
+  #  }
+  #}
+}
+ORDER BY ?pdb ?auth_align_begin
+```
+
+## `pdb_3d_pos`
+* 3D 座標がある position
+  * 3D データ不連続性取得のための
+```sparql
+PREFIX pdbo: <http://rdf.wwpdb.org/schema/pdbx-v50.owl#>
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX up: <http://purl.uniprot.org/uniprot/>
+SELECT DISTINCT ?pdb ?pos
+WHERE {
+  VALUES ?uniprot { up:{{source}} }
+  {{#if target}}
+  VALUES ?pdb { "{{target}}" }
+  {{/if}}
+  [] dct:identifier ?pdb ;
+     pdbo:has_entityCategory/pdbo:has_entity [
+       pdbo:referenced_by_struct_ref/pdbo:link_to_uniprot ?uniprot ;
+       pdbo:referenced_by_entity_poly/pdbo:referenced_by_entity_poly_seq/pdbo:referenced_by_pdbx_poly_seq_scheme/pdbo:pdbx_poly_seq_scheme.auth_seq_num ?auth_pos
+     ] .
+  BIND (xsd:integer(?auth_pos) AS ?pos)
+}
+ORDER BY ?pdb ?pos
+```
+
+## `target_align_ranges`
+* 不連続な align range に変換
+```javascript
+({pdb, pdb_3d_pos}) => {
+  if (!pdb.results.bindings[0] || !pdb_3d_pos.results.bindings[0]) return [];
+  
+  let pdb2begin = {};
+  let pdb2end   = {};
+  let pdb2delta = {};
+  let pdb2chain = {};
+  pdb.results.bindings.forEach(d => {
+    const pdb_id = d.pdb.value;
+    pdb2begin[pdb_id] = parseInt(d.auth_align_begin.value);
+    pdb2end[pdb_id]   = parseInt(d.auth_align_end.value);
+    pdb2delta[pdb_id] = parseInt(d.db_align_begin.value) - parseInt(d.auth_align_begin.value);
+    pdb2chain[pdb_id] = d.chains.value.split(/,/);
+  });
+  let res = [];
+  let pre_id = false;
+  let pre_pos = false;
+  let begin = false;
+  pdb_3d_pos.results.bindings.forEach(d => {
+    let pdb_id = d.pdb.value;
+    let pos = parseInt(d.pos.value);
+    if (pos < pdb2begin[pdb_id] || pdb2end[pdb_id] < pos) return false;
+    if (pre_id != pdb_id || pos - pre_pos != 1) { // align が不連続な場合
+      if (pre_id) {
+        for (let chain of pdb2chain[pre_id]) {
+          res.push({
+            reference: pre_id + "-" + chain,
+            begin: begin,
+            end: pre_pos,
+            delta: pdb2delta[pre_id],
+          });
+        }
+        begin = pos;
+      }
+      if (pre_id != pdb_id) pre_id = pdb_id;
+    }
+    if (begin === false) begin = pos;
+    pre_pos = pos;
+  });
+  for (let chain of pdb2chain[pre_id]) {
+    res.push({
+      reference: pre_id + "-" + chain,
+      begin: begin,
+      end: pre_pos,
+      delta: pdb2delta[pre_id],
+    });
+  }
+  return res;
+}
+```
+
+## `return`
+```javascript
+async ({location, target_align_ranges}) => {
+  if (!target_align_ranges[0]) return {};
+
+  const target_prefix = "pdb";
+  
+  let options = {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  }
+  
+  // decode location to coords
+  options.body = "location_id=" + encodeURIComponent(location);
+  const source_coords = await fetch("./togocoord_location_decoder", options).then(r => r.json());
+
+  // convert coords
+  options.body = "source_coords=" + encodeURIComponent(JSON.stringify(source_coords))
+        + "&target_align_ranges=" + encodeURIComponent(JSON.stringify(target_align_ranges));
+  const target_coords = await fetch("./togocoord_coord_converter", options).then(r => r.json());
+
+  // encode json-ld from coords
+  const promises = Object.keys(target_coords).map(async (reference) => {
+    const new_json = {
+      ...(source_coords.assembl && {assembl: source_coords.assembl}),
+      reference: reference,
+      ...(source_coords.join && {join: source_coords.join}),
+      ...(source_coords.complement && {complement: source_coords.complement}),
+      ranges: target_coords[reference]
+    };
+    options.body = "data=" + encodeURIComponent(JSON.stringify(new_json)) + "&reference_prefix=" + target_prefix;
+    //console.log(options.body);
+    return {jsonld: await fetch("./togocoord_location_encoder", options).then(r => r.json()), correspondence: new_json};
+  });
+  return Promise.all(promises);
+}
+```

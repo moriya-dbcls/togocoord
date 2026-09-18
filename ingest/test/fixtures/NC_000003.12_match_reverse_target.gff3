@@ -1,0 +1,3 @@
+##gff-version 3
+##sequence-region NC_000003.12 1 198295559
+NC_000003.12	RefSeq	match	282589	282892	304	+	.	ID=1508e03a-97dd-450b-a688-218063f4e393;Target=NG_044083.1 1 304 -;assembly_bases_aln=304;assembly_bases_seq=304;bit_score=566.796;blast_aligner=1;blast_score=304;common_component=0;e_value=2.17012e-159;filter_score=0;for_remapping=2;gap_count=0;hsp_percent_coverage=100;matchable_bases=304;matched_bases=304;num_ident=304;num_mismatch=0;pct_coverage=100;pct_coverage_hiqual=100;pct_identity_gap=100;pct_identity_gapopen_only=100;pct_identity_ungap=100;rank=1;weighted_identity=1

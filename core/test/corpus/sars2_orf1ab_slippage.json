@@ -1,0 +1,17 @@
+{
+  "id": "sars2_orf1ab_slippage",
+  "title": "SARS-CoV-2 ORF1ab: -1 ribosomal slippage",
+  "source": "NCBI nuccore NC_045512.2 feature table (retrieved 2026-09-18): CDS join(266..13468,13468..21555), protein_id YP_009724389.1, 7096 aa",
+  "mappings": [
+    { "kind": "cds", "protein": "refseq:YP_009724389.1", "location": "refseq:NC_045512.2:join(266..13468,13468..21555)", "codonStart": 1, "aaLength": 7096 }
+  ],
+  "cases": [
+    { "note": "last codon before slippage", "input": "refseq:YP_009724389.1:4401", "expect": { "targets": ["refseq:NC_045512.2:13466..13468"], "unmapped": null } },
+    { "note": "first codon after slippage reuses nt 13468", "input": "refseq:YP_009724389.1:4402", "expect": { "targets": ["refseq:NC_045512.2:13468..13470"], "unmapped": null } },
+    { "note": "range across slippage: overlapping target, not merged", "input": "refseq:YP_009724389.1:4401..4402", "expect": { "targets": ["refseq:NC_045512.2:join(13466..13468,13468..13470)"], "unmapped": null } },
+    { "note": "one nt belongs to two codons", "input": "refseq:NC_045512.2:13468", "direction": "inverse", "expect": { "targets": ["refseq:YP_009724389.1:join(4401c3,4402c1)"], "unmapped": null } },
+    { "note": "same, codon extension stripped", "input": "refseq:NC_045512.2:13468", "direction": "inverse", "codon": "never", "expect": { "targets": ["refseq:YP_009724389.1:join(4401,4402)"], "unmapped": null } },
+    { "note": "stop codon is not part of the protein", "input": "refseq:NC_045512.2:21553..21555", "direction": "inverse", "expect": { "targets": [], "unmapped": "refseq:NC_045512.2:21553..21555" } },
+    { "note": "5'UTR truncation gives fuzzy begin", "input": "refseq:NC_045512.2:1..300", "direction": "inverse", "expect": { "targets": ["refseq:YP_009724389.1:<1..12c2"], "unmapped": "refseq:NC_045512.2:1..265" } }
+  ]
+}
