@@ -64,6 +64,8 @@ interface Molecule {
   ref: string;
   length?: number;
   circular: boolean;
+  /** From the molecule's `region` feature (NCBI: Dbxref=taxon:N); inherited by its proteins. */
+  taxon?: number;
 }
 
 /**
@@ -150,6 +152,8 @@ export class Gff3Ingestor {
     const provenance: Provenance = { ...this.#base, record: f.seqid, feature: `${f.type} ${f.id ?? `line ${f.rows[0]!.line}`}` };
     if (f.type === "region") {
       if (attr(f, "Is_circular") === "true") m.circular = true;
+      const taxon = f.attributes.Dbxref?.find((x) => x.startsWith("taxon:"));
+      if (taxon) m.taxon = Number(taxon.slice(6));
       this.#sequence(moleculeRecord(f, m, this.#fasta.get(f.seqid), provenance));
       return;
     }
@@ -296,11 +300,13 @@ export class Gff3Ingestor {
     });
     // Published residues (--fasta protein.faa) give the checksums used to identify the protein across databases.
     const residues = protLength !== undefined ? st.source.get(protein, 0, protLength) : undefined;
+    const taxon = this.#molecules.get(f.seqid)?.taxon;
     this.#sequence({
       ref: protein,
       moltype: "protein",
       unit: "aa",
       length: protLength ?? aaLength,
+      ...(taxon !== undefined && { taxon }),
       provenance,
       ...(residues !== undefined && checksums(residues)),
     });
@@ -425,14 +431,17 @@ function moleculeRecord(
  */
 function featureLocation(f: GffFeature, m: Molecule, sink: Sink): Location | undefined {
   const strands = new Set(f.rows.map((r) => r.strand));
+  let segments: Segment[];
   if (strands.size > 1) {
-    sink.warning(`${f.seqid}: ${f.type} ${f.id ?? ""}: rows on different strands; feature skipped`);
-    return undefined;
+    // Rows on both strands (trans-splicing, e.g. chloroplast rps12): GFF3 cannot order them by position, so the rows
+    // are taken in file order, which NCBI writes in transcript order (verified by translation, spec-ingest §4).
+    segments = f.rows.map((r) => rowSegment(r, m.ref, r.strand === "-" ? -1 : 1));
+  } else {
+    const strand: 1 | -1 = f.rows[0]!.strand === "-" ? -1 : 1;
+    const rows = [...f.rows].sort((a, b) => a.start - b.start);
+    segments = rows.map((r) => rowSegment(r, m.ref, strand));
+    if (strand === -1) segments.reverse();
   }
-  const strand: 1 | -1 = f.rows[0]!.strand === "-" ? -1 : 1;
-  const rows = [...f.rows].sort((a, b) => a.start - b.start);
-  let segments: Segment[] = rows.map((r) => rowSegment(r, m.ref, strand));
-  if (strand === -1) segments.reverse();
   if (m.circular && m.length !== undefined) {
     const len = m.length;
     segments = segments.flatMap((s) => wrap(s, len));

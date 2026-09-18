@@ -152,7 +152,7 @@
 | GET | `/v1/sequences/{ref}` | 配列の情報（全保存先の情報をまとめたもの）と、同一配列の一覧 |
 | GET | `/v1/sequences/{ref}/edges` | その配列から出る edge と入る edge |
 | GET | `/v1/annotations?loc=` | その区間に重なる annotation。索引は feature の外枠で引くが、返すのは feature 自身の区間が重なるものだけ（イントロンの位置では、その転写産物を返さない） |
-| GET | `/v1/meta` | 保存先の一覧とメタデータ |
+| GET | `/v1/meta` | 保存先ごとのファイル名、メタデータ（表示名、生物種、アセンブリ、元ファイル、構築日時）、内容の集計（spec-ingest §12） |
 | GET | `/<namespace>:<accession>:<location>` | IRI の解決（identifiers.org 風）。`Accept` に応じて、ブラウザには Web UI（`/?loc=`）への 303、JSON-LD の要求には FALDO JSON-LD、JSON の要求には `/v1/location` への 303 を返す |
 | GET | `/`、`/ui/*` | Web UI（§6.1） |
 
@@ -173,6 +173,7 @@
 - アノテーションは、配列全体を覆う feature（chromosome、region など）を除き、狭い範囲のものから順に並べる。
 - 入力の誤りは、該当する文字の位置に `^` を付けて示す。
 - 変換先のタグ（MANE Select など）を印で示し、「MANE Select only」で絞り込める。
+- **Loaded data**（`?view=data`）: 読み込んでいる保存先を生物種（taxon）ごとにまとめて表示する。表示するのは、表示名、アセンブリ、元ファイル、件数、構築日時。保存先ごとの例をクリックすると、その場で変換を試せる。
 - ヒト全体の保存先（RefSeq、RefSeq RNA、Ensembl、UniProt、SIFTS）で、Chrome を使って表示と操作を確認した。
 
 ## 7. FALDO JSON-LD

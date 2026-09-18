@@ -14,9 +14,16 @@
     <header>
       <h1><span class="accent">T</span>ogo<span class="accent">C</span>oord</h1>
       <p class="tagline">Convert sequence coordinates between genomes, transcripts, proteins and structures</p>
+      <nav><a href="?" data-view="convert">Convert</a> · <a href="?view=data" data-view="data">Loaded data</a></nav>
     </header>
 
     <main>
+      <section id="data" hidden>
+        <h2>Loaded data <span id="data-count" class="muted"></span></h2>
+        <div id="species"></div>
+      </section>
+
+      <div id="convert-view">
       <form id="query">
         <label for="loc" class="visually-hidden">Location ID</label>
         <input id="loc" name="loc" type="text" autocomplete="off" spellcheck="false"
@@ -56,6 +63,7 @@
         <h2>Results <span id="count" class="muted"></span></h2>
         <ol id="results"></ol>
       </section>
+      </div>
     </main>
 
     <footer>

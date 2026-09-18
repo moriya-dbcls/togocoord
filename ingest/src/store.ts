@@ -152,16 +152,59 @@ export class SqliteSink implements Sink {
     this.#tick();
   }
 
-  /** Commit, build R*Tree and B-tree indexes, record metadata. */
+  /** Commit, build R*Tree and B-tree indexes, record metadata and a content summary. */
   close(meta: Record<string, string> = {}): void {
     this.#db.exec("COMMIT");
     this.#db.exec("BEGIN");
     this.#db.exec(INDEXES);
     const put = this.#db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)");
-    for (const [k, v] of Object.entries({ schema: STORE_SCHEMA_VERSION, created: new Date().toISOString(), ...meta })) put.run(k, v);
+    const summary = JSON.stringify(summarize(this.#db));
+    for (const [k, v] of Object.entries({ schema: STORE_SCHEMA_VERSION, created: new Date().toISOString(), summary, ...meta })) put.run(k, v);
     this.#db.exec("COMMIT");
     this.#db.close();
   }
+}
+
+/** What a store holds: counts, organisms and example locations to try (shown by the service's /v1/meta). */
+export interface StoreSummary {
+  sequences: Record<string, number>;
+  edges: Record<string, number>;
+  blocks: number;
+  annotations: number;
+  taxa: Array<{ taxon: number; organism?: string; sequences: number }>;
+  examples: string[];
+}
+
+export function summarize(db: DatabaseSync): StoreSummary {
+  const all = <T>(sql: string) => db.prepare(sql).all() as T[];
+  const one = (sql: string) => Number((db.prepare(sql).get() as { n: number }).n);
+  const sequences = Object.fromEntries(
+    all<{ moltype: string | null; n: number }>("SELECT moltype, count(*) AS n FROM sequence GROUP BY moltype").map((r) => [r.moltype ?? "unknown", Number(r.n)]),
+  );
+  const edges = Object.fromEntries(all<{ kind: string; n: number }>("SELECT kind, count(*) AS n FROM edge GROUP BY kind").map((r) => [r.kind, Number(r.n)]));
+  const taxa = all<{ taxon: number; organism: string | null; n: number }>(
+    "SELECT taxon, max(organism) AS organism, count(*) AS n FROM sequence WHERE taxon IS NOT NULL GROUP BY taxon ORDER BY n DESC",
+  ).map((r) => ({ taxon: Number(r.taxon), ...(r.organism && { organism: r.organism }), sequences: Number(r.n) }));
+  // Examples: a protein residue on a verified CDS edge, a residue on an alignment (e.g. structure), a whole protein.
+  const examples: string[] = [];
+  const cds = db
+    .prepare(
+      "SELECT f.ref FROM edge e JOIN sequence f ON f.id = e.from_seq WHERE e.kind = 'annotation' AND e.status = 'ok' AND f.moltype = 'protein' AND f.length > 60 ORDER BY e.id LIMIT 1 OFFSET 100",
+    )
+    .get() as { ref: string } | undefined;
+  if (cds) examples.push(`${cds.ref}:50`, cds.ref);
+  const aln = db
+    .prepare("SELECT f.ref, b.src FROM edge e JOIN sequence f ON f.id = e.from_seq JOIN block b ON b.edge = e.id WHERE e.kind = 'alignment' AND e.status = 'ok' ORDER BY e.id LIMIT 1 OFFSET 100")
+    .get() as { ref: string; src: number } | undefined;
+  if (aln) {
+    const aa = (db.prepare("SELECT unit FROM sequence WHERE ref = ?").get(aln.ref) as { unit: string | null } | undefined)?.unit === "aa";
+    examples.push(`${aln.ref}:${aa ? Math.floor(aln.src / 3) + 1 : aln.src + 1}`);
+  }
+  if (!examples.length) {
+    const seq = db.prepare("SELECT ref FROM sequence WHERE length > 0 ORDER BY id LIMIT 1").get() as { ref: string } | undefined;
+    if (seq) examples.push(seq.ref);
+  }
+  return { sequences, edges, blocks: one("SELECT count(*) AS n FROM block"), annotations: one("SELECT count(*) AS n FROM annotation"), taxa, examples };
 }
 
 export interface StoredEdge {
@@ -258,6 +301,12 @@ export class TogoCoordStore {
       this.#refs.set(id, ref);
     }
     return ref;
+  }
+
+  /** Content summary recorded at build time (computed now for stores built before summaries existed). */
+  summary(): StoreSummary {
+    const recorded = this.meta().summary;
+    return recorded ? (JSON.parse(recorded) as StoreSummary) : summarize(this.#db);
   }
 
   meta(): Record<string, string> {

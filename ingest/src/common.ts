@@ -110,3 +110,18 @@ export function assemblyReportSeqids(text: string): Map<string, string> {
   }
   return out;
 }
+
+/** Header of an NCBI assembly report: organism, taxon and assembly name. */
+export function assemblyReportInfo(text: string): { organism?: string; taxon?: string; assembly?: string; accession?: string } {
+  const field = (name: string) => new RegExp(`^# ${name}:\\s*(.+?)\\s*$`, "m").exec(text)?.[1];
+  const out: { organism?: string; taxon?: string; assembly?: string; accession?: string } = {};
+  const organism = field("Organism name");
+  const taxon = field("Taxid");
+  const assembly = field("Assembly name");
+  const accession = field("RefSeq assembly accession") ?? field("GenBank assembly accession");
+  if (organism) out.organism = organism;
+  if (taxon) out.taxon = taxon;
+  if (assembly) out.assembly = assembly;
+  if (accession && accession !== "n/a") out.accession = accession.split(/\s/)[0]!;
+  return out;
+}

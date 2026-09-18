@@ -228,6 +228,19 @@ describe("Ensembl 5'-incomplete CDS: the protein starts with X for the incomplet
   });
 });
 
+describe("trans-spliced CDS on both strands (Arabidopsis chloroplast rps12, NP_051038.1)", () => {
+  it("keeps the GFF3 row order and reproduces the protein", () => {
+    const source = new MemorySequenceSource();
+    for (const [, s] of parseFasta(fixture("arabidopsis_NC_000932.1.fa"))) source.add("refseq:NC_000932.1", s);
+    for (const [, s] of parseFasta(fixture("arabidopsis_NP_051038.1.faa"))) source.add("refseq:NP_051038.1", s);
+    const result = ingestGff3(fixture("arabidopsis_NC_000932.1_rps12.gff3"), { source });
+    assert.deepEqual(result.warnings, []);
+    const e = edge(result, "refseq:NP_051038.1");
+    assert.equal(e.location, "refseq:NC_000932.1:join(complement(69611..69724),139856..140087,140625..140650)");
+    assert.deepEqual([e.validation.status, e.validation.basis], ["ok", "full"]);
+  });
+});
+
 describe("transcript validation", () => {
   const ctx = createContext();
   const loc = parseLocationId("refseq:NC_000001.1:join(1..4,9..12)", ctx);

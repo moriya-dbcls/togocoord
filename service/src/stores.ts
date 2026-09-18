@@ -14,6 +14,7 @@ export class StoreSet {
   /** Merged sequence records and identity lists are looked up for every node of every search: keep them. */
   readonly #sequences = new Lru<string, ReturnType<TogoCoordStore["sequence"]> | null>(100_000);
   readonly #identical = new Lru<string, string[]>(100_000);
+  #meta: Array<Record<string, unknown>> | undefined;
 
   constructor(paths: string[] = [], options: StoreOptions & { registry?: NamespaceRegistry } = {}) {
     this.registry = options.registry ?? new NamespaceRegistry();
@@ -24,6 +25,7 @@ export class StoreSet {
     this.stores.push(store);
     this.#sequences.clear();
     this.#identical.clear();
+    this.#meta = undefined;
     return this;
   }
 
@@ -121,8 +123,13 @@ export class StoreSet {
     return this.stores.flatMap((s) => s.annotations(ref, start, end));
   }
 
-  meta(): Array<{ path: string } & Record<string, string>> {
-    return this.stores.map((s) => ({ ...s.meta(), path: s.path }));
+  /** Per store: file name, recorded metadata (label, organism, assembly, inputs, ...) and content summary. */
+  meta(): Array<Record<string, unknown>> {
+    this.#meta ??= this.stores.map((s) => {
+      const { summary: _recorded, ...meta } = s.meta();
+      return { file: s.path.split(/[\\/]/).pop()!, ...meta, summary: s.summary() };
+    });
+    return this.#meta;
   }
 
   edge(key: string): StoredEdge | undefined {

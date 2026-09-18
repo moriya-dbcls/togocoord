@@ -1,0 +1,6 @@
+##gff-version 3
+##sequence-region NC_000932.1 1 154478
+NC_000932.1	RefSeq	region	1	154478	.	+	.	ID=NC_000932.1:1..154478;Dbxref=taxon:3702;Is_circular=true;Name=Pltd;ecotype=Columbia;gbkey=Src;genome=chloroplast;mol_type=genomic DNA
+NC_000932.1	RefSeq	CDS	69611	69724	.	-	0	ID=cds-NP_051038.1;Parent=rna-ArthCp047;Dbxref=GenBank:NP_051038.1,GeneID:844801;Name=NP_051038.1;Note=trans-spliced;exception=trans-splicing;gbkey=CDS;gene=rps12;locus_tag=ArthCp047;part=1;product=ribosomal protein S12;protein_id=NP_051038.1;transl_table=11
+NC_000932.1	RefSeq	CDS	139856	140087	.	+	0	ID=cds-NP_051038.1;Parent=rna-ArthCp047;Dbxref=GenBank:NP_051038.1,GeneID:844801;Name=NP_051038.1;Note=trans-spliced;exception=trans-splicing;gbkey=CDS;gene=rps12;locus_tag=ArthCp047;part=2;product=ribosomal protein S12;protein_id=NP_051038.1;transl_table=11
+NC_000932.1	RefSeq	CDS	140625	140650	.	+	2	ID=cds-NP_051038.1;Parent=rna-ArthCp047;Dbxref=GenBank:NP_051038.1,GeneID:844801;Name=NP_051038.1;Note=trans-spliced;exception=trans-splicing;gbkey=CDS;gene=rps12;locus_tag=ArthCp047;part=3;product=ribosomal protein S12;protein_id=NP_051038.1;transl_table=11

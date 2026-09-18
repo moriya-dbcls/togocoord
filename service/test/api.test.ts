@@ -164,6 +164,17 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.deepEqual([seq.body.length, seq.body.gene, seq.body.tags], [899, "GPX1", ["MANE Select"]]);
   });
 
+  it("GET /v1/meta describes each store: organism, counts and examples to try", async () => {
+    const { body } = await get("/v1/meta");
+    const mt = body.stores.find((s: { file: string }) => s.file === "mt.sqlite");
+    assert.deepEqual(mt.summary.taxa, [{ taxon: 9606, organism: "Homo sapiens", sequences: 14 }]);
+    assert.deepEqual(mt.summary.edges, { annotation: 13 });
+    assert.ok(mt.summary.examples.length > 0);
+    const up = body.stores.find((s: { file: string }) => s.file === "uniprot.sqlite");
+    assert.equal(up.summary.taxa[0].taxon, 9606); // from the UniProt header (OX=9606)
+    for (const id of mt.summary.examples) assert.equal((await get(`/v1/location?loc=${encodeURIComponent(id)}`)).status, 200);
+  });
+
   it("serves the web UI", async () => {
     const index = await get("/", "text/html");
     assert.equal(index.status, 200);

@@ -57,7 +57,12 @@ export async function ingestFastaFile(path: string, sink: Sink, options: FastaOp
       const residues = chunks.join("").toUpperCase();
       const unit = options.unit ?? registry.defaultUnit(ref) ?? "aa";
       const transcript = /^(?:refseq:[NX][MR]_|ensembl:ENS[A-Z]*T\d)/.test(ref);
+      // UniProt headers carry the organism: `OS=Homo sapiens OX=9606`.
+      const ox = /\bOX=(\d+)/.exec(header)?.[1];
+      const os = /\bOS=(.+?)(?= [A-Z]{2}=|$)/.exec(header)?.[1];
       const record: SequenceRecord = {
+        ...(ox && { taxon: Number(ox) }),
+        ...(os && { organism: ownString(os) }),
         ref: ownString(ref),
         moltype: unit === "aa" ? "protein" : transcript ? "RNA" : "DNA",
         unit,

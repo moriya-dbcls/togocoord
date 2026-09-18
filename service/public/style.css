@@ -78,3 +78,15 @@ footer a { color: var(--accent-dark); }
 @media (max-width: 600px) {
   #loc { flex-basis: 100%; }
 }
+
+nav { margin-top: 10px; font-size: 15px; }
+nav a { color: var(--accent-dark); text-decoration: none; padding: 2px 6px; border-radius: 6px; }
+nav a.current { background: var(--paper); font-weight: 600; }
+.species { margin-bottom: 18px; }
+.species h3 { font-size: 16px; margin: 14px 0 6px; }
+.species h3 .muted { font-size: 13px; }
+.store { margin-bottom: 8px; }
+.store .label { font-weight: 600; }
+.store dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0 0; font-size: 13px; }
+.store dt { color: var(--muted); }
+.store dd { margin: 0; word-break: break-word; }

@@ -69,7 +69,11 @@ export class GenBankIngestor {
         this.#sink.sequence(s);
       },
     };
-    st.sequence(sequenceRecord(record, ref, provenance));
+    const own = sequenceRecord(record, ref, provenance);
+    st.sequence(own);
+    // Proteins encoded by this record inherit its organism.
+    if (own.taxon !== undefined) st.taxon = own.taxon;
+    if (own.organism !== undefined) st.organism = own.organism;
     for (const feature of record.features) {
       if (feature.key === "source") continue;
       ingestFeature(feature, record, ref, st);
@@ -100,6 +104,8 @@ interface State {
   units: Map<string, Unit>;
   exclude: ReadonlySet<string>;
   sequence: (s: SequenceRecord) => void;
+  taxon?: number;
+  organism?: string;
 }
 
 function ingestFeature(f: GbFeature, record: GbRecord, ref: string, st: State): void {
@@ -159,7 +165,15 @@ function ingestCds(f: GbFeature, loc: Location, ref: string, provenance: Provena
   if (translation) st.residues.add(protein, translation);
   pushCdsEdge({ f, cds: loc, outer: ref, protein, codonStart, table, aaLength, translation, provenance, st });
 
-  const seq: SequenceRecord = { ref: protein, moltype: "protein", unit: "aa", length: aaLength, provenance };
+  const seq: SequenceRecord = {
+    ref: protein,
+    moltype: "protein",
+    unit: "aa",
+    length: aaLength,
+    provenance,
+    ...(st.taxon !== undefined && { taxon: st.taxon }),
+    ...(st.organism !== undefined && { organism: st.organism }),
+  };
   if (translation) Object.assign(seq, checksums(translation));
   st.sequence(seq);
 }

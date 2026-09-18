@@ -204,8 +204,85 @@ $("#examples").append(
   ...EXAMPLES.map(([label, id]) => el("button", { type: "button", class: "small", title: id, onclick: () => run(id, toSelect.value) }, label)),
 );
 
+// ---- Loaded data view ------------------------------------------------------------------------------------------
+
+const fmt = (n) => Number(n).toLocaleString("en-US");
+// Sequences without a record of their own (only the end of an edge, e.g. GFF3 transcripts) have no molecule type.
+const counts = (o) =>
+  Object.entries(o ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `${fmt(n)} ${k === "unknown" ? "referenced only" : k}`).join(", ") || "—";
+
+/** Organism a store belongs to: its recorded organism, else the organism most of its sequences carry. */
+function storeOrganism(s) {
+  if (s.organism) return { name: s.organism, taxon: s.taxon };
+  const t = s.summary?.taxa?.[0];
+  return t ? { name: t.organism ?? `taxon ${t.taxon}`, taxon: t.taxon } : { name: "Cross-species / structures", taxon: undefined };
+}
+
+async function showData() {
+  $("#convert-view").hidden = true;
+  $("#data").hidden = false;
+  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("current", a.dataset.view === "data"));
+  const { stores } = await api("/v1/meta");
+  const groups = new Map();
+  for (const s of stores) {
+    const o = storeOrganism(s);
+    const key = o.taxon !== undefined ? String(o.taxon) : o.name; // "Homo sapiens" and "Homo sapiens (human)" are one group
+    if (!groups.has(key)) groups.set(key, { ...o, stores: [] });
+    groups.get(key).stores.push(s);
+  }
+  $("#data-count").textContent = `(${stores.length} stores, ${groups.size} groups)`;
+  $("#species").replaceChildren(
+    ...[...groups.values()].map((g) =>
+      el("div", { class: "species" },
+        el("h3", {}, g.name, g.taxon ? el("span", { class: "muted" }, ` · taxon ${g.taxon}`) : null),
+        ...g.stores.map((s) =>
+          el("div", { class: "card store" },
+            el("div", { class: "label" }, s.label ?? s.file),
+            el("dl", {},
+              s.assembly ? [el("dt", {}, "assembly"), el("dd", {}, `${s.assembly}${s.accession ? ` (${s.accession})` : ""}`)] : null,
+              el("dt", {}, "inputs"), el("dd", {}, el("code", {}, (s.inputs ?? "").split(",").join(", "))),
+              el("dt", {}, "sequences"), el("dd", {}, counts(s.summary?.sequences)),
+              el("dt", {}, "edges"), el("dd", {}, `${counts(s.summary?.edges)}${s.summary?.blocks ? ` (${fmt(s.summary.blocks)} blocks)` : ""}`),
+              s.summary?.annotations ? [el("dt", {}, "annotations"), el("dd", {}, fmt(s.summary.annotations))] : null,
+              el("dt", {}, "built"), el("dd", {}, `${(s.created ?? "").slice(0, 10)} · ${s.file} · schema ${s.schema}`),
+              s.summary?.examples?.length
+                ? [el("dt", {}, "try"), el("dd", {}, ...s.summary.examples.map((id) =>
+                    el("button", { type: "button", class: "small", title: "convert this location", onclick: () => { showConvert(); run(id, ""); } }, id)))]
+                : null,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+function showConvert() {
+  $("#data").hidden = true;
+  $("#convert-view").hidden = false;
+  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("current", a.dataset.view === "convert"));
+}
+
+document.querySelectorAll("nav a").forEach((a) =>
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (a.dataset.view === "data") {
+      history.pushState(null, "", "?view=data");
+      showData().catch((err) => showError(err));
+    } else {
+      history.pushState(null, "", "?");
+      showConvert();
+    }
+  }),
+);
+
 function fromUrl(push = false) {
   const p = new URLSearchParams(location.search);
+  if (p.get("view") === "data") {
+    showData().catch((err) => showError(err));
+    return;
+  }
+  showConvert();
   codonBox.checked = p.get("codon") !== "never";
   maneBox.checked = p.get("tag") === "MANE Select";
   if (p.get("loc")) run(p.get("loc"), p.get("to") ?? "", push);

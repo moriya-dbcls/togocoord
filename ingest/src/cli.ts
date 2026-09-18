@@ -4,11 +4,12 @@
 // Streams GenBank/GenPept flat files (.gb .gbk .gbff .gp .gpff) and GFF3 (.gff .gff3), optionally gzipped.
 // Without --db, writes JSON Lines to stdout ({"record":"sequence"|"edge"|"annotation"|"warning", ...}).
 // Large or indexed FASTA (--fasta) is read on demand through a .fai index (built next to the file when missing).
+import { execFileSync } from "node:child_process";
 import { readFileSync, statSync, existsSync } from "node:fs";
 import { basename } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { NamespaceRegistry } from "@togocoord/core";
-import { accessionRef, assemblyReportSeqids, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, VersionResolver } from "./common.ts";
+import { accessionRef, assemblyReportInfo, assemblyReportSeqids, ChainedSource, DEFAULT_EXCLUDED_ANNOTATIONS, VersionResolver } from "./common.ts";
 import { parseFastaHeaders } from "./fasta.ts";
 import { FaiSequenceSource } from "./fasta-index.ts";
 import { MemorySequenceSource, type SequenceSource } from "./sequence.ts";
@@ -19,7 +20,8 @@ import { SqliteSink } from "./store.ts";
 import { ingestGenBankFile, ingestGff3File, JsonlSink } from "./stream.ts";
 
 const USAGE =
-  "usage: togocoord-ingest [--db OUT.sqlite [--overwrite]] [--fasta FILE]... [--seqid-map ASSEMBLY_REPORT] [--sifts-known-only] [--all-annotations] FILE...\n";
+  "usage: togocoord-ingest [--db OUT.sqlite [--overwrite]] [--fasta FILE]... [--seqid-map ASSEMBLY_REPORT] [--assembly-report FILE]\n" +
+  "                        [--label TEXT] [--taxon ID] [--organism NAME] [--assembly NAME] [--sifts-known-only] [--all-annotations] FILE...\n";
 const args = process.argv.slice(2);
 if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
   process.stderr.write(USAGE);
@@ -46,13 +48,20 @@ let overwrite = false;
 let allAnnotations = false;
 let siftsKnownOnly = false;
 let seqids: Map<string, string> | undefined;
+/** Store metadata shown by the service (label, organism, assembly). */
+const meta: Record<string, string> = {};
 for (let i = 0; i < args.length; i++) {
   const a = args[i]!;
   if (a === "--db") db = args[++i];
   else if (a === "--overwrite") overwrite = true;
   else if (a === "--all-annotations") allAnnotations = true;
   else if (a === "--sifts-known-only") siftsKnownOnly = true;
-  else if (a === "--seqid-map") seqids = assemblyReportSeqids(readFileSync(args[++i]!, "utf8"));
+  else if (a === "--seqid-map" || a === "--assembly-report") {
+    const text = readFileSync(args[++i]!, "utf8");
+    if (a === "--seqid-map") seqids = assemblyReportSeqids(text);
+    const info = assemblyReportInfo(text);
+    for (const [k, v] of Object.entries(info)) meta[k] ??= v;
+  } else if (["--label", "--taxon", "--organism", "--assembly"].includes(a)) meta[a.slice(2)] = args[++i]!;
   else if (a === "--fasta") sources.push(openFasta(args[++i]));
   else if (a.startsWith("--")) {
     process.stderr.write(`unknown option ${a}\n${USAGE}`);
@@ -62,6 +71,16 @@ for (let i = 0; i < args.length; i++) {
 
 function openFasta(file: string | undefined): SequenceSource {
   if (!file) throw new Error("--fasta needs a file");
+  // Large gzipped FASTA cannot be held as one string (V8 limit ~0.5 G characters): decompress it once next to the
+  // input and read it through a .fai index like any large FASTA.
+  if (file.endsWith(".gz") && statSync(file).size > 32 * 1024 * 1024) {
+    const plain = file.slice(0, -3);
+    if (!existsSync(plain)) {
+      process.stderr.write(`${file}: decompressing to ${plain} for indexed access\n`);
+      execFileSync("sh", ["-c", 'gzip -dc "$1" > "$2.tmp" && mv "$2.tmp" "$2"', "sh", file, plain]);
+    }
+    file = plain;
+  }
   if (!file.endsWith(".gz") && (existsSync(`${file}.fai`) || statSync(file).size > 64 * 1024 * 1024)) {
     return new FaiSequenceSource(file, nameToRef);
   }
@@ -118,7 +137,7 @@ for (const file of inputs) {
   if (!stats) throw new Error(`${file}: unknown format (expected .gb/.gbff/.gp/.gff3/.fa, optionally .gz)`);
   process.stderr.write(`${file}: ${stats.lines} lines, ${stats.features} features\n`);
 }
-if (sink instanceof SqliteSink) sink.close({ inputs: inputs.map((f) => basename(f)).join(",") });
+if (sink instanceof SqliteSink) sink.close({ ...meta, inputs: inputs.map((f) => basename(f)).join(",") });
 else sink.flush();
 
 const seconds = ((performance.now() - started) / 1000).toFixed(1);
