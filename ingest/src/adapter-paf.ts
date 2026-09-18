@@ -5,7 +5,7 @@
 // Coordinates are 0-based half-open; on a '-' strand the CIGAR runs along the target forward and the query backward.
 import type { Block } from "@togocoord/core";
 import { NamespaceRegistry } from "@togocoord/core";
-import { validateAlignedBlocks } from "./adapter-chain.ts";
+import { blockMismatches, validateAlignedBlocks } from "./adapter-chain.ts";
 import { ownString } from "./common.ts";
 import type { Edge, Provenance, Sink } from "./model.ts";
 import type { SequenceSource } from "./sequence.ts";
@@ -118,6 +118,8 @@ export interface PafOptions {
   shared?: (ref: string) => boolean;
   /** Whether two sequences may correspond (see ChainOptions.compatible). */
   compatible?: (from: string, to: string) => boolean;
+  /** Record the aligned bases that differ (see ChainOptions.recordMismatches). */
+  recordMismatches?: boolean;
 }
 
 export interface PafStats {
@@ -214,6 +216,13 @@ export async function ingestPafFile(path: string, sink: Sink, options: PafOption
       provenance: { ...provenance, record: `${r.qname}:${r.qstart}-${r.qend}` },
       validation: validateAlignedBlocks(blocks, options.source, options.sample ?? 20, options.minIdentity ?? 0.5, stats),
     };
+    if (options.recordMismatches && options.source) {
+      const m = blockMismatches(blocks, options.source);
+      if (m?.length) {
+        edge.mismatches = m;
+        edge.attributes.mismatches = String(m.length);
+      }
+    }
     sink.edge(edge);
     stats.alignments++;
     stats.blocks += blocks.length;

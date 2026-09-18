@@ -412,6 +412,12 @@ export class StoreSet {
     return this.species().find((s) => s.taxon === taxon)?.organism;
   }
 
+  /** Mismatching aligned bases of a genome-alignment edge (`<store>:<edge id>`) within [start, end) of its source. */
+  mismatches(key: string, ref: string, start: number, end: number): Array<{ pos: number; a: string; b: string }> {
+    const [store, id] = key.split(":");
+    return this.stores[Number(store)]?.mismatches(Number(id), ref, start, end) ?? [];
+  }
+
   edge(key: string): StoredEdge | undefined {
     const [store, id] = key.split(":");
     return this.stores[Number(store)]?.edge(Number(id));

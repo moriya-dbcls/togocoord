@@ -81,6 +81,20 @@ let toNames: Map<string, string> | undefined;
 /** Both assemblies' reports: the chain store records the species and length of the sequences it connects. */
 const chainReports: string[] = [];
 /** Sequences listed in both reports (the same accession in both assemblies): identity, no alignment needed. */
+/**
+ * Whether the two assemblies of a chain / PAF are of one species (the same taxon, or the same binomial name, e.g.
+ * Marchantia polymorpha and its subsp. ruderalis): then the mismatching bases are recorded.
+ */
+function sameSpecies(): boolean {
+  const infos = chainReports.map((t) => assemblyReportInfo(t));
+  if (infos.length !== 2) return false;
+  // As spec-service §2.2: an infraspecific name (subsp., var., strain, ...) after the other's binomial.
+  const plain = (o?: string) => (o ?? "").replace(/\s*\(.*\)\s*$/, "").trim();
+  const under = (sub: string, species: string) =>
+    /^[A-Z][a-z]+ [a-z][a-z-]+$/.test(species) && new RegExp(`^${species} (?:subsp\\.|var\\.|f\\.|str\\.|strain|substr\\.|serovar|biovar|pv\\.|cv\\.)`).test(sub);
+  const [a, b] = infos.map((i) => plain(i.organism));
+  return infos[0]!.taxon === infos[1]!.taxon || (!!a && !!b && (under(a, b) || under(b, a)));
+}
 /** Nuclear sequences and organelle genomes do not correspond (organelle DNA inserted in the nucleus is paralogous). */
 function sameMolecule(): (from: string, to: string) => boolean {
   const kinds = new Map(chainReports.flatMap((t) => [...assemblyReportMolecules(t)]));
@@ -180,6 +194,7 @@ for (const file of inputs) {
       toRef: (n) => lookupSeqid(toNames!, n),
       shared: sharedBetweenReports(),
       compatible: sameMolecule(),
+      recordMismatches: sameSpecies(),
     });
     const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(1) : "-";
     process.stderr.write(
@@ -211,6 +226,7 @@ for (const file of inputs) {
       toRef: (n) => lookupSeqid(toNames!, n),
       shared: sharedBetweenReports(),
       compatible: sameMolecule(),
+      recordMismatches: sameSpecies(),
     });
     const identity = s.sampledBases ? ((100 * s.identicalBases) / s.sampledBases).toFixed(2) : "-";
     process.stderr.write(

@@ -566,6 +566,54 @@ describe("protein alignments computed by TogoCoord (T2)", () => {
   });
 });
 
+describe("what differs along a path (spec-service §14)", () => {
+  const make = (name: string, r: IngestResult) => {
+    const path = join(dir, `${name}.sqlite`);
+    const sink = new SqliteSink(path);
+    for (const x of r.sequences) sink.sequence(x);
+    for (const e of r.edges) sink.edge(e);
+    sink.close();
+    return new TogoCoordStore(path);
+  };
+  const none = { annotations: [], warnings: [] };
+  const dna = (ref: string, taxon: number) => ({ ref, moltype: "DNA" as const, unit: "nt" as const, length: 10_000, taxon, provenance: { adapter: "assembly-report" as const } });
+  const aa = (ref: string, taxon: number) => ({ ref, moltype: "protein" as const, unit: "aa" as const, length: 10, taxon, provenance: { adapter: "fasta" as const } });
+  const cds = (from: string, to: string, tgt: number): Edge => ({
+    kind: "annotation", from, to, blocks: [{ srcRef: from, src: 0, tgtRef: to, tgt, len: 30, rev: false }],
+    attributes: {}, provenance: { adapter: "gff3" }, validation: { status: "ok" },
+  });
+  const lift = (from: string, to: string, src: number, tgt: number, mismatches?: Array<[number, string, string]>): Edge => ({
+    kind: "liftover", directional: true, from, to, blocks: [{ srcRef: from, src, tgtRef: to, tgt, len: 200, rev: false }],
+    attributes: mismatches ? { mismatches: String(mismatches.length) } : {}, provenance: { adapter: "chain" }, validation: { status: "ok" },
+    ...(mismatches && { mismatches }),
+  });
+  const [OLD, NEW, MOUSE] = ["refseq:NC_000401.1", "refseq:NC_000401.2", "refseq:NC_000501.1"];
+  const [A, B, M] = ["refseq:NP_000401.1", "refseq:NP_000402.1", "refseq:NP_000501.1"];
+  const stores = new StoreSet()
+    .add(make("d-new", { ...none, sequences: [dna(NEW, 9606), aa(A, 9606), aa(B, 9606)], edges: [cds(A, NEW, 2000), cds(B, NEW, 2001)] }))
+    .add(make("d-old", { ...none, sequences: [dna(OLD, 9606)], edges: [] }))
+    .add(make("d-mouse", { ...none, sequences: [dna(MOUSE, 10090), aa(M, 10090)], edges: [cds(M, MOUSE, 2000)] }))
+    .add(make("d-lifts", { ...none, sequences: [], edges: [lift(OLD, NEW, 900, 1900, [[1004, "C", "T"]]), lift(NEW, MOUSE, 1950, 1950)] }));
+  const ctx = stores.context();
+  const hits = (loc: string, o: Parameters<typeof convert>[2]) => convert(stores, parseLocationId(loc, ctx), o, ctx);
+
+  it("reports a base that differs between assemblies on the way", () => {
+    const [hit] = hits(`${OLD}:1004..1006`, { to: { ref: A } });
+    assert.deepEqual([hit!.id, hit!.differences], [`${A}:2`, [`base ${OLD}:1005 C>T`]]);
+    assert.equal(hits(`${OLD}:1007..1009`, { to: { ref: A } })[0]!.differences, undefined);
+  });
+
+  it("warns when a residue lands in another reading frame", () => {
+    const toB = hits(`${A}:2`, { to: { ref: B } })[0]!;
+    assert.deepEqual([toB.id, toB.cautions], [`${B}:1c3..2c2`, ["frame differs"]]);
+  });
+
+  it("warns that a genome alignment between species gives an orthologous position", () => {
+    const [hit] = hits(`${A}:2`, { to: { category: "protein" }, taxon: 10090 });
+    assert.deepEqual([hit!.id, hit!.cautions], [`${M}:2`, ["orthologous position in another species"]]);
+  });
+});
+
 describe("species of infraspecific taxa (spec-service §2.2)", () => {
   const named = (name: string, meta: Record<string, string>) => {
     const path = join(dir, `${name}.sqlite`);

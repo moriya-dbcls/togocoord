@@ -464,6 +464,7 @@ function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: C
     cost: r.cost,
     approximate: r.approximate,
     ...(r.differences && { differences: r.differences }),
+    ...(r.cautions && { cautions: r.cautions }),
     orientation: r.orientation,
     path: r.path.map((s) => ({
       kind: s.kind,

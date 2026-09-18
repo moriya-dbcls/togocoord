@@ -111,3 +111,4 @@ nav a.current { background: var(--paper); font-weight: 600; }
 select:disabled, .option.unusable { opacity: 0.45; cursor: not-allowed; }
 .option.unusable input { cursor: not-allowed; }
 .store .md5 { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
+.badge.caution { background: #fff4d6; color: #7a5a00; }

@@ -78,8 +78,13 @@ export interface Conversion {
    */
   orientation: "forward" | "reverse" | "mixed";
   path: Step[];
-  /** Residues that differ between the input and the target along the path (protein alignments). */
+  /**
+   * What differs between the input and the target along the path: residues of protein alignments (`168 L>M`) and bases
+   * of genome alignments between assemblies (`base refseq:NC_000007.13:140453136 A>T`).
+   */
   differences?: string[];
+  /** Qualitative warnings: `frame differs`, `orthologous position in another species` (spec-service §14). */
+  cautions?: string[];
 }
 
 /**
@@ -262,6 +267,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
         cost: state.cost,
         approximate: state.path.some(isApproximate),
         ...(state.path.some((s) => s.differences) && { differences: state.path.flatMap((s) => s.differences ?? []) }),
+        ...((c) => (c.length ? { cautions: c } : {}))(cautionsOf(state, input, ctx, stores)),
         orientation: state.orientation,
         path: state.path,
       });
@@ -471,7 +477,10 @@ function expand(
         provenance: edge.provenance,
       };
       if (edge.location !== undefined) step.edgeLocation = edge.location;
-      const differences = substituted(edge.attributes.substitutions, step.direction, loc);
+      const differences = [
+        ...substituted(edge.attributes.substitutions, step.direction, loc),
+        ...(edge.attributes.mismatches ? baseMismatches(stores, key, loc) : []),
+      ];
       if (differences.length) step.differences = differences;
       out.push({
         location: t.location,
@@ -482,6 +491,33 @@ function expand(
         orientation: ctx.unitOf(loc.outer) === "aa" ? combine(state.orientation, t.orientation) : t.orientation,
       });
     }
+  }
+  return out;
+}
+
+/** Bases of a genome alignment (directional, used from its source) that differ within the location. */
+function baseMismatches(stores: StoreSet, key: string, loc: Location): string[] {
+  return loc.segments.flatMap((s) =>
+    stores.mismatches(key, s.ref, s.start, Math.max(s.end, s.start + 1)).map((m) => `base ${s.ref}:${m.pos + 1} ${m.a}>${m.b}`),
+  );
+}
+
+/**
+ * Warnings about the path as a whole (spec-service §14):
+ * - `frame differs`: a protein input on residue boundaries lands inside codons of the target protein (a gene model with
+ *   another reading frame there);
+ * - `orthologous position in another species`: the path crosses species through a genome alignment, whose positions
+ *   are homologous; residues often differ (no bases are recorded between species).
+ */
+function cautionsOf(state: State, input: Location, ctx: CoordContext, stores: StoreSet): string[] {
+  const out: string[] = [];
+  const onResidues = (l: Location) => l.segments.every((s) => s.start % 3 === 0 && s.end % 3 === 0);
+  if (ctx.unitOf(input.outer) === "aa" && onResidues(input) && ctx.unitOf(state.location.outer) === "aa" && !onResidues(state.location)) {
+    out.push("frame differs");
+  }
+  const lifts = state.path.filter((s) => s.kind === "liftover");
+  if (lifts.some((s) => stores.taxonOf(s.from) !== undefined && stores.taxonOf(s.to) !== undefined && stores.taxonOf(s.from) !== stores.taxonOf(s.to))) {
+    out.push("orthologous position in another species");
   }
   return out;
 }

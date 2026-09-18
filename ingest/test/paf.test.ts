@@ -75,6 +75,24 @@ describe("PAF adapter", () => {
     assert.deepEqual([stats.alignments, stats.crossMolecule], [0, 1]);
   });
 
+  it("records the aligned bases that differ, and the store reads them back by position", async () => {
+    const { SqliteSink, TogoCoordStore } = await import("../src/store.ts");
+    const Q2 = Q.slice(0, 10) + (Q[10] === "A" ? "C" : "A") + Q.slice(11);
+    const src = new MemorySequenceSource().add(ref("Q2"), Q2).add(ref("T"), T);
+    const dir = mkdtempSync(join(tmpdir(), "togocoord-paf-"));
+    const path = join(dir, "snv.paf");
+    writeFileSync(path, row("Q2", Q2.length, 0, 149, "+", "T", 200, 0, 150, 147, "50=2I50=3D47=") + "\n");
+    const db = join(dir, "snv.sqlite");
+    const sink = new SqliteSink(db);
+    await ingestPafFile(path, sink, { fromRef: ref, toRef: ref, source: src, minLength: 10, recordMismatches: true });
+    sink.close();
+    const store = new TogoCoordStore(db);
+    assert.deepEqual(store.mismatches(1, ref("Q2"), 0, 149), [{ pos: 10, a: Q2[10], b: T[10] }]);
+    assert.deepEqual(store.mismatches(1, ref("Q2"), 11, 149), []);
+    assert.equal(store.edge(1)!.attributes.mismatches, "1");
+    store.close();
+  });
+
   it("requires the CIGAR", () => {
     const r = parsePafLine(row("Q", Q.length, 0, 149, "+", "T", 200, 0, 150, 147, "x").replace("\tcg:Z:x", ""))!;
     assert.throws(() => pafBlocks(r, ref("Q"), ref("T")), /cg:Z/);

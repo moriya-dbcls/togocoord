@@ -49,6 +49,11 @@ export interface Edge {
   location?: string;
   /** Usable only from `from` to `to` (e.g. liftOver chains, filtered on the source side). Stored in compact chunks. */
   directional?: boolean;
+  /**
+   * Aligned bases that differ (genome alignments between assemblies of one species): 0-based position on the source,
+   * the source base and the aligned target base (in the source's orientation). Positions only, no sequences.
+   */
+  mismatches?: Array<[number, string, string]>;
   attributes: Record<string, string>;
   provenance: Provenance;
   validation: Validation;

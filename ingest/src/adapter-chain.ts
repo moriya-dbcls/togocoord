@@ -102,6 +102,11 @@ export interface ChainOptions {
    * genome (nuclear insertions of organelle DNA, NUMTs / NUPTs) are paralogous, not the same position.
    */
   compatible?: (from: string, to: string) => boolean;
+  /**
+   * Record the aligned bases that differ (whole blocks compared with `source`): for assemblies of one species, where
+   * they are few (GRCh37 / GRCh38, MpTak v3.1 / v7.1). Between species most bases differ and nothing is recorded.
+   */
+  recordMismatches?: boolean;
 }
 
 export interface ChainStats {
@@ -160,11 +165,38 @@ export async function ingestChainFile(path: string, sink: Sink, options: ChainOp
       provenance: { ...provenance, record: `chain ${c.id}` },
       validation: validateAlignedBlocks(blocks, options.source, sample, minIdentity, stats),
     };
+    if (options.recordMismatches && options.source) {
+      const m = blockMismatches(blocks, options.source);
+      if (m?.length) {
+        edge.mismatches = m;
+        edge.attributes.mismatches = String(m.length);
+      }
+    }
     sink.edge(edge);
     stats.chains++;
     stats.blocks += blocks.length;
   }
   return stats;
+}
+
+/**
+ * Aligned bases that differ over whole blocks: [0-based source position, source base, target base in the source's
+ * orientation]. Undefined when a sequence is not available. `N` on either side is not a difference.
+ */
+export function blockMismatches(blocks: Block[], source: SequenceSource): Array<[number, string, string]> | undefined {
+  const out: Array<[number, string, string]> = [];
+  for (const b of blocks) {
+    const s = source.get(b.srcRef, b.src, b.src + b.len);
+    const t0 = source.get(b.tgtRef, b.tgt, b.tgt + b.len);
+    if (s === undefined || t0 === undefined) return undefined;
+    const t = b.rev ? reverseComplement(t0) : t0;
+    for (let k = 0; k < b.len; k++) {
+      const x = s[k]!;
+      const y = t[k]!;
+      if (x !== y && x !== "N" && y !== "N") out.push([b.src + k, x, y]);
+    }
+  }
+  return out;
 }
 
 /**

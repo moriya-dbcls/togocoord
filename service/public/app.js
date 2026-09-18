@@ -184,9 +184,13 @@ function renderResult(r) {
       r.assembly && multiAssembly.has(r.taxon) ? el("span", { class: "badge species", title: "genome assembly" }, r.assembly) : null,
       el("span", { class: "badge", title: "path cost" }, `cost ${r.cost}`),
       r.approximate ? el("span", { class: "badge warn", title: "the path uses an edge not verified against the sequences; positions may be shifted" }, "approximate") : null,
+      // Residues (protein alignments) or bases (genome alignments between assemblies) that differ along the path.
       r.differences?.length
-        ? el("span", { class: "badge warn", title: `the residue differs between the input and the target (protein alignment): ${r.differences.join(", ")}` }, `residue differs: ${r.differences.slice(0, 3).join(", ")}`)
+        ? el("span", { class: "badge warn", title: `differs between the input and the target: ${r.differences.join(", ")}` },
+            `${r.differences.every((d) => d.startsWith("base ")) ? "base" : "residue"} differs: ${r.differences.slice(0, 2).map((d) => d.replace(/^base \S+:/, "")).join(", ")}${r.differences.length > 2 ? " …" : ""}`)
         : null,
+      ...(r.cautions ?? []).map((c) =>
+        el("span", { class: "badge caution", title: c === "frame differs" ? "the target lies in another reading frame than the input's residues" : "genome alignment between species: the position is homologous, residues may differ" }, c)),
       r.orientation !== "forward" ? el("span", { class: "badge" }, r.orientation) : null,
       el("button", { type: "button", class: "small", onclick: () => toggleExtra(card, "faldo", r.location) }, "FALDO"),
       el("button", { type: "button", class: "small", onclick: () => toggleExtra(card, "annotations", r.location) }, "Annotations"),

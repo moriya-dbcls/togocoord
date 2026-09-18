@@ -16,9 +16,12 @@ import { ownString } from "./common.ts";
 import { Lru } from "./lru.ts";
 import type { Annotation, Edge, Provenance, SequenceRecord, Sink, Validation } from "./model.ts";
 
-export const STORE_SCHEMA_VERSION = "5";
-/** Versions the reader accepts (5 added chunked storage for directional edges; 4 simply has none). */
-export const READABLE_SCHEMA_VERSIONS: readonly string[] = ["4", "5"];
+export const STORE_SCHEMA_VERSION = "6";
+/**
+ * Versions the reader accepts (5 added chunked storage for directional edges, 6 the mismatching bases of genome
+ * alignments; older stores simply have none).
+ */
+export const READABLE_SCHEMA_VERSIONS: readonly string[] = ["4", "5", "6"];
 
 /** Blocks per chunk of a directional edge (spec-ingest §14). */
 export const CHUNK_SIZE = 256;
@@ -38,6 +41,7 @@ CREATE TABLE annotation(
   id INTEGER PRIMARY KEY, seq INTEGER NOT NULL, start INTEGER NOT NULL, "end" INTEGER NOT NULL,
   type TEXT, location TEXT, attributes TEXT, provenance TEXT);
 CREATE TABLE warning(id INTEGER PRIMARY KEY, message TEXT);
+CREATE TABLE mismatch(edge INTEGER NOT NULL, seq INTEGER NOT NULL, pos INTEGER NOT NULL, a TEXT NOT NULL, b TEXT NOT NULL);
 CREATE TABLE chunk(
   id INTEGER PRIMARY KEY, edge INTEGER NOT NULL, src_seq INTEGER NOT NULL, tgt_seq INTEGER NOT NULL,
   lo INTEGER NOT NULL, hi INTEGER NOT NULL, src0 INTEGER NOT NULL, tgt0 INTEGER NOT NULL, rev INTEGER NOT NULL,
@@ -54,6 +58,7 @@ CREATE VIRTUAL TABLE chunk_src USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
 INSERT INTO chunk_src SELECT id, src_seq, src_seq, lo, hi FROM chunk ORDER BY src_seq, lo;
 CREATE VIRTUAL TABLE annotation_idx USING rtree_i32(id, seq_lo, seq_hi, lo, hi);
 INSERT INTO annotation_idx SELECT id, seq, seq, start, max("end", start + 1) FROM annotation ORDER BY seq, start;
+CREATE INDEX mismatch_pos ON mismatch(seq, pos);
 CREATE INDEX sequence_digest ON sequence(digest) WHERE digest IS NOT NULL;
 CREATE INDEX sequence_md5 ON sequence(md5) WHERE md5 IS NOT NULL;
 CREATE INDEX edge_from ON edge(from_seq);
@@ -78,7 +83,7 @@ export class SqliteSink implements Sink {
   readonly counts = { sequence: 0, edge: 0, block: 0, chunk: 0, annotation: 0, warning: 0 };
   readonly validation: Record<string, number> = {};
   readonly mismatches: string[] = [];
-  readonly #s: Record<"newSeq" | "fillSeq" | "edge" | "block" | "chunk" | "annotation" | "warning", StatementSync>;
+  readonly #s: Record<"newSeq" | "fillSeq" | "edge" | "block" | "chunk" | "mismatch" | "annotation" | "warning", StatementSync>;
 
   constructor(path: string, options: SqliteSinkOptions = {}) {
     if (existsSync(path)) {
@@ -101,6 +106,7 @@ export class SqliteSink implements Sink {
         "INSERT INTO edge(kind, from_seq, to_seq, location, attributes, provenance, status, detail, basis) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
       ),
       block: this.#db.prepare("INSERT INTO block(edge, src_seq, src, tgt_seq, tgt, len, rev) VALUES (?,?,?,?,?,?,?)"),
+      mismatch: this.#db.prepare("INSERT INTO mismatch(edge, seq, pos, a, b) VALUES (?,?,?,?,?)"),
       chunk: this.#db.prepare("INSERT INTO chunk(edge, src_seq, tgt_seq, lo, hi, src0, tgt0, rev, n, data) VALUES (?,?,?,?,?,?,?,?,?,?)"),
       annotation: this.#db.prepare('INSERT INTO annotation(seq, start, "end", type, location, attributes, provenance) VALUES (?,?,?,?,?,?,?)'),
       warning: this.#db.prepare("INSERT INTO warning(message) VALUES (?)"),
@@ -143,6 +149,11 @@ export class SqliteSink implements Sink {
       e.kind, this.#seq(e.from), this.#seq(e.to), e.location ?? null, JSON.stringify(e.attributes), JSON.stringify(e.provenance),
       e.validation.status, e.validation.detail ?? null, e.validation.basis ?? null,
     ) as { id: number };
+    if (e.mismatches?.length) {
+      const seq = this.#seq(e.from);
+      for (const [pos, a, b] of e.mismatches) this.#s.mismatch.run(row.id, seq, pos, a, b);
+      this.#tick(e.mismatches.length);
+    }
     if (e.directional) {
       // Millions of blocks (whole-genome chains): compact chunks indexed by their source extent.
       const sorted = [...e.blocks].sort((a, b) => a.src - b.src);
@@ -555,6 +566,20 @@ export class TogoCoordStore {
   neighbors(loc: Location, ctx: CoordContext = this.context()): MapResult {
     return mapLocation(loc, this.mappingFor(loc), ctx);
   }
+
+  /** Mismatching aligned bases of an edge within [start, end) of its source sequence (schema 6). */
+  mismatches(edge: number, ref: string, start: number, end: number): Array<{ pos: number; a: string; b: string }> {
+    if (this.#hasMismatches === undefined) {
+      this.#hasMismatches = this.#db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'mismatch'").get() !== undefined;
+    }
+    const id = this.#hasMismatches ? this.#id(ref) : undefined;
+    if (id === undefined) return [];
+    return this.#db
+      .prepare("SELECT pos, a, b FROM mismatch WHERE seq = ? AND pos >= ? AND pos < ? AND edge = ? ORDER BY pos")
+      .all(id, start, end, edge)
+      .map((r) => ({ pos: Number((r as { pos: number }).pos), a: String((r as { a: string }).a), b: String((r as { b: string }).b) }));
+  }
+  #hasMismatches: boolean | undefined;
 
   /** An annotation by its ID, in a store built with --id-namespace (e.g. the CRE FCHS_1). */
   annotationById(name: string): Omit<Annotation, "extent"> | undefined {
