@@ -1,5 +1,10 @@
 # @togocoord/service
 
+```sh
+node service/src/serve.ts --port 8080 human_genome.sqlite human_rna.sqlite human_ensembl.sqlite human_uniprot.sqlite sifts_human.sqlite
+# Web UI: http://127.0.0.1:8080/   REST API: /v1/convert?loc=uniprot:P07203:49&to=genome
+```
+
 TogoCoord のサービス層（v0.1）。複数の保存先（`@togocoord/ingest` で作る SQLite）をまたいで経路を探索し、Location ID を変換する。
 
 - 規則と検証結果: [../docs/spec-service.md](../docs/spec-service.md)

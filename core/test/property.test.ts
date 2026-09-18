@@ -79,18 +79,32 @@ describe("mapLocation agrees with the per-unit oracle", () => {
     );
   });
 
-  it("a partially covered segment yields a fuzzy boundary", () => {
+  it("a segment truncated at an end yields a fuzzy boundary", () => {
+    // Internal gaps (e.g. a base inserted in a transcript) do not truncate: the target may stay one contiguous
+    // interval (spec-core §5.4) and the gap is reported as unmapped. Only unmapped ends are truncations.
     fc.assert(
       fc.property(arbMapping(["test:A"], ["test:X"]), arbSegment("test:A"), (m, seg) => {
         const plain: Segment = { ref: seg.ref, start: seg.start, end: seg.end, strand: seg.strand };
         const result = mapLocation({ outer: "test:A", kind: "join", segments: [plain] }, m, ctx);
         const segs = result.targets.flatMap((t) => t.location.segments);
         const anyFuzzy = segs.some((s) => s.fuzzyLow || s.fuzzyHigh);
-        if (segs.length > 0 && result.unmapped) assert.ok(anyFuzzy, "expected a fuzzy boundary");
+        const unmappedUnits = new Set((result.unmapped?.segments ?? []).flatMap(traversal));
+        const endCut = unmappedUnits.has(plain.start) || unmappedUnits.has(plain.end - 1);
+        if (segs.length > 0 && endCut) assert.ok(anyFuzzy, "expected a fuzzy boundary");
         if (!result.unmapped) assert.ok(!anyFuzzy, "no truncation, no fuzzy boundary");
       }),
       RUNS,
     );
+  });
+
+  it("an internal gap keeps a contiguous target without truncation marks (regression: seed -346057382)", () => {
+    const m = new Mapping([
+      { srcRef: "test:A", src: 0, tgtRef: "test:X", tgt: 23, len: 6, rev: false },
+      { srcRef: "test:A", src: 7, tgtRef: "test:X", tgt: 29, len: 1, rev: false },
+    ]);
+    const r = mapLocation({ outer: "test:A", kind: "join", segments: [{ ref: "test:A", start: 0, end: 8, strand: 1 }] }, m, ctx);
+    assert.deepEqual(r.targets.map((t) => formatLocationId(t.location, ctx)), ["test:X:24..30"]);
+    assert.equal(r.unmapped && formatLocationId(r.unmapped, ctx), "test:A:7");
   });
 });
 

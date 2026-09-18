@@ -95,7 +95,8 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     const ld = await get(path, "application/ld+json");
     assert.equal(ld.body["@id"], "https://t/refseq:NC_012920.1:join(16560..16569,1..%3E5)");
     const html = await get(path, "text/html");
-    assert.match(html.body, /<h1>refseq:NC_012920.1:join\(16560..16569,1..&gt;5\)<\/h1>/);
+    assert.equal(html.status, 303);
+    assert.equal(html.location, `/?loc=${encodeURIComponent("refseq:NC_012920.1:join(16560..16569,1..>5)")}`);
     const json = await get(path, "application/json");
     assert.equal(json.status, 303);
     assert.equal(json.location, `/v1/location?loc=${encodeURIComponent("refseq:NC_012920.1:join(16560..16569,1..>5)")}`);
@@ -108,9 +109,23 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.deepEqual(edges.body.edges.map((e: { to: string; validation: { status: string } }) => [e.to, e.validation.status]), [["refseq:NM_000581.4", "ok"]]);
   });
 
-  it("GET /v1/annotations returns features overlapping a location", async () => {
+  it("GET /v1/annotations returns features overlapping a location, not those spanning it with a gap", async () => {
     const { body } = await get(`/v1/annotations?loc=${encodeURIComponent("refseq:NC_012920.1:5")}`);
     assert.ok(body.annotations.some((a: { type: string }) => a.type === "D-loop"));
+    // The D-loop is join(16024..16569,1..576): position 10000 lies inside its bounding interval only.
+    const inner = await get(`/v1/annotations?loc=${encodeURIComponent("refseq:NC_012920.1:10000")}`);
+    assert.ok(!inner.body.annotations.some((a: { type: string }) => a.type === "D-loop"));
+    assert.ok(inner.body.annotations.some((a: { type: string; location: string }) => a.type === "tRNA" && a.location === "refseq:NC_012920.1:9991..10058"));
+  });
+
+  it("serves the web UI", async () => {
+    const index = await get("/", "text/html");
+    assert.equal(index.status, 200);
+    assert.match(index.type!, /text\/html/);
+    assert.match(index.body, /<script type="module" src="\/ui\/app.js">/);
+    assert.match((await get("/ui/app.js")).type!, /javascript/);
+    assert.match((await get("/ui/style.css")).type!, /text\/css/);
+    assert.equal((await get("/ui/../src/api.ts")).status, 404);
   });
 
   it("returns JSON errors", async () => {

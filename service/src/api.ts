@@ -1,4 +1,5 @@
 // REST API (design §9) on node:http. JSON in, JSON out; CORS open for browser clients (UI, TogoStanza).
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import {
   decodeLocationId,
@@ -24,6 +25,13 @@ export interface ApiOptions {
   /** Maximum number of locations in one POST /v1/convert (default 1000). */
   maxBatch?: number;
 }
+
+/** Web UI files (service/public), served at `/` and `/ui/<file>`. */
+const UI_FILES: Record<string, { type: string; path: URL }> = {
+  "index.html": { type: "text/html; charset=utf-8", path: new URL("../public/index.html", import.meta.url) },
+  "app.js": { type: "text/javascript; charset=utf-8", path: new URL("../public/app.js", import.meta.url) },
+  "style.css": { type: "text/css; charset=utf-8", path: new URL("../public/style.css", import.meta.url) },
+};
 
 class HttpError extends Error {
   readonly status: number;
@@ -143,13 +151,26 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         const annotations = loc.segments.flatMap((s) =>
           stores.annotations(s.ref, s.start === s.end ? s.start - 1 : s.start, s.start === s.end ? s.start + 1 : s.end),
         );
+        // The index holds each feature's bounding interval; keep features whose own segments overlap the input
+        // (a position in an intron is not "in" the transcript).
+        const overlaps = (text: string) => {
+          let feature: Location;
+          try {
+            feature = parseLocationId(text, ctx);
+          } catch {
+            return true;
+          }
+          return feature.segments.some((f) =>
+            loc.segments.some((s) => f.ref === s.ref && f.start < Math.max(s.end, s.start + 1) && Math.max(s.start, s.end === s.start ? s.start - 1 : s.start) < f.end),
+          );
+        };
         return {
           input: formatLocationId(loc, ctx),
           annotations: annotations.filter((a) => {
             const key = `${a.type}\t${a.location}`;
             if (seen.has(key)) return false;
             seen.add(key);
-            return true;
+            return overlaps(a.location);
           }),
         };
       },
@@ -162,11 +183,21 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     try {
       if (req.method === "OPTIONS") return send(res, 204, undefined);
+      if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/ui/"))) {
+        const file = UI_FILES[url.pathname === "/" ? "index.html" : url.pathname.slice(4)];
+        if (!file) throw new HttpError(404, `no such UI file ${url.pathname}`);
+        res.writeHead(200, { "Content-Type": file.type, "Cache-Control": "no-cache" });
+        return void res.end(readFileSync(file.path));
+      }
       // identifiers.org-style resolution: /<namespace>:<accession>:<location>
       if (req.method === "GET" && /^\/[A-Za-z][\w.-]*:[^/]+:/.test(url.pathname)) {
         const loc = parse(decodeLocationId(url.pathname.slice(1)));
         const accept = req.headers.accept ?? "";
-        if (accept.includes("text/html")) return sendHtml(res, locationPage(loc, ctx, base));
+        if (accept.includes("text/html")) {
+          // Browsers get the web UI for this location.
+          res.setHeader("Location", `/?loc=${encodeURIComponent(formatLocationId(loc, ctx))}`);
+          return send(res, 303, undefined);
+        }
         if (accept.includes("application/json") && !accept.includes("ld+json")) {
           res.setHeader("Location", `/v1/location?loc=${encodeURIComponent(formatLocationId(loc, ctx))}`);
           return send(res, 303, undefined);
@@ -206,9 +237,6 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(ld ? body.value : body));
 }
 
-function sendHtml(res: ServerResponse, html: string): void {
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(html);
-}
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
@@ -273,22 +301,4 @@ function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: C
       ...(s.provenance && { provenance: s.provenance }),
     })),
   };
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-}
-
-function locationPage(loc: Location, ctx: CoordContext, base: string): string {
-  const id = formatLocationId(loc, ctx);
-  const q = encodeURIComponent(id);
-  return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(id)}</title>
-<h1>${escapeHtml(id)}</h1>
-<ul>
-<li><a href="/v1/location?loc=${q}">location (JSON)</a></li>
-<li><a href="/v1/location/faldo?loc=${q}">FALDO JSON-LD</a></li>
-<li><a href="/v1/convert?loc=${q}">directly connected sequences</a></li>
-<li>convert to: ${["genome", "transcript", "protein"].map((c) => `<a href="/v1/convert?loc=${q}&amp;to=${c}">${c}</a>`).join(" · ")}</li>
-</ul>
-<pre>${escapeHtml(JSON.stringify(toFaldo(loc, ctx, { base }), null, 2))}</pre>`;
 }

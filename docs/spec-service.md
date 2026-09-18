@@ -147,11 +147,24 @@
 | GET | `/v1/location/faldo?loc=` | FALDO JSON-LD（`application/ld+json`） |
 | GET | `/v1/sequences/{ref}` | 配列の情報（全保存先の情報をまとめたもの）と、同一配列の一覧 |
 | GET | `/v1/sequences/{ref}/edges` | その配列から出る edge と入る edge |
-| GET | `/v1/annotations?loc=` | その区間に重なる annotation |
+| GET | `/v1/annotations?loc=` | その区間に重なる annotation。索引は feature の外枠で引くが、返すのは feature 自身の区間が重なるものだけ（イントロンの位置では、その転写産物を返さない） |
 | GET | `/v1/meta` | 保存先の一覧とメタデータ |
-| GET | `/<namespace>:<accession>:<location>` | IRI の解決（identifiers.org 風）。`Accept` に応じて、HTML、FALDO JSON-LD、`/v1/location` への 303 リダイレクトを返す |
+| GET | `/<namespace>:<accession>:<location>` | IRI の解決（identifiers.org 風）。`Accept` に応じて、ブラウザには Web UI（`/?loc=`）への 303、JSON-LD の要求には FALDO JSON-LD、JSON の要求には `/v1/location` への 303 を返す |
+| GET | `/`、`/ui/*` | Web UI（§6.1） |
 
 誤りは `{"error": ..., "position"?: ...}` で返す（400: 構文や意味の誤り、404、405、413）。
+
+### 6.1 Web UI（3d）
+
+`service/public/`（ビルド不要の HTML・JavaScript・CSS。コンセプト版の配色とフォントを引き継ぐ）。REST API だけを使う薄いクライアントで、状態は URL（`?loc=&to=&codon=`）に持つので、画面の URL をそのまま共有できる。
+
+- Location ID を入力して、変換先（直接つながる配列、ゲノム、遺伝子領域、転写産物、タンパク質、構造）を選ぶ。コドン内の位置の表示を切り替えられる。
+- 入力: 正規形の ID、各セグメント（残基番号とコドン内の位置）、FALDO JSON-LD、重なるアノテーション。
+- 結果: 変換先の ID、種類、コスト、`approximate`（照合できていない edge を通った場合）、向き、経路（edge の種類と方向。マウスを重ねると、edge の location、検証結果、exception、由来を表示）、各段で写像できなかった部分。
+- 結果の ID をクリックすると、その位置から「直接つながる配列」を調べ直す（コンセプト版の、変換を続けていく操作に相当）。
+- アノテーションは、配列全体を覆う feature（chromosome、region など）を除き、狭い範囲のものから順に並べる。
+- 入力の誤りは、該当する文字の位置に `^` を付けて示す。
+- ヒト全体の保存先（RefSeq、RefSeq RNA、Ensembl、UniProt、SIFTS）で、Chrome を使って表示と操作を確認した。
 
 ## 7. FALDO JSON-LD
 

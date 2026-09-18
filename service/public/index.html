@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TogoCoord</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/ui/style.css" />
+    <script type="module" src="/ui/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1><span class="accent">T</span>ogo<span class="accent">C</span>oord</h1>
+      <p class="tagline">Convert sequence coordinates between genomes, transcripts, proteins and structures</p>
+    </header>
+
+    <main>
+      <form id="query">
+        <label for="loc" class="visually-hidden">Location ID</label>
+        <input id="loc" name="loc" type="text" autocomplete="off" spellcheck="false"
+               placeholder="namespace:accession:location, e.g. uniprot:P07203:49" />
+        <label for="to" class="visually-hidden">Convert to</label>
+        <select id="to" name="to">
+          <option value="">directly connected</option>
+          <option value="genome">genome</option>
+          <option value="gene_region">gene region</option>
+          <option value="transcript">transcript</option>
+          <option value="protein">protein</option>
+          <option value="structure">structure</option>
+        </select>
+        <button type="submit">Convert</button>
+        <label class="option"><input id="codon" type="checkbox" checked /> codon positions</label>
+      </form>
+      <div id="examples" aria-label="Examples"></div>
+
+      <p id="error" role="alert" hidden></p>
+
+      <section id="input" hidden>
+        <h2>Input</h2>
+        <div class="card">
+          <div class="id-row">
+            <code id="input-id"></code>
+            <span id="input-kind" class="badge"></span>
+            <button type="button" class="small" data-action="faldo">FALDO JSON-LD</button>
+            <button type="button" class="small" data-action="annotations">Annotations</button>
+          </div>
+          <table id="segments"></table>
+          <div class="extra" hidden></div>
+        </div>
+      </section>
+
+      <section id="output" hidden>
+        <h2>Results <span id="count" class="muted"></span></h2>
+        <ol id="results"></ol>
+      </section>
+    </main>
+
+    <footer>
+      <a href="/v1/meta">stores</a> · REST API: <code>/v1/convert?loc=…&amp;to=…</code> ·
+      coordinates are Location IDs (INSDC location syntax, codon positions as <code>60c2</code>)
+    </footer>
+  </body>
+</html>
