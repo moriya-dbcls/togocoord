@@ -1,11 +1,13 @@
 # @togocoord/core
 
-TogoCoord のコアライブラリ（v0.1）。Location ID のパース・正規化と、ブロック列による座標写像を提供する。I/O は持たない。
+English | [日本語](README.ja.md)
 
-- 設計: [../docs/design.md](../docs/design.md)
-- 規則: [../docs/spec-core.md](../docs/spec-core.md)
+The TogoCoord core library (v0.1). It provides parsing and normalization of Location IDs, and coordinate mapping with block lists. It has no I/O.
 
-## 使い方
+- Design: [../docs/design.md](../docs/design.md)
+- Rules: [../docs/spec-core.md](../docs/spec-core.md)
+
+## Usage
 
 ```ts
 import { cdsMapping, createContext, formatLocationId, mapLocation, parseLocationId } from "@togocoord/core";
@@ -24,27 +26,27 @@ mapLocation(parseLocationId("refseq:YP_009724389.1:4401..4402", ctx), toGenome, 
 
 mapLocation(parseLocationId("refseq:NC_045512.2:13468", ctx), toGenome.inverse(), ctx)
   .targets.map((t) => formatLocationId(t.location, ctx));
-// => ["refseq:YP_009724389.1:join(4401c3,4402c1)"]   ("never" モードでは join(4401,4402))
+// => ["refseq:YP_009724389.1:join(4401c3,4402c1)"]   (join(4401,4402) in "never" mode)
 ```
 
-## 構成
+## Layout
 
-| ファイル | 内容 |
+| File | Description |
 |---|---|
-| `src/parser.ts` | location の文法（spec-core §3.2） |
-| `src/namespace.ts` | 名前空間の登録・accession の検査・既定の単位（§3.4） |
-| `src/location.ts` | 意味値（セグメント列）への変換、正規形での出力（§3.3, §3.5） |
-| `src/mapping.ts` | ブロック、`invert`、`compose`、`mappingFromLocation`、`cdsMapping`（§4） |
-| `src/convert.ts` | `mapLocation`（§5） |
-| `test/corpus/` | フェーズ0のテストデータ（実データ4件、合成データ3件） |
-| `test/oracle.ts` | 残基単位の素朴な実装（テストの正解） |
+| `src/parser.ts` | Location grammar (spec-core §3.2) |
+| `src/namespace.ts` | Namespace registration, accession checks, default units (§3.4) |
+| `src/location.ts` | Conversion to semantic values (segment lists), output in normal form (§3.3, §3.5) |
+| `src/mapping.ts` | Blocks, `invert`, `compose`, `mappingFromLocation`, `cdsMapping` (§4) |
+| `src/convert.ts` | `mapLocation` (§5) |
+| `test/corpus/` | Phase 0 test data (4 real, 3 synthetic) |
+| `test/oracle.ts` | Naive per-residue implementation (the expected answers for tests) |
 
-## 開発
+## Development
 
-Node.js 23.6 以上（TypeScript を型の除去だけで直接実行する）。
+Node.js 23.6 or later (TypeScript is run directly with type stripping only).
 
 ```sh
 npm install
-npm test          # node --test（テストデータ + property テスト + 単体テスト）
+npm test          # node --test (test data + property tests + unit tests)
 npm run typecheck # tsc --noEmit
 ```

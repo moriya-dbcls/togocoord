@@ -1,41 +1,43 @@
-# TogoCoord コア仕様（v0.1.1）
+# TogoCoord Core Specification (v0.1.1)
 
-2026-09-18。[design.md](design.md) の §3（Location ID）と §4（座標モデル）を、実装できる粒度まで厳密にしたもの。コアライブラリ（`core/`）はこの仕様に従い、テストデータ（`core/test/corpus/`）で検証する。
+English | [日本語](spec-core.ja.md)
 
----
-
-## 1. 範囲
-
-- 扱う: Location ID のパース、意味値への変換、正規形での出力。写像（ブロック列）の構築・反転・合成。写像による location の変換。
-- 扱わない: 配列の取得、データ源の読み込み（アダプタ）、経路探索、ID の解決（最新版の version の補完、UniProt の代表アイソフォームの判定など）。これらはサービス層で扱う。コアは、必要な情報（配列の単位など）を呼び出し側から受け取る。
+2026-09-18. This document makes §3 (Location ID) and §4 (coordinate model) of [design.md](design.md) precise enough to implement. The core library (`core/`) follows this specification and is verified against the test data (`core/test/corpus/`).
 
 ---
 
-## 2. 内部座標
+## 1. Scope
 
-- すべて **0-based half-open** の区間 `[start, end)` で扱う。1-based closed の表記との変換は、パースと出力のときにだけ行う。
-- 座標の単位（unit）は配列の種類で決まる。
-  - 塩基配列（`nt`）: 1塩基が1単位。
-  - アミノ酸配列（`aa`）: **1残基を3単位**（コドン単位）とする。残基 n（1-based）のコドン内の k 文字目（1..3）は、単位 `3(n−1)+(k−1)` に当たる。
-- この規約により、aa↔nt の変換はコドン単位と塩基の1対1の対応として、aa↔aa の変換は3単位ずつの対応として扱える。そのため、**コドン内の位置は aa↔aa の写像を通しても保たれる**。
-- 配列の単位は、呼び出し側が関数 `unitOf(ref)` で与える。与えない場合は、名前空間の既定値を使う（§3.4）。
+- In scope: parsing Location IDs, converting them to semantic values, and writing them in canonical form. Building, inverting and composing mappings (block lists). Converting locations through mappings.
+- Out of scope: fetching sequences, reading data sources (adapters), path search, and ID resolution (filling in the latest version, determining the canonical UniProt isoform, and so on). These are handled in the service layer. The core receives the information it needs (such as the unit of a sequence) from the caller.
+
+---
+
+## 2. Internal coordinates
+
+- Everything is handled as **0-based half-open** intervals `[start, end)`. Conversion to and from 1-based closed notation happens only at parse and output time.
+- The coordinate unit is determined by the sequence type.
+  - Nucleotide sequences (`nt`): 1 base is 1 unit.
+  - Amino acid sequences (`aa`): **1 residue is 3 units** (codon units). Character k (1..3) within the codon of residue n (1-based) corresponds to unit `3(n−1)+(k−1)`.
+- With this convention, aa↔nt conversion is a one-to-one correspondence between codon units and bases, and aa↔aa conversion is a correspondence in steps of 3 units. Therefore, **the codon position is preserved even through aa↔aa mappings**.
+- The caller gives the unit of a sequence through the function `unitOf(ref)`. If it is not given, the namespace default is used (§3.4).
 
 ---
 
 ## 3. Location ID
 
-### 3.1 全体
+### 3.1 Overall
 
 ```
 <namespace>:<accession>:<location>
 ```
 
-- 最初の `:` までが namespace、次の `:` までが accession、残りが location。accession に `:` は含まれない。
-- 配列の内部キーは `<namespace>:<accession>`（例: `refseq:NC_045512.2`、`pdb:4HHB.A`）とする。
-- 空白は、パースの前にすべて取り除く。
-- **配列全体の省略形**（v0.1.3）: `parseLocationId(text, ctx, { wholeSequence: true })` は、location を省いた `namespace:accession` を、`ctx.lengthOf` で得た長さを使って `1..L` として読む。入力の省略形としてだけ認めるもので、出力は常に明示した範囲（例: `uniprot:P07203:1..203`）にする。バージョンなしで扱う配列（UniProt など）は、更新で長さが変わりうるため、そのときの長さを明示して返すほうが再現性を保てる。長さが分からなければ誤りとする。
+- Everything up to the first `:` is the namespace, up to the next `:` is the accession, and the rest is the location. The accession does not contain `:`.
+- The internal key of a sequence is `<namespace>:<accession>` (e.g. `refseq:NC_045512.2`, `pdb:4HHB.A`).
+- All whitespace is removed before parsing.
+- **Whole-sequence shorthand** (v0.1.3): `parseLocationId(text, ctx, { wholeSequence: true })` reads a `namespace:accession` with the location omitted as `1..L`, using the length obtained from `ctx.lengthOf`. This is accepted only as an input shorthand; the output is always an explicit range (e.g. `uniprot:P07203:1..203`). For sequences handled without a version (such as UniProt), the length can change with updates, so returning the length at that time explicitly preserves reproducibility. If the length is unknown, it is an error.
 
-### 3.2 location の文法
+### 3.2 Location grammar
 
 ```ebnf
 location   = [ remote ":" ] body ;
@@ -49,169 +51,169 @@ point      = pos ;
 between    = pos "^" pos ;
 oneof      = INT "." INT ;
 pos        = INT [ "c" ( "1" | "2" | "3" ) ] ;
-INT        = 1以上の10進整数 ;
-remote     = 英字を1文字以上含む [A-Za-z0-9_.-]+ ;    (* 外側と同じ名前空間の accession *)
+INT        = decimal integer >= 1 ;
+remote     = [A-Za-z0-9_.-]+ containing at least one letter ;    (* accession in the same namespace as the outer one *)
 ```
 
-**パースエラーとする条件**
+**Conditions that are parse errors**
 
-| 条件 | 例 |
+| Condition | Example |
 |---|---|
-| 0 や負の数 | `0`、`-5` |
-| 範囲の始点が終点より大きい | `12..5`（原点をまたぐ場合は join で書く） |
-| `<` が終点側に、`>` が始点側にある | `1..<5`、`>1..5` |
-| 1点の位置に `<` や `>` が付いている | `<5` |
-| コドン拡張が 1..3 以外 | `5c4` |
-| 残基の間（`^`）で、両側が隣り合っていない | `5^7` |
-| `oneof` にコドン拡張や `<`、`>` が付いている | `5c1.7` |
-| `order` が入れ子になっている | `join(order(1..2),3..4)` |
+| 0 or a negative number | `0`, `-5` |
+| The start of a range is greater than its end | `12..5` (a range across the origin is written with join) |
+| `<` on the end side, or `>` on the start side | `1..<5`, `>1..5` |
+| `<` or `>` on a single-point position | `<5` |
+| A codon extension other than 1..3 | `5c4` |
+| Between residues (`^`) where the two sides are not adjacent | `5^7` |
+| `oneof` with a codon extension, `<` or `>` | `5c1.7` |
+| Nested `order` | `join(order(1..2),3..4)` |
 
-### 3.3 意味値（セグメント列）への変換
+### 3.3 Conversion to semantic values (segment list)
 
-パースした構文木は、**向き付きのセグメントを並べた列**に変換する。
+The parsed syntax tree is converted to **a list of oriented segments**.
 
 ```ts
 Segment = { ref, start, end, strand: +1 | -1, fuzzyLow?, fuzzyHigh?, uncertain? }
 Location = { outer: ref, kind: "join" | "order", segments: Segment[] }
 ```
 
-- **並び順（traversal order）**: セグメントは、feature を 5'→3'（N末→C末）にたどる順に並べる。
-- `complement(X)`: X のセグメント列を逆順にし、各セグメントの strand を反転する。`complement(join(A,B))` は `[B⁻, A⁻]` になり、`join(complement(B),complement(A))` と同じ値になる。
-- `join` と `order`: 子のセグメント列を連結する。入れ子の join は平坦にする。最上位に `order` がある場合だけ、kind を `order` とする。
-- **fuzzy は数値の上での端として持つ**。`<` は数値の小さい側（`fuzzyLow`）、`>` は大きい側（`fuzzyHigh`）に付く。INSDC と同じく、生物学的な 5'/3' ではなく数値の大小で区別する。
-- `remote:` は、その部分のセグメントの ref を `<外側の名前空間>:<remote>` にする。
-- **単位の変換**（aa の場合）:
-  - 位置 `n` → `[3(n−1), 3n)`
-  - 位置 `nck` → `[3(n−1)+k−1, 3(n−1)+k)`
-  - 範囲の始点 `n[ck]` → `3(n−1) + (k−1、省略時は 0)`
-  - 範囲の終点 `n[ck]` → `3(n−1) + (k、省略時は 3)`（排他的な終端）
-- **残基の間 `a^b`**: 長さ0のセグメント `[k, k)` にする。k は右側の単位の位置。
-  - nt: `b = a+1` が必要で、k = a。
-  - aa: 左の単位を `L = 3(a−1)+(x−1、省略時は 2)`、右の単位を `R = 3(b−1)+(y−1、省略時は 0)` とし、`R = L+1` が必要で、k = R。したがって `60^61`、`60c3^61c1`、`60c1^60c2` はすべて有効。
-- `oneof a.b`: `[a の始点, b の終点)` とし、`uncertain` を立てる。
-- **意味上のエラー**:
-  - aa の配列に strand −1 がある（タンパク質に complement は使えない）
-  - nt の配列にコドン拡張がある
-  - 長さがわかっている配列で、区間が配列の範囲を超える
+- **Traversal order**: segments are ordered as the feature is traversed 5'→3' (N-terminus→C-terminus).
+- `complement(X)`: the segment list of X is reversed, and the strand of each segment is flipped. `complement(join(A,B))` becomes `[B⁻, A⁻]`, the same value as `join(complement(B),complement(A))`.
+- `join` and `order`: the child segment lists are concatenated. Nested joins are flattened. The kind is `order` only when `order` is at the top level.
+- **Fuzzy is held as a numeric end**. `<` attaches to the numerically lower side (`fuzzyLow`), and `>` to the higher side (`fuzzyHigh`). As in INSDC, the distinction is by numeric order, not by biological 5'/3'.
+- `remote:` sets the ref of the segments in that part to `<outer namespace>:<remote>`.
+- **Unit conversion** (for aa):
+  - Position `n` → `[3(n−1), 3n)`
+  - Position `nck` → `[3(n−1)+k−1, 3(n−1)+k)`
+  - Range start `n[ck]` → `3(n−1) + (k−1, or 0 if omitted)`
+  - Range end `n[ck]` → `3(n−1) + (k, or 3 if omitted)` (exclusive end)
+- **Between residues `a^b`**: becomes a zero-length segment `[k, k)`, where k is the position of the right unit.
+  - nt: `b = a+1` is required, and k = a.
+  - aa: with the left unit `L = 3(a−1)+(x−1, or 2 if omitted)` and the right unit `R = 3(b−1)+(y−1, or 0 if omitted)`, `R = L+1` is required, and k = R. Therefore `60^61`, `60c3^61c1` and `60c1^60c2` are all valid.
+- `oneof a.b`: becomes `[start of a, end of b)` with `uncertain` set.
+- **Semantic errors**:
+  - strand −1 on an aa sequence (complement cannot be used on proteins)
+  - a codon extension on an nt sequence
+  - on a sequence of known length, an interval beyond the sequence range
 
-### 3.4 名前空間
+### 3.4 Namespaces
 
-| prefix | accession のパターン（概略） | 既定の単位 |
+| prefix | accession pattern (approximate) | Default unit |
 |---|---|---|
-| `insdc` | `[A-Z]{1,6}\d{5,}(\.\d+)?` | 英字3文字＋数字（例: `AAF99721`）は aa、それ以外は nt |
-| `refseq` | `[A-Z]{2}_[A-Z0-9]+(\.\d+)?` | `NP_`・`XP_`・`YP_`・`WP_`・`AP_` は aa、それ以外は nt |
-| `ensembl` | `ENS[A-Z]*[EGTP]\d{11}(\.\d+)?` | `…P` は aa、それ以外は nt |
-| `uniprot` | UniProt の accession ＋ `(-\d+)?` | aa |
+| `insdc` | `[A-Z]{1,6}\d{5,}(\.\d+)?` | 3 letters + digits (e.g. `AAF99721`) is aa, otherwise nt |
+| `refseq` | `[A-Z]{2}_[A-Z0-9]+(\.\d+)?` | `NP_`, `XP_`, `YP_`, `WP_`, `AP_` are aa, otherwise nt |
+| `ensembl` | `ENS[A-Z]*[EGTP]\d{11}(\.\d+)?` | `…P` is aa, otherwise nt |
+| `uniprot` | UniProt accession + `(-\d+)?` | aa |
 | `uniparc` | `UPI[0-9A-F]{10}` | aa |
-| `pdb` | `[0-9][A-Za-z0-9]{3}\.<chain>` または `pdb_\d{4}[0-9][A-Za-z0-9]{3}\.<chain>` | aa |
-| `refget` | `SQ\.[A-Za-z0-9_-]{32}` | 既定値なし（呼び出し側が与える） |
+| `pdb` | `[0-9][A-Za-z0-9]{3}\.<chain>` or `pdb_\d{4}[0-9][A-Za-z0-9]{3}\.<chain>` | aa |
+| `refget` | `SQ\.[A-Za-z0-9_-]{32}` | No default (given by the caller) |
 
-- この表のパターンは、ID の形としての最低限の検査である。名前空間は、登録用の関数で追加できる（テスト用の `test` もこれで登録する）。
-- 正規化として、prefix は小文字にする。PDB の ID は、4文字形式なら大文字にし、拡張形式（`pdb_0000xxxx`）で4文字形式に直せるものは4文字形式にする。chain は大文字と小文字を区別する（auth_asym_id）。
-- **要確認**: prefix 名は bioregistry と照合する必要がある。例えば bioregistry には `uniprot.isoform` が別の prefix として存在する。現時点では `uniprot` の下でアイソフォームも受け付ける。
+- The patterns in this table are a minimal check of the ID's form. Namespaces can be added with a registration function (the `test` namespace for tests is also registered this way).
+- As normalization, the prefix is lowercased. A PDB ID in 4-character form is uppercased, and an extended-form ID (`pdb_0000xxxx`) that can be converted to 4-character form is converted to 4-character form. The chain is case-sensitive (auth_asym_id).
+- **To be confirmed**: prefix names need to be checked against bioregistry. For example, bioregistry has `uniprot.isoform` as a separate prefix. Currently, isoforms are also accepted under `uniprot`.
 
-### 3.5 正規形での出力
+### 3.5 Canonical form output
 
-意味値から文字列を作る規則。**意味値が同じなら、出力される文字列も必ず同じになる**。
+Rules for building a string from a semantic value. **If the semantic values are the same, the output strings are always the same**.
 
-1. セグメントが1つなら、そのセグメントを書く（strand が −1 なら `complement(…)` で囲む）。
-2. セグメントが2つ以上で、**すべてが strand −1 かつ同じ ref** の場合は、`complement(join(…))` の形にする。中の要素は、セグメント列を逆順にし、strand を + にして書く。
-3. それ以外は `join(…)`（kind が order なら `order(…)`）とし、要素ごとに必要なら `complement` を付ける。
-4. ref が外側と異なるセグメントには `accession:` を前に付ける。
-5. 隣接している区間は結合しない。
-6. セグメントの書き方:
-   - nt: 長さ1で fuzzy がなければ `n`、そうでなければ `[<]a..[>]b`。長さ0は `k^k+1`。uncertain なら `a.b`。
-   - aa: 始点を `残基[c k]`（k=1 なら省く）、終点を `残基[c k]`（k=3 なら省く）とする。1残基をちょうど覆う場合は `n`、1単位だけなら `nck`。
-   - aa の長さ0（位置 k）: k が3の倍数なら `k/3 ^ k/3+1`、そうでなければ `LcX^RcY`（コドン内の位置）。
-7. **コドン拡張を省く出力モード**（`codon: "never"`）: `c` を取り除き、残基全体を覆う形にする。コドン内の `^` は、その残基の位置 `n` とする。
+1. If there is one segment, that segment is written (wrapped in `complement(…)` if the strand is −1).
+2. If there are two or more segments and **all are strand −1 with the same ref**, the form is `complement(join(…))`. The inner elements are written with the segment list reversed and the strand set to +.
+3. Otherwise, it is `join(…)` (`order(…)` if the kind is order), with `complement` added to each element as needed.
+4. A segment whose ref differs from the outer one is prefixed with `accession:`.
+5. Adjacent intervals are not merged.
+6. Writing a segment:
+   - nt: `n` if the length is 1 with no fuzzy, otherwise `[<]a..[>]b`. Length 0 is `k^k+1`. If uncertain, `a.b`.
+   - aa: the start is `residue[c k]` (omitted if k=1), and the end is `residue[c k]` (omitted if k=3). `n` if it covers exactly one residue, `nck` if only one unit.
+   - aa of length 0 (position k): if k is a multiple of 3, `k/3 ^ k/3+1`; otherwise `LcX^RcY` (codon position).
+7. **Output mode without codon extensions** (`codon: "never"`): `c` is removed, and the form covers whole residues. A `^` within a codon becomes the position `n` of that residue.
 
 ---
 
-## 4. 写像
+## 4. Mapping
 
-### 4.1 ブロック
+### 4.1 Block
 
 ```ts
 Block = { srcRef, src, tgtRef, tgt, len, rev }
 ```
 
-- src 側の単位 `x ∈ [src, src+len)` を、次の位置に写す。
+- A src-side unit `x ∈ [src, src+len)` maps to the following position.
   - `rev = false`: `tgt + (x − src)`
   - `rev = true`: `tgt + len − 1 − (x − src)`
-- 不変条件: `len > 0`、`src ≥ 0`、`tgt ≥ 0`。**src 側でも tgt 側でも重なりを許す**（ribosomal slippage、アライメントの重複、および invert に対して閉じているため）。
-- 写像（Mapping）はブロックの集合である。ある単位の写像先は0個以上ある。
+- Invariants: `len > 0`, `src ≥ 0`, `tgt ≥ 0`. **Overlaps are allowed on both the src side and the tgt side** (for ribosomal slippage, duplicated alignments, and closure under invert).
+- A mapping (Mapping) is a set of blocks. A unit has zero or more mapped positions.
 
-### 4.2 演算
+### 4.2 Operations
 
-| 演算 | 定義 |
+| Operation | Definition |
 |---|---|
-| `invert(m)` | 各ブロックの src と tgt を入れ替える（`rev` はそのまま） |
-| `compose(ab, bc)` | ab の各ブロック a と bc の各ブロック b について、a の tgt 区間と b の src 区間の交差 `[lo, hi)` があれば、ブロックを1つ作る。src 側の始点は、`a.rev` なら `a.src + (a.tgt + a.len − hi)`、そうでなければ `a.src + (lo − a.tgt)`。tgt 側の始点は、`b.rev` なら `b.tgt + (b.src + b.len − hi)`、そうでなければ `b.tgt + (lo − b.src)`。長さは `hi − lo`、`rev` は `a.rev ≠ b.rev` |
-| `fromLocation(F, loc)` | feature 配列 F から参照配列への写像。セグメントを並び順にたどり、累積の位置 `off` について `{F, off, seg.ref, seg.start, len, seg.strand = −1}` を作る |
-| `cdsMapping(P, cds, codonStart, aaLength)` | `compose(scale, fromLocation(P#cds, cds))`。scale は `{P, 0, P#cds, codonStart−1, 3·aaLength, false}` |
+| `invert(m)` | Swaps src and tgt of each block (`rev` unchanged) |
+| `compose(ab, bc)` | For each block a of ab and each block b of bc, if the tgt interval of a and the src interval of b intersect in `[lo, hi)`, one block is created. The src-side start is `a.src + (a.tgt + a.len − hi)` if `a.rev`, otherwise `a.src + (lo − a.tgt)`. The tgt-side start is `b.tgt + (b.src + b.len − hi)` if `b.rev`, otherwise `b.tgt + (lo − b.src)`. The length is `hi − lo`, and `rev` is `a.rev ≠ b.rev` |
+| `fromLocation(F, loc)` | Mapping from feature sequence F to the reference sequence. Segments are traversed in order, and for the cumulative position `off`, `{F, off, seg.ref, seg.start, len, seg.strand = −1}` is created |
+| `cdsMapping(P, cds, codonStart, aaLength)` | `compose(scale, fromLocation(P#cds, cds))`. scale is `{P, 0, P#cds, codonStart−1, 3·aaLength, false}` |
 
-- **先頭の不完全なコドン**（`leadingPartialCodon`、v0.1.2）: Ensembl は、5' 側が欠けた CDS のタンパク質の先頭に、欠けたコドンを表す `X` を1残基置く（INSDC の `/codon_start` にはこの残基がない）。この選択肢を指定すると、1番目の残基の最後の `codonStart − 1` 単位を、CDS の先頭の塩基に対応させる。scale は `{P, 3−(codonStart−1), P#cds, 0, 3·aaLength−(3−(codonStart−1)), false}`。1番目の残基をゲノムに変換すると、欠けた部分があるので始点に切り詰めの印が付く（例: `<930312..930313`）。
-- `aaLength` は、呼び出し側が必ず与える（コアでは推定しない）。終止コドンの有無、不完全な終止コドン（`transl_except` の TERM）、3' 側が部分的な CDS などを、コアでは判断できないため。
-- `3·aaLength + codonStart − 1` が CDS の長さを超える場合はエラーとする。
-
----
-
-## 5. 変換（`mapLocation`）
-
-入力の Location の各セグメント s について、並び順に次の処理を行う。
-
-1. **断片（piece）**: s と交差するすべてのブロックについて、交差する部分を写す。写像先の strand は `s.strand × (rev ? −1 : +1)`。
-2. **断片の順序**: s の並び順に従う（+ なら src の始点の昇順、− なら src の終点の降順）。同じ位置の場合は、ブロックの登録順とする。
-3. **写像できなかった部分（unmapped）**: s のうち、どの断片にも覆われない部分を、s と同じ strand で、並び順に返す。
-4. **結合**: 並び順で連続する断片 p、q（入力のセグメントをまたいでもよい）について、次の条件をすべて満たせば1つにまとめる。
-   - tgt の ref と strand が同じ
-   - tgt が並び順で連続している（+ なら `q.start = p.end`、− なら `q.end = p.start`）
-   - 同じセグメント内なら、src が並び順で後ろに進んでいる（重なっていない）
-   - 別のセグメントなら、入力の kind が `join` で、どちらのセグメントも uncertain（`a.b`）でない
-
-   イントロンをまたぐゲノム区間を写すと、タンパク質側では連続した1区間になる。エキソンごとの join で書かれた CDS の location や、エキソン境界で分断されたコドンも、タンパク質側では1区間になる。一方、slippage で同じ塩基が2つの位置に写る場合は、結合しない（v0.1.1 で、セグメントをまたぐ結合を追加した）。
-5. **fuzzy**: まとめた断片の並び順での始端（最初の断片の、そのセグメントでの始端）と終端（最後の断片の、そのセグメントでの終端）ごとに、「切り詰めがあったか」を判定する。
-   - そのセグメントの端と一致する場合は、入力の fuzzy を引き継ぐ（+ なら始端が `fuzzyLow`、− なら始端が `fuzzyHigh`）。
-   - セグメントの内側にある場合は、並び順ですぐ外側の単位が、**同じ変換先の配列への**断片に覆われていなければ、切り詰めありとする。ほかの配列に写っているかどうかは関係しない。そのため、ある配列への結果が、無関係な edge の有無に左右されない（v0.1.1 で変更）。
-   - 切り詰めを tgt の数値の端に変換する（tgt の strand が + なら始端を Low に、− なら始端を High に）。
-6. **残基の間（長さ0のセグメント `[k,k)`）**: 単位 k−1 と k をそれぞれ写す。**変換先の配列ごとに**、次の条件をすべて満たせば、その配列上の `[max, max)` に写す。
-   - その配列の中で、どちらも写像先がちょうど1つである
-   - 写像先が隣り合っている（位置の差の絶対値が1）
-
-   どの配列でも条件を満たさない場合は unmapped とする。配列ごとに判定するのは、読み枠の異なる重なり合った遺伝子（例: ヒトのミトコンドリアゲノムの ATP8 と ATP6）があっても、それぞれの配列では位置が一意に決まるためである（v0.1.1 で変更。v0.1 では全体でちょうど1つを条件にしていた）。
-7. **uncertain**: s が uncertain で、まとめた結果が1区間になった場合は、その区間に uncertain を引き継ぐ。複数の区間になった場合は、結果全体に `uncertain: true` を立てる。
-
-**出力**
-- まとめた断片を、tgt の ref ごとにまとめる（最初に現れた順）。ref ごとに1つの Location（kind は入力と同じ）を作る。
-- **tgt が aa の場合**: strand がすべて −1 なら、並びを逆にして strand を + にし、`orientation: "reverse"` とする。strand が混在する場合は、すべて + にして `"mixed"` とする。数値の上での fuzzy は、そのまま保つ。
-- 結果として、断片の一覧（表示用、まとめる前のもの）、写像先の Location の一覧、unmapped の Location を返す。
+- **Leading partial codon** (`leadingPartialCodon`, v0.1.2): Ensembl places one residue `X` representing the missing codon at the start of the protein of a CDS whose 5' end is missing (INSDC `/codon_start` has no such residue). When this option is specified, the last `codonStart − 1` units of the first residue correspond to the first base of the CDS. scale is `{P, 3−(codonStart−1), P#cds, 0, 3·aaLength−(3−(codonStart−1)), false}`. When the first residue is converted to the genome, the start gets a truncation mark because part of it is missing (e.g. `<930312..930313`).
+- `aaLength` is always given by the caller (the core does not infer it), because the core cannot judge the presence of a stop codon, an incomplete stop codon (TERM in `transl_except`), a CDS that is partial on the 3' side, and so on.
+- If `3·aaLength + codonStart − 1` exceeds the CDS length, it is an error.
 
 ---
 
-## 6. v0.1 で扱わないもの
+## 5. Conversion (`mapLocation`)
 
-- 環状配列での `n^1`（末尾と先頭の間）。パースは通るが、変換はエラーとする。
-- 配列の長さの検査。長さが与えられた場合だけ行う。
-- ID の解決（version の補完、アイソフォームの正規化、PDB の chain の対応付け）。これはサービス層で扱う。
+For each segment s of the input Location, in traversal order, the following is done.
+
+1. **Pieces**: for every block that intersects s, the intersecting part is mapped. The strand of the mapped part is `s.strand × (rev ? −1 : +1)`.
+2. **Piece order**: follows the traversal order of s (ascending src start if +, descending src end if −). For equal positions, the block registration order is used.
+3. **Unmapped parts**: the parts of s not covered by any piece are returned, with the same strand as s, in traversal order.
+4. **Merging**: consecutive pieces p, q in traversal order (possibly across input segments) are merged into one if all of the following hold.
+   - The tgt ref and strand are the same
+   - The tgt is contiguous in traversal order (`q.start = p.end` if +, `q.end = p.start` if −)
+   - Within the same segment, src advances in traversal order (no overlap)
+   - Across different segments, the input kind is `join` and neither segment is uncertain (`a.b`)
+
+   When a genomic interval spanning an intron is mapped, it becomes one contiguous interval on the protein side. A CDS location written as a join per exon, and a codon split at an exon boundary, also become one interval on the protein side. On the other hand, when the same base maps to two positions due to slippage, the pieces are not merged (merging across segments was added in v0.1.1).
+5. **Fuzzy**: for the start in traversal order (the start of the first piece within its segment) and the end (the end of the last piece within its segment) of a merged piece, whether "truncation occurred" is determined.
+   - If it coincides with the end of the segment, the input fuzzy is carried over (if +, the start is `fuzzyLow`; if −, the start is `fuzzyHigh`).
+   - If it is inside the segment, it is truncated if the unit immediately outside in traversal order is not covered by a piece **to the same target sequence**. Whether it maps to other sequences does not matter. Therefore, the result for one sequence does not depend on the presence of unrelated edges (changed in v0.1.1).
+   - The truncation is converted to a numeric end of the tgt (if the tgt strand is +, the start becomes Low; if −, the start becomes High).
+6. **Between residues (zero-length segment `[k,k)`)**: units k−1 and k are each mapped. **For each target sequence**, if all of the following hold, it maps to `[max, max)` on that sequence.
+   - Within that sequence, each has exactly one mapped position
+   - The mapped positions are adjacent (absolute difference of positions is 1)
+
+   If the conditions hold for no sequence, it is unmapped. The check is per sequence because, even with overlapping genes in different reading frames (e.g. ATP8 and ATP6 in the human mitochondrial genome), the position is uniquely determined on each sequence (changed in v0.1.1; in v0.1 the condition was exactly one overall).
+7. **Uncertain**: if s is uncertain and the merged result is one interval, uncertain is carried over to that interval. If it becomes multiple intervals, `uncertain: true` is set on the whole result.
+
+**Output**
+- Merged pieces are grouped by tgt ref (in order of first appearance). One Location per ref is created (kind is the same as the input).
+- **When the tgt is aa**: if all strands are −1, the order is reversed, the strand is set to +, and `orientation: "reverse"` is set. If strands are mixed, all are set to + and `"mixed"` is set. Numeric fuzzy is kept as is.
+- The result consists of the list of pieces (for display, before merging), the list of mapped Locations, and the unmapped Location.
 
 ---
 
-## 7. テストデータ（`core/test/corpus/`）
+## 6. Not handled in v0.1
 
-| ファイル | 由来 | 検証すること |
+- `n^1` on a circular sequence (between the end and the start). It parses, but conversion is an error.
+- Checking sequence length. Done only when the length is given.
+- ID resolution (filling in the version, normalizing isoforms, matching PDB chains). This is handled in the service layer.
+
+---
+
+## 7. Test data (`core/test/corpus/`)
+
+| File | Source | What it verifies |
 |---|---|---|
-| `sars2_orf1ab_slippage.json` | NCBI の NC_045512.2（2026-09-18 に取得）。CDS `join(266..13468,13468..21555)`、YP_009724389.1（7096 aa） | slippage（1塩基が2つのコドンに属する）、終止コドンが unmapped になること、切り詰めの fuzzy |
-| `human_mt_nd6_minus.json` | NC_012920.1 の ND6 `complement(14149..14673)`、YP_003024037.1（174 aa） | マイナス鎖、aa を逆向きに出力すること、fuzzy の向きの変換 |
-| `human_mt_nd1_partial_stop.json` | NC_012920.1 の ND1 `3307..4262`、`transl_except=(pos:4261..4262,aa:TERM)`、318 aa | 不完全な終止コドン（aaLength を明示すること） |
-| `human_mt_dloop_circular.json` | NC_012920.1 の D-loop `complement(join(16024..16569,1..576))` | 原点をまたぐこと、complement(join) の正規形、原点をまたぐ入力が feature 上で1区間にまとまること |
-| `synthetic_plus_split_codon.json` | 合成データ | + 鎖で、コドンがエキソン境界で分断される場合、イントロンをまたぐ区間をまとめること、`^` |
-| `synthetic_minus_split_codon.json` | 合成データ | − 鎖で、コドンが分断される場合 |
-| `synthetic_aa_to_aa.json` | 合成データ（UniProt→PDB を想定） | aa↔aa でコドン内の位置が保たれること、未解像の領域、aa の `^` |
+| `sars2_orf1ab_slippage.json` | NCBI NC_045512.2 (retrieved 2026-09-18). CDS `join(266..13468,13468..21555)`, YP_009724389.1 (7096 aa) | Slippage (one base belongs to two codons), the stop codon being unmapped, truncation fuzzy |
+| `human_mt_nd6_minus.json` | ND6 of NC_012920.1 `complement(14149..14673)`, YP_003024037.1 (174 aa) | Minus strand, reverse output for aa, conversion of fuzzy direction |
+| `human_mt_nd1_partial_stop.json` | ND1 of NC_012920.1 `3307..4262`, `transl_except=(pos:4261..4262,aa:TERM)`, 318 aa | Incomplete stop codon (aaLength given explicitly) |
+| `human_mt_dloop_circular.json` | D-loop of NC_012920.1 `complement(join(16024..16569,1..576))` | Crossing the origin, canonical form of complement(join), input crossing the origin merging into one interval on the feature |
+| `synthetic_plus_split_codon.json` | Synthetic data | On the + strand, a codon split at an exon boundary, merging an interval that spans an intron, `^` |
+| `synthetic_minus_split_codon.json` | Synthetic data | On the − strand, a split codon |
+| `synthetic_aa_to_aa.json` | Synthetic data (modeled on UniProt→PDB) | Codon position preserved in aa↔aa, unresolved regions, `^` on aa |
 
-**フェーズ2（アダプタ）で実データを確認する候補**
-- セレノプロテイン（`transl_except` で Sec を指定しているもの）
-- RefSeq の転写産物とゲノムの不一致（NCBI GFF の `cDNA_match` と Gap）
-- `codon_start` が 2 または 3 の部分的な CDS（INSDC）
-- PDB の挿入コード（Kabat 番号の抗体の構造）と未解像の残基
-- 細菌の環状ゲノムで、原点をまたぐ CDS
-- GFA（逆向きの segment、bubble）
+**Candidates for checking with real data in phase 2 (adapters)**
+- Selenoproteins (with Sec specified by `transl_except`)
+- Mismatches between RefSeq transcripts and the genome (`cDNA_match` and Gap in NCBI GFF)
+- Partial CDSs with `codon_start` 2 or 3 (INSDC)
+- PDB insertion codes (antibody structures with Kabat numbering) and unresolved residues
+- CDSs crossing the origin in circular bacterial genomes
+- GFA (reverse segments, bubbles)

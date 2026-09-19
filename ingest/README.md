@@ -1,33 +1,35 @@
 # @togocoord/ingest
 
-TogoCoord のアダプタ（v0.2）。GenBank/GenPept のフラットファイルと GFF3 を読み、配列、写像の edge、アノテーションを出力する。取り込み時に自己検証（翻訳の照合、アライメントの同一塩基数の照合）を行う。
+English | [日本語](README.ja.md)
 
-- 規則: [../docs/spec-ingest.md](../docs/spec-ingest.md)
-- コア: [../core](../core)
+The TogoCoord adapters (v0.2). They read GenBank/GenPept flat files and GFF3, and output sequences, mapping edges and annotations. Self-validation is done during ingest (checking translations and checking the number of identical bases in alignments).
+
+- Rules: [../docs/spec-ingest.md](../docs/spec-ingest.md)
+- Core: [../core](../core)
 
 ## CLI
 
 ```sh
-# 小さなファイル: JSON Lines を標準出力へ
+# Small file: JSON Lines to standard output
 node ingest/src/cli.ts NC_012920.1.gb > mt.jsonl
 
-# ゲノム全体: SQLite へ（.gz をそのまま読む。FASTA は .fai で必要な区間だけ読む）
+# Whole genome: to SQLite (reads .gz directly; FASTA is read only for the needed ranges via .fai)
 node --max-old-space-size=512 ingest/src/cli.ts \
   --db human.sqlite --fasta GRCh38.fna --fasta GRCh38_protein.faa.gz GRCh38_genomic.gff.gz
 # stderr: sequences 137512, edges 505277 {"skipped":359831,"ok":142549,"mismatch":2897}, ... (73 s)
 #         mismatches: 0 unexplained, 2897 with an INSDC /exception
 ```
 
-| オプション | 内容 |
+| Option | Description |
 |---|---|
-| `--db FILE` | SQLite に保存する（なければ JSON Lines を出力する）。既存のファイルは `--overwrite` で置き換える |
-| `--fasta FILE` | 自己検証に使う配列（ゲノム、転写産物、タンパク質）。何度でも指定できる。64MB を超えるか `.fai` があるファイルは、ランダムアクセスで読む |
-| `--all-annotations` | exon も annotation として保存する |
-| `--from-report FILE`、`--to-report FILE` | UCSC の chain ファイル（`.chain(.gz)`）の変換元と変換先のアセンブリの NCBI assembly report。`chr1` などの名前を RefSeq の accession に読み替える（spec-ingest §14） |
+| `--db FILE` | Save to SQLite (otherwise output JSON Lines). An existing file is replaced with `--overwrite` |
+| `--fasta FILE` | Sequences used for self-validation (genome, transcripts, proteins). Can be given any number of times. Files over 64MB or with a `.fai` are read with random access |
+| `--all-annotations` | Also save exons as annotations |
+| `--from-report FILE`, `--to-report FILE` | NCBI assembly reports of the source and target assemblies of a UCSC chain file (`.chain(.gz)`). Translates names such as `chr1` to RefSeq accessions (spec-ingest §14) |
 
-出力する JSON Lines では、各行の `record` が `sequence` / `edge` / `annotation` / `warning` のいずれかになる。
+In the JSON Lines output, the `record` of each line is one of `sequence` / `edge` / `annotation` / `warning`.
 
-## 保存先の検証
+## Store validation
 
 ```sh
 node ingest/bench/verify-store.ts human.sqlite GRCh38.fna GRCh38_protein.faa.gz 10000
@@ -35,9 +37,9 @@ node ingest/bench/verify-store.ts human.sqlite GRCh38.fna GRCh38_protein.faa.gz 
 # protein -> genome: p50 0.06 ms, p95 0.62 ms, p99 0.95 ms
 ```
 
-ランダムに選んだタンパク質の残基を、保存先を使ってゲノム上に変換し、そのコドンを翻訳して公開配列と比べる。さらにゲノムから逆に変換して、元の残基に戻るかも調べる。結果の読み方は [../docs/scaling.md](../docs/scaling.md) §7 を参照。
+Converts randomly chosen protein residues to the genome using the store, translates the codons and compares them with the published sequence. It also converts back from the genome and checks that the original residue is returned. For how to read the results, see [../docs/scaling.md](../docs/scaling.md) §7.
 
-## ライブラリ
+## Library
 
 ```ts
 import { ingestGenBank, edgeMapping } from "@togocoord/ingest";
@@ -52,18 +54,18 @@ mapLocation(parseLocationId("refseq:YP_003024037.1:174", ctx), edgeMapping(nd6),
 // => ["refseq:NC_012920.1:complement(14152..14154)"]
 ```
 
-## 構成
+## Layout
 
-| ファイル | 内容 |
+| File | Description |
 |---|---|
-| `src/gbff.ts`、`src/gff3.ts`、`src/fasta.ts` | パーサ |
-| `src/adapter-gbff.ts`、`src/adapter-gff3.ts` | アダプタ（spec-ingest §3, §4） |
-| `src/adapter-fasta.ts`、`src/adapter-sifts.ts`、`src/adapter-mane.ts`、`src/adapter-chain.ts` | FASTA、SIFTS、MANE、UCSC chain のアダプタ（spec-ingest §9〜§11, §14） |
-| `src/validate.ts` | 自己検証（§6）とタンパク質長の推定（§5） |
-| `src/sequence.ts` | 配列の取得、相補鎖、翻訳、refget ダイジェスト |
-| `src/stream.ts` | ストリーミング読み込み（`.gz` 対応）、`JsonlSink` |
-| `src/fasta-index.ts` | `.fai` の作成と、FASTA へのランダムアクセス |
-| `src/store.ts` | SQLite への書き込み（`SqliteSink`）と問い合わせ（`TogoCoordStore`） |
-| `bench/verify-store.ts` | 公開タンパク質配列による照合と、問い合わせ時間の計測 |
-| `src/genetic-codes.ts` | NCBI の `gc.prt` から生成した翻訳表 |
-| `test/fixtures/` | NCBI の実データ（2026-09-18 取得） |
+| `src/gbff.ts`, `src/gff3.ts`, `src/fasta.ts` | Parsers |
+| `src/adapter-gbff.ts`, `src/adapter-gff3.ts` | Adapters (spec-ingest §3, §4) |
+| `src/adapter-fasta.ts`, `src/adapter-sifts.ts`, `src/adapter-mane.ts`, `src/adapter-chain.ts` | Adapters for FASTA, SIFTS, MANE and UCSC chain (spec-ingest §9–§11, §14) |
+| `src/validate.ts` | Self-validation (§6) and protein length estimation (§5) |
+| `src/sequence.ts` | Sequence retrieval, reverse complement, translation, refget digests |
+| `src/stream.ts` | Streaming reads (with `.gz` support), `JsonlSink` |
+| `src/fasta-index.ts` | Creating `.fai` and random access to FASTA |
+| `src/store.ts` | Writing to SQLite (`SqliteSink`) and queries (`TogoCoordStore`) |
+| `bench/verify-store.ts` | Checks against published protein sequences and query time measurement |
+| `src/genetic-codes.ts` | Translation tables generated from NCBI `gc.prt` |
+| `test/fixtures/` | Real NCBI data (downloaded 2026-09-18) |

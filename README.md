@@ -17,7 +17,7 @@ TogoCoord converts sequence coordinates between the layers of life-science data:
 | `core/` | Location ID parsing, canonical form and FALDO JSON-LD; mappings as block lists (no dependencies) |
 | `ingest/` | Adapters for GenBank / GFF3 / FASTA / SIFTS / MANE / UCSC chain / PAF / BED / NCBI assembly reports, self-validation, SQLite (R*Tree) stores, CLI `togocoord-ingest` |
 | `service/` | Path search across stores, REST API and web UI (`togocoord-serve`) |
-| `docs/` | Design, specifications and data, in Japanese ([design.md](docs/design.md), [data.md](docs/data.md), [spec-core.md](docs/spec-core.md), [spec-ingest.md](docs/spec-ingest.md), [spec-service.md](docs/spec-service.md), [scaling.md](docs/scaling.md)) |
+| `docs/` | Design, specifications and data; Japanese versions as `*.ja.md` ([design.md](docs/design.md), [data.md](docs/data.md), [spec-core.md](docs/spec-core.md), [spec-ingest.md](docs/spec-ingest.md), [spec-service.md](docs/spec-service.md), [scaling.md](docs/scaling.md)) |
 | `scripts/` | Downloading, building and serving the data ([data.md](docs/data.md)) |
 | `poc/` | Proof-of-concept implementation (web UI and SPARQList; for reference) |
 
@@ -41,7 +41,7 @@ node service/src/serve.ts --port 8080 human.sqlite human_uniprot.sqlite
 # Assembly sequence names as input (with GRCh37 and chains loaded): /v1/convert?loc=hg19:chr7:140453136&to=genome&assembly=GRCh38
 ```
 
-The demo data (human, mouse, Arabidopsis, Marchantia, SIFTS, fanta.bio, chains and alignments) is downloaded and built with `node scripts/data.ts build` and served with `node scripts/data.ts serve`; see [docs/data.md](docs/data.md) (in Japanese).
+The demo data (human, mouse, Arabidopsis, Marchantia, SIFTS, fanta.bio, chains and alignments) is downloaded and built with `node scripts/data.ts build` and served with `node scripts/data.ts serve`; see [docs/data.md](docs/data.md).
 
 To serve it under a subdirectory behind a reverse proxy, see [spec-service §6](docs/spec-service.md).
 

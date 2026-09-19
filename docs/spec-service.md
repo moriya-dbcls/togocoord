@@ -1,365 +1,367 @@
-# TogoCoord サービス層仕様（v0.2：経路探索・同一配列・REST API）
+# TogoCoord service layer specification (v0.2: path search, identical sequences, REST API)
 
-2026-09-18。フェーズ3a〜3c と 3e（SIFTS）の規則。実装は `service/`（`@togocoord/service`）。
+English | [日本語](spec-service.ja.md)
+
+2026-09-18. Rules for phases 3a to 3c and 3e (SIFTS). Implemented in `service/` (`@togocoord/service`).
 
 ---
 
-## 1. 複数の保存先（`StoreSet`）
+## 1. Multiple stores (`StoreSet`)
 
-- 複数の SQLite 保存先（種ごと、あるいはデータ源ごと。例: ヒトのゲノム GFF3 と RefSeq RNA の GenBank）を1つの集合として扱う。
-- ブロックは、すべての保存先から、R*Tree を使って**変換中の location に重なるものだけ**取り出す。edge は `<保存先の番号>:<edge の ID>` で識別する。
-- 保存先ごとのキャッシュ（参照キーと ID の対応、単位、edge）は、上限付きの LRU とする（既定では5万件）。SQLite のページキャッシュは既定で 8MB とし、それを超える読み込みは OS のファイルキャッシュに任せる。
-- 保存先には、スキーマのバージョン（`meta.schema`）が一致するものだけを開く。
-- 配列の情報は、保存先をまたいでまとめる。項目ごとに最初に見つかった値を採り、長さ0は「不明」として後の値で置き換え、タグは和集合にする。まとめた結果と同一配列の一覧は、上限付きのキャッシュに置く。
-- コンテキストの配列長は、保存先の長さ（0は不明）を使う。そのため、配列長を超える入力は誤りになる。
+- Multiple SQLite stores (one per species or per data source; for example, the human genome GFF3 and the RefSeq RNA GenBank) are handled as one set.
+- Blocks are fetched from all stores using R*Tree, taking **only those that overlap the location being converted**. An edge is identified by `<store number>:<edge ID>`.
+- Each store's caches (reference key to ID, units, edges) are bounded LRU caches (50,000 entries by default). The SQLite page cache is 8MB by default; reads beyond that are left to the OS file cache.
+- A store is opened only if its schema version (`meta.schema`) matches.
+- Sequence information is merged across stores. For each field, the first value found is used; a length of 0 means "unknown" and is replaced by a later value; tags are combined as a union. The merged result and the list of identical sequences are kept in a bounded cache.
+- The context sequence length is the length from the store (0 means unknown). Therefore, input beyond the sequence length is an error.
 
-## 2. 変換（`convert`）
+## 2. Conversion (`convert`)
 
-入力: Location と、`to`（変換先）と `maxHops`。
+Input: a Location, `to` (the target), and `maxHops`.
 
-| `to` | 意味 |
+| `to` | Meaning |
 |---|---|
-| `{ ref }` | 特定の配列 |
-| `{ category }` | `genome` / `gene_region` / `transcript` / `protein` / `structure`（accession の規則と分子種から判定する。PDB の鎖は `structure`） |
-| `{ namespace }` | 名前空間（例: `uniprot`）。API と UI では、層（`protein` など）と、結果の絞り込み `db` の組み合わせを勧める |
-| 省略 | `maxHops`（既定1）以内にあるすべての配列 |
+| `{ ref }` | A specific sequence |
+| `{ category }` | `genome` / `gene_region` / `transcript` / `protein` / `structure` (determined from accession rules and molecule type; PDB chains are `structure`) |
+| `{ namespace }` | A namespace (for example, `uniprot`). In the API and UI, the recommended form is a layer (such as `protein`) combined with the result filter `db` |
+| Omitted | All sequences within `maxHops` (default 1) |
 
-`prefer`（タグの一覧。API の既定は `MANE Select` と `MANE Plus Clinical`）: 同じコストの経路のうち、タグの付いた配列を経由する経路を選ぶ（経由した、タグのない中間の配列の数を、コストの次の比較の鍵にする）。同じコストの結果は、タグの付いた変換先を先に並べる。コストの値そのものは変えない。例: GPX1 のゲノム上のコドンから PDB へは、UniProt と同一の Ensembl タンパク質が複数あるが、MANE Select の ENSP00000407375.1 を経由する経路が選ばれる。
+`prefer` (a list of tags; the API default is `MANE Select` and `MANE Plus Clinical`): among paths of the same cost, choose the path that passes through tagged sequences (the number of untagged intermediate sequences passed through is the next comparison key after cost). Results of the same cost list tagged targets first. The cost value itself is not changed. Example: from a genomic codon of GPX1 to PDB, there are several Ensembl proteins identical to UniProt, but the path through the MANE Select ENSP00000407375.1 is chosen.
 
-**探索**: 配列を節点、edge を辺とするコスト付きの最短経路探索（Dijkstra 法）を行う。
-- 状態は「配列と、その上の location」の組とする。展開では、location に重なるブロックを持つ edge だけをたどり、その edge のブロックでコアの `mapLocation` を行う。
-- 各配列には、最も安い経路で1回だけ到達する。
-- 変換先の条件に合う配列に達したら、そこからは**同一配列と、T2 のアライメントで結ばれたほぼ同一の UniProt のレコードだけ**をたどる。同じ残基の別のデータベースのレコード（RefSeq、Ensembl、UniProt）も結果にするためで、「タンパク質」を選べば UniProt も含まれる。ただし、入力と同一の配列（同一配列の段だけで達したもの）は入力そのものとみなし、変換先の種類に合っても、ふつうに先へたどる（例: `uniprot:P07203:49` → 同一の NP_000572.2 → ゲノム → 別のアイソフォーム）。
-- 同じ経路の中で、同じ edge は再び使わない。
-- `maxHops` の既定値は、変換先がある場合は4、ない場合は1。
-- 打ち切りはしない（最大の段数までの近傍を探索し終えるまで続ける）。そのため、探索範囲は §2.1 の層の規則で絞る。
+**Search**: a cost-weighted shortest path search (Dijkstra's algorithm) with sequences as nodes and edges as graph edges.
+- A state is the pair "a sequence and a location on it". Expansion follows only edges that have blocks overlapping the location, and applies the core `mapLocation` with that edge's blocks.
+- Each sequence is reached only once, by the cheapest path.
+- Once a sequence matching the target condition is reached, from there the search follows **only identical sequences and near-identical UniProt records linked by a T2 alignment**. This is so that records of other databases for the same residue (RefSeq, Ensembl, UniProt) are also returned as results; choosing "protein" includes UniProt. However, a sequence identical to the input (reached only through identity steps) is treated as the input itself, and even if it matches the target type, the search continues from it as usual (example: `uniprot:P07203:49` → identical NP_000572.2 → genome → another isoform).
+- Within one path, the same edge is not used again.
+- The default `maxHops` is 4 when a target is given and 1 when not.
+- There is no early cutoff (the search continues until the neighborhood up to the maximum number of hops is fully explored). Therefore, the search scope is narrowed by the layer rules in §2.1.
 
-### 2.1 層の規則（探索範囲の限定）
+### 2.1 Layer rules (limiting the search scope)
 
-配列の種類には、緩い上下関係がある: **ゲノム(0) − 遺伝子領域(1) − 転写産物(2) − タンパク質(3) − 構造(4)**。概念的に離れた層どうしの変換も、どこかの層でUターンすれば足りるので、上下に深く行き来する経路は探索しない。規則は恣意的に次のように定める。
+Sequence types have a loose hierarchy: **genome(0) − gene region(1) − transcript(2) − protein(3) − structure(4)**. A conversion between conceptually distant layers only needs one U-turn at some layer, so paths that go deep up and down are not searched. The rules are set, arbitrarily, as follows.
 
-1. **深さの上限**: 出発点と変換先のうち、より下位（構造寄り）のほうより下の層には入らない。変換先が名前空間だけで指定されたとき（層が分からない）は、上限を設けない。
-2. **Uターンは1回まで**: 上り（ゲノム方向）と下りの切り替えは1回まで。同じ層の中の移動（同一配列、同じ層どうしのアライメント）や、層の分からない配列（`other`）との間の移動は数えない。
-3. 同じ配列でも、状態（最後の向きとUターンの回数）が違えば別の節点として扱う。変換先としては、配列ごとに最も安い結果だけを返す。
+1. **Depth limit**: do not enter a layer below the lower (closer to structure) of the start and the target. When the target is given only as a namespace (the layer is unknown), there is no limit.
+2. **At most one U-turn**: switching between going up (toward the genome) and going down happens at most once. Moves within the same layer (identity, alignments within the same layer) and moves to or from sequences of unknown layer (`other`) are not counted.
+3. The same sequence in different states (last direction and number of U-turns) is treated as a different node. As targets, only the cheapest result per sequence is returned.
 
-例: 残る経路は、ATP8 → ゲノム → ATP6（上って下る）、UniProt → Ensembl → ゲノム、ゲノム → タンパク質 → PDB。切られる経路は、UniProt → PDB → UniProt → ゲノム（変換先がゲノムなのに構造へ下りる）、タンパク質A → ゲノム → タンパク質B → 別のゲノム（ジグザグ）。
+Example: paths kept are ATP8 → genome → ATP6 (up then down), UniProt → Ensembl → genome, and genome → protein → PDB. Paths cut are UniProt → PDB → UniProt → genome (goes down to structure even though the target is the genome) and protein A → genome → protein B → another genome (zigzag).
 
-効果（ヒト、UniProt の100番残基 → ゲノム）: 展開する配列は、p53 で 492 → 27、ヘモグロビン α で 10 になった。
+Effect (human, UniProt residue 100 → genome): the number of expanded sequences went from 492 to 27 for p53, and to 10 for hemoglobin α.
 
-**オーソログ**: オーソログのタンパク質どうしの edge は、種をまたぐ edge として §2.2 の範囲の規則で扱う。層の規則1の例外は設けない。
+**Orthologs**: edges between orthologous proteins are treated as species-crossing edges under the scope rules in §2.2. No exception to layer rule 1 is made.
 
-### 2.2 範囲の規則（生物種とアセンブリ）
+### 2.2 Scope rules (species and assembly)
 
-変換先は「配列の種類」（`to`）と「範囲」（生物種 `taxon`、アセンブリ `assembly`）の2軸で指定する。生物種とアセンブリでは扱いが違う。生物種をまたぐのは相同性による対応で、利用者が選ぶべきもの。同じ種のアセンブリ間（GRCh37 ↔ GRCh38）は同じ DNA の座標系の違いにすぎず、アノテーションは片方（GRCh38）にしかないことが多い。
+A target is specified on two axes: the "sequence type" (`to`) and the "scope" (species `taxon`, assembly `assembly`). Species and assemblies are handled differently. Crossing species is a homology-based correspondence that the user should choose. Between assemblies of the same species (GRCh37 ↔ GRCh38), the difference is only in the coordinate system of the same DNA, and annotations often exist on only one of them (GRCh38).
 
-1. **生物種は、既定では入力と同じに留まる。** 別の種に入る段（liftOver の chain、別の種の同一配列）は、入力と違う `taxon` を指定したときだけ、その種へ1回だけ通る。
-2. **同じ種のアセンブリは、経路が必要とすれば、指定がなくても種ごとに1回またぐ。** 種をまたいだ先でも、その種のアセンブリを1回またげる（mm10 → mm39 → hg38 → hg19）。 例: GRCh37 の位置 → chain → GRCh38 → CDS → タンパク質。経路には `liftover` の段が残るので、どこでアセンブリを移ったかが分かる。
-3. **`assembly` は、ゲノムの結果をどのアセンブリで返すかだけを決める。** 既定は、入力がその種のゲノム上にあれば入力のアセンブリ、そうでなければその種の既定のアセンブリ（アノテーションの最も多いもの。ヒトなら GRCh38）。変換先を指定しないとき（直接つながる配列）は、指定がない限り絞らない。GRCh37 の位置を GRCh38 に移すには `to=genome&assembly=GRCh38` とする。`assembly` は `GRCh37.p13`、`GRCh37`、UCSC 名の `hg19` のどれでもよい。
-4. **経路の途中で、今いる生物種とアセンブリを持ち回る。** 結果は持ち回った種で判定するので、配列そのものに taxon の記録がない配列（Ensembl など）も正しく扱える。配列の生物種は、その配列の記録、それを含む保存先の記録（`--taxon`）、同一配列が1種だけならその種、の順に決める。ゲノム配列のアセンブリは、その配列を含む保存先の `assembly`、またはその配列を挙げる assembly report（spec-ingest §15）で決める。chain の保存先は、両側のアセンブリの配列の種と長さを記録する。そのため、相手の種の保存先を読み込んでいなくても、種をまたぐ段を見分けられる。
-5. **範囲外の変換先（例: マウスを指定したときのヒトのタンパク質、GRCh37 を指定したときの GRCh38 の位置）からは、範囲をまたぐ段、ゲノムに向かう段（Uターン前）、同一配列だけをたどる。** 同じ種の中で横に広がらない。
-**種の線引き**: 同じ種（NCBI の種の階級）の中は「アセンブリの違い」、種が違えば「種の違い」とする。亜種・変種・株・個体のゲノムは、同じ種の別アセンブリとして扱う（ゲノムの座標系の違いに近く、パンゲノムの各ハプロタイプも同じ）。taxon を種にまとめるのは、それが明示されているときだけとする。つまり、保存先に `--species-taxon` が記録されている場合か、NCBI の学名で二名法の後に種より下の階級（`subsp.`、`var.`、`f.`、`str.`、`strain`、`substr.`、`serovar`、`biovar`、`pv.`、`cv.`）が明記され、その二名法の種が読み込まれている場合。例: *Marchantia polymorpha* subsp. *ruderalis*（1480154、MpTak_v7.1）は、*Marchantia polymorpha*（3197、v3.1 と UniProt）にまとめる。学名の最初の2語が同じだけではまとめない（Human immunodeficiency virus 1 と 2 は別の種）。
+1. **By default, the species stays the same as the input.** A step into another species (a liftOver chain, an identical sequence of another species) is taken only when a `taxon` different from the input is given, and only once, into that species.
+2. **Assemblies of the same species are crossed once per species when the path needs it, even without being specified.** After crossing species, the search can also cross that species' assemblies once (mm10 → mm39 → hg38 → hg19). Example: a GRCh37 position → chain → GRCh38 → CDS → protein. The path keeps the `liftover` step, so you can see where the assembly changed.
+3. **`assembly` only determines in which assembly genome results are returned.** The default is the input's assembly if the input is on a genome of that species, otherwise the species' default assembly (the one with the most annotations; GRCh38 for human). When no target is given (directly connected sequences), results are not filtered unless specified. To move a GRCh37 position to GRCh38, use `to=genome&assembly=GRCh38`. `assembly` can be `GRCh37.p13`, `GRCh37`, or the UCSC name `hg19`.
+4. **The current species and assembly are carried along the path.** Results are judged by the carried species, so sequences without their own taxon record (such as Ensembl) are handled correctly. A sequence's species is determined, in order, from the sequence's own record, the record of the store containing it (`--taxon`), and, if its identical sequences belong to a single species, that species. A genome sequence's assembly is determined from the `assembly` of the store containing it, or from an assembly report that lists the sequence (spec-ingest §15). A chain store records the species and lengths of the sequences of the assemblies on both sides. Therefore, species-crossing steps can be recognized even if the other species' store is not loaded.
+5. **From an out-of-scope target (for example, a human protein when mouse is specified, or a GRCh38 position when GRCh37 is specified), the search follows only scope-crossing steps, steps toward the genome (before the U-turn), and identical sequences.** It does not spread sideways within the same species.
+**Species boundaries**: within the same species (NCBI species rank) the difference is an "assembly difference"; between different species it is a "species difference". Genomes of subspecies, varieties, strains and individuals are treated as other assemblies of the same species (this is close to a difference in genome coordinate systems; the same holds for each haplotype of a pangenome). A taxon is merged into a species only when this is explicit: that is, when `--species-taxon` is recorded in the store, or when the NCBI scientific name explicitly has a rank below species after the binomial (`subsp.`, `var.`, `f.`, `str.`, `strain`, `substr.`, `serovar`, `biovar`, `pv.`, `cv.`) and that binomial species is loaded. Example: *Marchantia polymorpha* subsp. *ruderalis* (1480154, MpTak_v7.1) is merged into *Marchantia polymorpha* (3197, v3.1 and UniProt). Sharing only the first two words of the scientific name is not enough to merge (Human immunodeficiency virus 1 and 2 are different species).
 
-**既定のアセンブリ**: アノテーションのあるアセンブリのうち、公開日（assembly report の Date）の新しいもの、次にアノテーションの多いもの（MpTak_v7.1 は Marchanta_polymorpha_v1 より新しい。GRCh37 にはアノテーションがないので GRCh38）。
+**Default assembly**: among assemblies with annotations, the one with the newest release date (Date in the assembly report), then the one with the most annotations (MpTak_v7.1 is newer than Marchanta_polymorpha_v1; GRCh37 has no annotations, so GRCh38).
 
-**chain のないアセンブリ間・種間**: ゲノムからゲノムへ、入力と違うアセンブリや種に変換するときは、層の規則1の例外として、タンパク質の層まで入れる。同一配列のタンパク質を介して（ゲノム → CDS → 同一配列 → CDS → ゲノム）、配列の変わっていない遺伝子のコード領域だけを変換できる。
+**Between assemblies or species without a chain**: when converting from a genome to a genome of an assembly or species different from the input, the protein layer is allowed as an exception to layer rule 1. Through identical proteins (genome → CDS → identical sequence → CDS → genome), only the coding regions of genes whose sequences did not change can be converted.
 
-6. **段数の上限**: 種をまたぐときは `CROSSING_HOPS`（2）を足す。アセンブリが複数ある種では、変換先があるとき1を足す。変換先を指定せず種をまたいだときは、着いたところで止める。
+6. **Hop limit**: when crossing species, `CROSSING_HOPS` (2) is added. For a species with multiple assemblies, 1 is added when a target is given. When species are crossed without a target, the search stops on arrival.
 
-**入力のアセンブリ名**: `<アセンブリ>:<配列名>[:<位置>]`（例: `hg19:chr7:140453136`、`GRCh37:7:140453136`）も受け付ける。配列名は、assembly report の Sequence-Name、UCSC 名、GenBank の accession のどれでもよい。API が `refseq:NC_000007.13:140453136` に読み替え、応答では正規形を返す。`/v1/location` は、書かれた名前（`written`）と、生物種、アセンブリを返す。
+**Assembly names in input**: `<assembly>:<sequence name>[:<position>]` (for example, `hg19:chr7:140453136`, `GRCh37:7:140453136`) is also accepted. The sequence name can be the Sequence-Name in the assembly report, the UCSC name, or the GenBank accession. The API rewrites it as `refseq:NC_000007.13:140453136` and returns the canonical form in the response. `/v1/location` returns the written name (`written`), the species and the assembly.
 
-種をまたぐ edge の種類は、今は `liftover` だけ。オーソログの対応を加えるときは、同じ種類の edge として扱う。
+The only kind of species-crossing edge today is `liftover`. When ortholog correspondences are added, they are handled as edges of the same kind.
 
-**向き（orientation）**: ヌクレオチドの結果では、その結果の区間の鎖。タンパク質の結果（常に N 末端から C 末端へ書く）では、入力がコード配列の逆鎖に対応するときに `reverse` になる。経路の各段は出力の鎖をそのまま返すので、段ごとの向きを掛け合わせてはいけない。以前はそうしていたため、「タンパク質 → マイナス鎖のゲノム → 同じ遺伝子の別のタンパク質」が `reverse` と表示されていた（2026-09-18 修正）。
+**Orientation**: for nucleotide results, it is the strand of the result's interval. For protein results (always written from N-terminus to C-terminus), it is `reverse` when the input corresponds to the reverse strand of the coding sequence. Each path step returns the output strand as is, so orientations must not be multiplied across steps. This used to be done, so "protein → minus-strand genome → another protein of the same gene" was shown as `reverse` (fixed 2026-09-18).
 
-## 3. edge のコストと優先順位
+## 3. Edge costs and priority
 
-完全一致する経路があれば、必ずそれを選ぶ。どのデータベースを経由するか（UniProt なら Ensembl 経由、など）を個別に決めるコードは持たず、次のコストの順序だけで決める。
+If an exact path exists, it is always chosen. There is no code that decides which database to go through case by case (such as via Ensembl for UniProt); it is decided only by the following cost order.
 
-| 段 | コスト |
+| Step | Cost |
 |---|---|
-| **同一配列**（refget ダイジェストが一致。§3.1） | 0 |
-| 一次データの edge（CDS、`cDNA_match`、SIFTS など）で、検証済みまたは検証の対象外 | 1 |
-| ゲノム全体のアライメント（`liftover`、UCSC chain。§9） | 2 |
-| 自前で計算したタンパク質のアライメント（T2。spec-ingest §18） | 3 |
-| 自己検証で不一致（`mismatch`） | 1 + 10 |
-| NCBI の `/exception` があり、配列による全体照合（`basis: "full"`）で ok になっていない | 1 + 10 |
+| **Identity** (refget digests match; §3.1) | 0 |
+| Primary-data edge (CDS, `cDNA_match`, SIFTS, etc.), validated or not subject to validation | 1 |
+| Whole-genome alignment (`liftover`, UCSC chain; §9) | 2 |
+| Self-computed protein alignment (T2; spec-ingest §18) | 3 |
+| Mismatch in self-validation (`mismatch`) | 1 + 10 |
+| Has an NCBI `/exception` and is not ok by full sequence comparison (`basis: "full"`) | 1 + 10 |
 
-### 3.1 同一配列（identity）
+### 3.1 Identical sequences (identity)
 
-- 取り込み時に、配列の refget ダイジェスト（SHA-512 由来、同一性の判定に使う）と MD5（UniParc などの外部データと照合するための鍵。UniParc は大文字で持つが、比較では大文字と小文字を区別しない）を記録する。対象は、GBFF の配列と `/translation`、`--fasta` で与えた公開タンパク質配列、FASTA アダプタで取り込んだ UniProt や Ensembl の配列。
-- 位置が特定の配列の上だけにある location は、**ダイジェストが同じ別の配列へ、同じ座標のままコスト0で移れる**。経路では `kind: "identity"` の段として記録する。
-- UniParc の CRC64 は、衝突の例があるため同一性の判定には使わない。
-- 実例: UniProt の P07203（GPX1）と RefSeq の NP_000572.2 はダイジェストが一致する（49番のセレノシステインを含めて203残基が同一）。そのため、`uniprot:P07203:49` は同一配列の段と CDS の段を経て `refseq:NM_000581.4:220..222` に変換される（コスト1）。
+- At ingest, the sequence's refget digest (derived from SHA-512, used to judge identity) and MD5 (a key for matching external data such as UniParc; UniParc stores it in uppercase, but comparison is case-insensitive) are recorded. This applies to GBFF sequences and `/translation`, published protein sequences given with `--fasta`, and UniProt and Ensembl sequences ingested with the FASTA adapter.
+- A location whose positions are all on one specific sequence **can move at cost 0, keeping the same coordinates, to another sequence with the same digest**. In the path it is recorded as a `kind: "identity"` step.
+- UniParc's CRC64 is not used to judge identity, because collisions are known.
+- Example: UniProt P07203 (GPX1) and RefSeq NP_000572.2 have matching digests (all 203 residues are identical, including the selenocysteine at 49). Therefore, `uniprot:P07203:49` is converted to `refseq:NM_000581.4:220..222` via an identity step and a CDS step (cost 1).
 
-- **配列で照合済みなら、exception の目印を無視する**。例えば、ゲノムとの違いが塩基置換だけの転写産物は、座標が保たれている。一方、`basis: "partial"`（終止コドンがないことだけを確かめたもの）の ok は、照合済みとはみなさない。
-- **アライメントを優先する**: 同じ2つの配列を結ぶアライメント edge（`cDNA_match` など）が location に重なっているときは、ゲノム上のモデルから作った annotation edge を使わない。アライメントは転写産物自身の配列を表しているが、ゲノム上のモデルはそうではないため。
-- **`approximate`**: 経路に、上のコストの上乗せ対象の edge を含む変換結果に付ける。挿入や欠失のため、位置がずれている可能性がある。
+- **If verified by sequence, the exception flag is ignored.** For example, a transcript that differs from the genome only by base substitutions keeps its coordinates. On the other hand, an ok with `basis: "partial"` (which only checked that there is no stop codon) is not considered verified.
+- **Alignments take priority**: when an alignment edge (such as `cDNA_match`) linking the same two sequences overlaps the location, the annotation edge built from the genomic model is not used. The alignment represents the transcript's own sequence, but the genomic model does not.
+- **`approximate`**: set on conversion results whose path includes an edge subject to the cost penalties above. The position may be shifted due to insertions or deletions.
 
-## 4. 結果
+## 4. Results
 
-各結果は次の内容を持つ。
+Each result has the following.
 
-- 変換先の Location とその ID
-- 変換先の種類（category）
-- コスト
+- The target Location and its ID
+- The target type (category)
+- The cost
 - `approximate`
-- 向き（orientation）
-- 経路（`path`）
+- The orientation
+- The path (`path`)
 
-経路の各段は、次の内容を持つ。
+Each path step has the following.
 
-- 使った edge と、順方向か逆方向か
-- その段に入った location
-- その段で**写像できなかった部分**
-- edge の属性と、検証結果、由来
+- The edge used, and whether it was used forward or reverse
+- The location that entered the step
+- The **parts that could not be mapped** at that step
+- The edge's attributes, validation result and provenance
 
 ---
 
-## 5. 検証（2026-09-18、ヒト GRCh38.p14）
+## 5. Validation (2026-09-18, human GRCh38.p14)
 
-**保存先**
-- ゲノム GFF3 を、ゲノム・RefSeq RNA・RefSeq タンパク質の配列で自己検証しながら取り込んだもの: 120秒、1.1GB
-- RefSeq RNA の GenBank: 33秒、0.6GB。CDS の edge 136,794件すべてが、各 mRNA 自身の配列から翻訳を再現した
+**Stores**
+- Genome GFF3 ingested with self-validation against the genome, RefSeq RNA and RefSeq protein sequences: 120 seconds, 1.1GB
+- RefSeq RNA GenBank: 33 seconds, 0.6GB. All 136,794 CDS edges reproduced the translation from each mRNA's own sequence
 
-**方法**: `service/bench/verify-search.ts`。公開タンパク質の残基をランダムに選び、ゲノムに変換する。次の2つで判定する。
+**Method**: `service/bench/verify-search.ts`. Residues of published proteins are chosen at random and converted to the genome. Judged in two ways:
 
-- **1残基の判定**: 変換先のコドンが公開配列の残基をコードしているか。
-- **15残基の窓の判定**: 窓を変換し、翻訳が公開配列の窓と8割以上一致するか。塩基置換では窓の一致率はほとんど下がらないが、座標がずれると窓全体が一致しなくなるので、「座標が正しいか」を判定できる。
+- **Single-residue check**: whether the target codon encodes the residue of the published sequence.
+- **15-residue window check**: convert the window and check whether its translation matches the published window at 80% or more. Base substitutions barely lower the window match rate, but a coordinate shift makes the whole window mismatch, so this checks "whether the coordinates are correct".
 
-**対象1: NCBI が `/exception` を付けた CDS を持つタンパク質（1,543件から2,000残基）**
+**Set 1: proteins with CDSs that NCBI marked with `/exception` (2,000 residues from 1,543 proteins)**
 
-| 経路の種類 / 変換先 | 1残基の判定（一致 / 不一致） | 窓の判定（正しい / ずれ） |
+| Path type / target | Single-residue check (match / mismatch) | Window check (correct / shifted) |
 |---|---|---|
-| 直接の edge（配列で照合済み） / 主染色体 | 1,822 / 0 | 1,767 / 0 |
-| 転写産物経由（NM → `cDNA_match`） / 主染色体 | 129 / 1 | 125 / **0** |
-| 直接の edge / 代替配列（NT_・NW_） | 1,789 / 0 | 1,758 / 0 |
-| 転写産物経由 / 代替配列 | 3,022 / 28 | 2,934 / 15（※） |
-| exception 付きの edge（最後の手段、`approximate`） | 205 / 159 | 185 / 151 |
+| Direct edge (verified by sequence) / primary chromosomes | 1,822 / 0 | 1,767 / 0 |
+| Via transcript (NM → `cDNA_match`) / primary chromosomes | 129 / 1 | 125 / **0** |
+| Direct edge / alternate sequences (NT_, NW_) | 1,789 / 0 | 1,758 / 0 |
+| Via transcript / alternate sequences | 3,022 / 28 | 2,934 / 15 (*) |
+| Edge with exception (last resort, `approximate`) | 205 / 159 | 185 / 151 |
 
-※ いずれも MHC 領域の代替ハプロタイプ。経路の2段とも配列で照合済みなので、座標のずれではなく、ハプロタイプ間のアミノ酸の違いによると考えられる。
+* All are alternate haplotypes of the MHC region. Both steps of the path are verified by sequence, so these are thought to be amino acid differences between haplotypes, not coordinate shifts.
 
-**対象2: 全タンパク質（5,000残基）**
+**Set 2: all proteins (5,000 residues)**
 
-| 経路の種類 | 1残基の判定 | 窓の判定 |
+| Path type | Single-residue check | Window check |
 |---|---|---|
-| 直接の edge | 一致 5,178 / 不一致 0 | ずれ 0 |
-| 転写産物経由 | 一致 52 / 不一致 0 | ずれ 0 |
+| Direct edge | match 5,178 / mismatch 0 | shifted 0 |
+| Via transcript | match 52 / mismatch 0 | shifted 0 |
 
-**問い合わせの速さ**（ゲノムへの変換）: p50 0.3ms、p99 1〜2.4ms
+**Query speed** (conversion to the genome): p50 0.3ms, p99 1 to 2.4ms
 
-### 5.1 検証の過程で見つかり、直したもの
+### 5.1 Problems found and fixed during validation
 
-| 問題 | 対策 |
+| Problem | Fix |
 |---|---|
-| **NCBI の GFF3 の mRNA は、遺伝子の範囲全体を表す1行**で、エキソンは子の feature として別に書かれている。これをそのまま転写産物の edge にしていたため、スプライスされていない範囲と対応させていた。転写産物の配列で検証して初めて見つかった（19万件の不一致） | 転写産物系の feature は、`Parent` で紐づくエキソンから location を組み立てる（spec-ingest §4） |
-| RefSeq 転写産物の**ポリA鎖**（ゲノムにない）のせいで、長さの不一致と判定されていた（4,697件） | 転写産物がモデルより長く、はみ出した部分が9割以上 A の場合はポリA鎖とみなし、その手前で照合する |
-| ゲノム上のモデルが NM と一致しない転写産物で、そのモデルの edge が安い経路として選ばれていた | 転写産物の edge も配列で検証する（塩基置換だけなら ok、長さが違えば mismatch）。あわせて、コストの規則（§3）とアライメント優先の規則を設けた |
-| 検証の ok に強弱の区別がなかった | `basis`（`full` か `partial`）を記録する（保存先のスキーマをバージョン2に上げた） |
+| **An mRNA in NCBI's GFF3 is a single line covering the whole gene range**, with exons written separately as child features. This was used as is for the transcript edge, so it was mapped to the unspliced range. Found only after validating against transcript sequences (190,000 mismatches) | Transcript-type features build their location from the exons linked by `Parent` (spec-ingest §4) |
+| The **poly(A) tail** of RefSeq transcripts (not in the genome) caused them to be judged as length mismatches (4,697 cases) | If the transcript is longer than the model and the overhanging part is 90% or more A, it is treated as a poly(A) tail and comparison stops before it |
+| For transcripts whose genomic model does not match the NM, the model's edge was chosen as the cheaper path | Transcript edges are also validated by sequence (ok if only base substitutions; mismatch if lengths differ). Together with this, the cost rules (§3) and the alignment priority rule were introduced |
+| A validation ok had no distinction of strength | `basis` (`full` or `partial`) is recorded (the store schema was raised to version 2) |
 
-### 5.2 残る課題
+### 5.2 Remaining issues
 
-- 代替配列（NT_・NW_）の多くには `cDNA_match` がない。exception 付きの転写産物では、最後の手段として `approximate` な経路が使われる。
-- 部分的にしか写せない経路と、全体を写せるが高コストの経路の選択は、配列ごとのコストだけで決めている。入力のうち写せた割合は、選択に使っていない。
+- Many alternate sequences (NT_, NW_) have no `cDNA_match`. For transcripts with exceptions, an `approximate` path is used as a last resort.
+- The choice between a path that maps only part of the input and a path that maps all of it at a higher cost is decided only by per-sequence cost. The fraction of the input that was mapped is not used in the choice.
 
 ---
 
-## 6. REST API（`togocoord-serve`）
+## 6. REST API (`togocoord-serve`)
 
-`node service/src/serve.ts [--port 8080] [--host 127.0.0.1] [--base URL] STORE.sqlite...`。Node 組み込みの http で実装し、依存パッケージはない。CORS は全開放。
+`node service/src/serve.ts [--port 8080] [--host 127.0.0.1] [--base URL] STORE.sqlite...`. Implemented with Node's built-in http, with no dependency packages. CORS is fully open.
 
-| メソッド | パス | 内容 |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&maxHops=&codon=never&tag=` | 変換。`db`（名前空間。例: `uniprot`、複数可）は、結果をそのデータベースのものに絞る（知らない名前空間は400）。`taxon`（NCBI taxon の番号、`taxon:10090`、読み込んだ生物種の学名や一般名。例: `Mus musculus`、`mouse`）と `assembly`（ゲノムの結果のアセンブリ。例: `GRCh37`、`hg19`）で、変換先の範囲を指定する（§2.2）。`loc` はアセンブリの配列名でも書ける（`hg19:chr7:140453136`）。ID で引ける注釈の ID でもよい（`fanta:FCHS_301358` は、その CRE の領域 `refseq:NC_000003.12:181712289..181712497`。`/v1/location` の `written.annotation` に ID、種類、名前、リンクを返す）。知らない種やアセンブリは400。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す。`tag`（例: `MANE Select`）を指定すると、そのタグを持つ変換先だけを返す。結果には、変換先のタグ（`tags`）、生物種（`taxon`、`organism`）、ゲノムならアセンブリ（`assembly`）が付き、応答には入力の生物種とアセンブリ（`inputTaxon`、`inputAssembly`）が付く。UI は、入力と違う生物種の結果に生物種名を表示する |
-| POST | `/v1/convert` | 一括変換。`{"locations": [...], "to": ..., "db": ..., "taxon": ..., "assembly": ..., "maxHops": ..., "codon": ...}`。最大1000件。個々の入力の誤りは、その要素に `error` として返す |
-| GET | `/v1/location?loc=` | 正規形の ID、IRI、セグメント（1始まり。タンパク質は残基番号とコドン内の位置）、生物種とアセンブリ、アセンブリの配列名で書かれていればその名前（`written`） |
-| GET | `/v1/location/faldo?loc=` | FALDO JSON-LD（`application/ld+json`） |
-| GET | `/v1/sequences/{ref}` | 配列の情報（全保存先の情報をまとめたもの）と、同一配列の一覧 |
-| GET | `/v1/sequences/{ref}/edges` | その配列から出る edge と入る edge |
-| GET | `/v1/annotations?loc=` | その区間に重なる annotation。索引は feature の外枠で引くが、返すのは feature 自身の区間が重なるものだけ（イントロンの位置では、その転写産物を返さない）。ゲノムの位置では、**同じ種の他のアセンブリの注釈も返す**。位置を chain やアライメントでそのアセンブリに移して引き（1段だけ）、各注釈に `assembly`、引いた位置（`via`）、入力のアセンブリに移し戻した位置（`lifted`）を付ける。例: mm39 の位置で、mm10 にしかない fanta.bio の CRE が見える。ID のある注釈には `id`（`fanta:FCMM_194523`）と `link` が付く |
-| GET | `/v1/meta` | 保存先ごとのファイル名、メタデータ（表示名、生物種、アセンブリ、元ファイル、構築日時）、内容の集計（spec-ingest §12）。`species` に、読み込んだ生物種（taxon、名前、アセンブリ、既定のアセンブリ）の一覧、`assemblies` に、アセンブリ（名前、UCSC 名、accession）の一覧、`annotationNamespaces` に ID で引ける注釈の名前空間 |
-| GET | `/<namespace>:<accession>:<location>` | IRI の解決（identifiers.org 風）。`Accept` に応じて、ブラウザには Web UI（`/?loc=`）への 303、JSON-LD の要求には FALDO JSON-LD、JSON の要求には `/v1/location` への 303 を返す |
-| GET | `/`、`/ui/*` | Web UI（§6.1） |
+| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&maxHops=&codon=never&tag=` | Conversion. `db` (namespace, for example `uniprot`; multiple allowed) filters results to that database (unknown namespace is 400). `taxon` (NCBI taxon number, `taxon:10090`, or the scientific or common name of a loaded species, for example `Mus musculus`, `mouse`) and `assembly` (assembly for genome results, for example `GRCh37`, `hg19`) specify the target scope (§2.2). `loc` can also be written with an assembly sequence name (`hg19:chr7:140453136`). It can also be the ID of an annotation that can be looked up by ID (`fanta:FCHS_301358` is the region of that CRE, `refseq:NC_000003.12:181712289..181712497`; `/v1/location` returns the ID, type, name and link in `written.annotation`). Unknown species or assemblies are 400. `to` is a type (such as `genome`), a namespace (such as `uniprot`) or a sequence (`refseq:NC_000001.11`), and can be given multiple times. If omitted, all directly connected sequences are returned. With `tag` (for example `MANE Select`), only targets with that tag are returned. Results carry the target's tags (`tags`), species (`taxon`, `organism`) and, for genomes, the assembly (`assembly`); the response carries the input's species and assembly (`inputTaxon`, `inputAssembly`). The UI shows the species name on results whose species differs from the input |
+| POST | `/v1/convert` | Batch conversion. `{"locations": [...], "to": ..., "db": ..., "taxon": ..., "assembly": ..., "maxHops": ..., "codon": ...}`. Up to 1000 items. Errors in individual inputs are returned as `error` on that element |
+| GET | `/v1/location?loc=` | Canonical ID, IRI, segments (1-based; for proteins, the residue number and the position within the codon), species and assembly, and, if written with an assembly sequence name, that name (`written`) |
+| GET | `/v1/location/faldo?loc=` | FALDO JSON-LD (`application/ld+json`) |
+| GET | `/v1/sequences/{ref}` | Sequence information (merged from all stores) and the list of identical sequences |
+| GET | `/v1/sequences/{ref}/edges` | Edges leaving and entering the sequence |
+| GET | `/v1/annotations?loc=` | Annotations overlapping the interval. The index is looked up by the feature's outer bounds, but only features whose own intervals overlap are returned (at an intron position, that transcript is not returned). For genomic positions, **annotations on other assemblies of the same species are also returned**. The position is moved to that assembly by a chain or alignment (one step only) and looked up there, and each annotation gets `assembly`, the looked-up position (`via`) and the position moved back to the input assembly (`lifted`). Example: at an mm39 position, fanta.bio CREs that exist only on mm10 are visible. Annotations with IDs get `id` (`fanta:FCMM_194523`) and `link` |
+| GET | `/v1/meta` | Per store: file name, metadata (display name, species, assembly, source files, build time), content summary (spec-ingest §12). `species` lists the loaded species (taxon, name, assemblies, default assembly), `assemblies` lists assemblies (name, UCSC name, accession), and `annotationNamespaces` lists the namespaces of annotations that can be looked up by ID |
+| GET | `/<namespace>:<accession>:<location>` | IRI resolution (identifiers.org-like). Depending on `Accept`: a 303 to the Web UI (`/?loc=`) for browsers, FALDO JSON-LD for JSON-LD requests, and a 303 to `/v1/location` for JSON requests |
+| GET | `/`, `/ui/*` | Web UI (§6.1) |
 
-- `loc` は `namespace:accession` だけでもよく、配列全体（`1..長さ`）として扱う。応答の `input` には、明示した範囲を返す。
-- 上限: 入力の区間長は合計500万塩基（または残基）まで（超えると413）。結果は1件の変換につき1000件まで（超えると `truncated: true`）。
-- location のない IRI（`/refseq:NC_000001.11`）は、範囲ではなく配列そのものを表す。JSON の要求には `/v1/sequences/{ref}` への 303 を、ブラウザには UI への 303 を返す。
+- `loc` may be just `namespace:accession`, which is treated as the whole sequence (`1..length`). The response's `input` returns the explicit range.
+- Limits: the total interval length of the input is up to 5 million bases (or residues) (413 if exceeded). Results are up to 1000 per conversion (`truncated: true` if exceeded).
+- An IRI without a location (`/refseq:NC_000001.11`) represents the sequence itself, not a range. It returns a 303 to `/v1/sequences/{ref}` for JSON requests and a 303 to the UI for browsers.
 
-誤りは `{"error": ..., "position"?: ...}` で返す（400: 構文や意味の誤り、404、405、413）。
+Errors are returned as `{"error": ..., "position"?: ...}` (400: syntax or semantic errors, 404, 405, 413).
 
-**サブディレクトリへの配置**: UI は、スタイルとスクリプトを相対パス（`ui/…`）で読み、API の URL を自分のスクリプトの URL から決める。そのため、リバースプロキシでサブディレクトリ（例: `https://example.org/togocoord/` → `http://127.0.0.1:8080/`）に置いてもそのまま動く。末尾の `/` がない URL（`/togocoord`）は `/togocoord/` へリダイレクトする設定にする（nginx の `location /togocoord/ { proxy_pass http://127.0.0.1:8080/; }` は自動でそうなる）。IRI の接頭辞は `--base https://example.org/togocoord/` で合わせる。
+**Deploying in a subdirectory**: the UI loads its styles and scripts with relative paths (`ui/…`) and derives the API URL from its own script URL. Therefore, it works as is when placed in a subdirectory behind a reverse proxy (for example, `https://example.org/togocoord/` → `http://127.0.0.1:8080/`). Configure the URL without the trailing `/` (`/togocoord`) to redirect to `/togocoord/` (nginx's `location /togocoord/ { proxy_pass http://127.0.0.1:8080/; }` does this automatically). Match the IRI prefix with `--base https://example.org/togocoord/`.
 
-### 6.1 Web UI（3d）
+### 6.1 Web UI (3d)
 
-`service/public/`（ビルド不要の HTML・JavaScript・CSS。コンセプト版の配色とフォントを引き継ぐ）。REST API だけを使う薄いクライアントで、状態は URL（`?loc=&to=&db=&taxon=&assembly=&codon=`）に持つので、画面の URL をそのまま共有できる。
+`service/public/` (HTML, JavaScript and CSS with no build step; it keeps the colors and fonts of the concept version). A thin client that uses only the REST API. State is kept in the URL (`?loc=&to=&db=&taxon=&assembly=&codon=`), so the page URL can be shared as is.
 
-- Location ID を入力して、変換先（直接つながる配列、ゲノム、遺伝子領域、転写産物、タンパク質、構造）、データベース（既定は「any database」。結果の絞り込み）、生物種（既定は「same species」。読み込んだ生物種から選ぶ）を選ぶ。アセンブリの選択は、1つの種に複数のアセンブリを読み込んだときだけ表示する（既定は「default assembly」。選択肢は `GRCh37.p13 / hg19` のように UCSC 名も示し、生物種、accession、アノテーションの有無はマウスを重ねると表示する）。入力のカードには、生物種、アセンブリ、アセンブリの配列名で書かれていればその名前（`written as chr7`）を表示する。ゲノムの結果には、その種に複数のアセンブリがあるときにアセンブリ名を付ける。読み込んでいないデータの例（GRCh37 など）は表示しない。
-- **効かない選択は無効にする**（理由はマウスを重ねると表示）。変換先の層にないデータベース（genome での UniProt など。structure は PDB だけなので選択ごと無効）。アセンブリは、変換先が genome か直接つながる配列で、対象の種に複数のアセンブリがあるときだけ選べ、選択肢はその種のものだけ。MANE Select only は、変換先が転写産物かタンパク質で、対象の種に MANE の印があるときだけ。生物種は、入力の種からゲノムのアライメント（liftOver の chain）がある種だけ選べ、ない種は選べない（理由をツールチップで示す。同一配列でだけ届く場合もあるが、まれで、変換できるかのように見えるので。API の `taxon` ではどの種も指定できる）。他の種を1つも選べないときは、選択ごと無効にする。入力の種そのものは「same species」と同じなので一覧に出さない。無効になった選択は既定に戻し、その値で変換する。判定には `/v1/meta` の `crossings`（chain がつなぐ種とアセンブリ）と `tags`（タグを持つ配列の種）を使う。コドン内の位置の表示を切り替えられる。
-- 入力: 正規形の ID、各セグメント（残基番号とコドン内の位置）、FALDO JSON-LD、重なるアノテーション。
-- 結果: 変換先の ID、種類、コスト、`approximate`（照合できていない edge を通った場合）、向き、経路（edge の種類と方向。マウスを重ねると、edge の location、検証結果、exception、由来を表示）、各段で写像できなかった部分。
-- 結果の ID をクリックすると、その位置から「直接つながる配列」を調べ直す（コンセプト版の、変換を続けていく操作に相当）。
-- アノテーションは、配列全体を覆う feature（chromosome、region など）を除き、狭い範囲のものから順に並べる。
-- 入力の誤りは、該当する文字の位置に `^` を付けて示す。
-- 変換先のタグ（MANE Select など）を印で示し、「MANE Select only」で絞り込める。
-- **Loaded data**（`?view=data`）: 読み込んでいる保存先を生物種（taxon）ごとにまとめて表示する。種ごとに畳んで表示し（開くと各保存先）、見出しにデータセットの数、taxon、アセンブリを示す。表示するのは、表示名、アセンブリ、元ファイル、件数、構築日時。保存先ごとの例をクリックすると、その場で変換を試せる。
-- ヒト全体の保存先（RefSeq、RefSeq RNA、Ensembl、UniProt、SIFTS）で、Chrome を使って表示と操作を確認した。
+- Enter a Location ID and choose the target (directly connected sequences, genome, gene region, transcript, protein, structure), the database (default "any database"; filters results) and the species (default "same species"; chosen from the loaded species). The assembly selector is shown only when multiple assemblies are loaded for one species (default "default assembly"; options also show the UCSC name, as in `GRCh37.p13 / hg19`, and the species, accession and whether annotations exist are shown on mouse hover). The input card shows the species, the assembly and, if written with an assembly sequence name, that name (`written as chr7`). Genome results get the assembly name when the species has multiple assemblies. Examples for data that is not loaded (such as GRCh37) are not shown.
+- **Options that have no effect are disabled** (the reason is shown on mouse hover). Databases not in the target layer (such as UniProt for genome; structure has only PDB, so the whole selector is disabled). The assembly can be chosen only when the target is genome or directly connected sequences and the relevant species has multiple assemblies, and the options are only that species' assemblies. MANE Select only is available only when the target is transcript or protein and the relevant species has MANE markers. Only species that have a genome alignment (liftOver chain) from the input species can be chosen; others cannot (the reason is shown in a tooltip; they may sometimes be reached only through identical sequences, but this is rare and would look as if conversion were possible; the API's `taxon` accepts any species). If no other species can be chosen, the whole selector is disabled. The input species itself is the same as "same species", so it is not listed. A disabled option is reset to its default, and the conversion uses that value. These checks use `crossings` (species and assemblies linked by chains) and `tags` (species of sequences with tags) from `/v1/meta`. The display of the position within the codon can be toggled.
+- Input: canonical ID, each segment (residue number and position within the codon), FALDO JSON-LD, overlapping annotations.
+- Results: target ID, type, cost, `approximate` (when the path went through an edge that could not be verified), orientation, path (edge kind and direction; mouse hover shows the edge's location, validation result, exception and provenance), and the parts that could not be mapped at each step.
+- Clicking a result ID re-queries "directly connected sequences" from that position (equivalent to the concept version's operation of continuing the conversion).
+- Annotations are sorted from the narrowest range, excluding features that cover the whole sequence (chromosome, region, etc.).
+- Input errors are shown with `^` under the character at the error position.
+- Target tags (such as MANE Select) are shown as markers, and results can be filtered with "MANE Select only".
+- **Loaded data** (`?view=data`): shows the loaded stores grouped by species (taxon). Each species is collapsed (expand to see each store), and the heading shows the number of datasets, the taxon and the assemblies. Shown are the display name, assembly, source files, counts and build time. Clicking a per-store example tries the conversion on the spot.
+- Display and operation were checked in Chrome with the full human stores (RefSeq, RefSeq RNA, Ensembl, UniProt, SIFTS).
 
 ## 7. FALDO JSON-LD
 
-FALDO の定義（`faldo.ttl`）で確認した語彙だけを使う。コンセプト版で使っていた `faldo:NegativeStrand`、`faldo:member`、`faldo:order` は、FALDO の定義にない。
+Only vocabulary confirmed in the FALDO definition (`faldo.ttl`) is used. `faldo:NegativeStrand`, `faldo:member` and `faldo:order`, used in the concept version, are not in the FALDO definition.
 
 | Location | FALDO |
 |---|---|
-| 1塩基・1残基 | `faldo:ExactPosition` |
-| 範囲 | `faldo:Region`（`faldo:begin` と `faldo:end`。逆鎖では生物学的な始点を begin とするので、begin のほうが数値が大きい。FALDO の README の cheY の例と一致することを確認した） |
-| 鎖の向き | 位置の型として `faldo:ForwardStrandPosition` / `faldo:ReverseStrandPosition`（タンパク質には付けない） |
-| `a^b` | `faldo:InBetweenPosition`（`faldo:after` / `faldo:before`。鎖の向きに沿う） |
+| Single base / single residue | `faldo:ExactPosition` |
+| Range | `faldo:Region` (`faldo:begin` and `faldo:end`. On the reverse strand, the biological start is begin, so begin has the larger number. Confirmed to match the cheY example in the FALDO README) |
+| Strand | `faldo:ForwardStrandPosition` / `faldo:ReverseStrandPosition` as the position type (not added for proteins) |
+| `a^b` | `faldo:InBetweenPosition` (`faldo:after` / `faldo:before`, following the strand) |
 | `a.b` | `faldo:InRangePosition` |
-| `<`、`>` | その端の位置を `faldo:FuzzyPosition` 型にする（`faldo:position` は残す） |
-| `join` / `order` | `faldo:ListOfRegions`（`rdf:Seq`）/ `faldo:BagOfRegions`（`rdf:Bag`）。要素は `rdf:_1`、`rdf:_2`… の順に、生物学的な順序で並べる |
-| コドン拡張 | 位置に `tgc:codonPosition`（1..3）を付ける。FALDO に採用されれば `faldo:` に移す |
+| `<`, `>` | The position at that end gets type `faldo:FuzzyPosition` (`faldo:position` is kept) |
+| `join` / `order` | `faldo:ListOfRegions` (`rdf:Seq`) / `faldo:BagOfRegions` (`rdf:Bag`). Elements are ordered `rdf:_1`, `rdf:_2`… in biological order |
+| Codon extension | Positions get `tgc:codonPosition` (1..3). If adopted by FALDO, it will move to `faldo:` |
 
-- 最上位のノードは location そのもの（`@id` は location の IRI）。IRI では `<`、`>`、`^` だけを % エンコードする。
-- 配列は `https://identifiers.org/<namespace>:<accession>` で参照する。
-- jsonld.js で RDF に展開し、正しいトリプルになることを確認した。
-- 既定の基底 IRI は `https://togocoord.dbcls.jp/`（仮。2026-09-19 に `togocoord.example.org` から変更。`--base` で上書きできる）。語彙（`tgc:`）は `https://togocoord.dbcls.jp/ontology#`。
+- The top-level node is the location itself (`@id` is the location IRI). In IRIs, only `<`, `>` and `^` are percent-encoded.
+- Sequences are referenced as `https://identifiers.org/<namespace>:<accession>`.
+- Expanded to RDF with jsonld.js and confirmed to produce correct triples.
+- The default base IRI is `https://togocoord.dbcls.jp/` (provisional; changed from `togocoord.example.org` on 2026-09-19; can be overridden with `--base`). The vocabulary (`tgc:`) is `https://togocoord.dbcls.jp/ontology#`.
 
 ---
 
-## 8. 構造との対応（3e、2026-09-18、ヒト）
+## 8. Mapping to structures (3e, 2026-09-18, human)
 
-**保存先**（すべて `togocoord-ingest` で作成）
+**Stores** (all built with `togocoord-ingest`)
 
-| 保存先 | 入力 | 時間 | 自己検証 |
+| Store | Input | Time | Self-validation |
 |---|---|---|---|
-| RefSeq ゲノム | GRCh38.p14 の GFF3、ゲノム・RNA・タンパク質の配列 | 134秒 | CDS と alignment で説明のつかない不一致は0件（exception 付き 5,778件を除く） |
-| RefSeq RNA | RNA の GenBank | 37秒 | CDS 136,794件すべて ok |
-| Ensembl | release 116 の GFF3、Ensembl のタンパク質配列、`--seqid-map`（NCBI の assembly report） | 190秒 | **CDS 約37万件すべて ok** |
-| UniProt | ヒトの参照プロテオーム（canonical 20,652件 ＋ additional 148,999件） | 2秒 | — |
-| SIFTS | `uniprot_segments_observed`（ヒトの UniProt に限定） | 9秒 | 24万 edge のうち ok 240,124件 |
+| RefSeq genome | GRCh38.p14 GFF3, genome, RNA and protein sequences | 134 seconds | 0 unexplained mismatches in CDS and alignments (excluding 5,778 with exceptions) |
+| RefSeq RNA | RNA GenBank | 37 seconds | All 136,794 CDSs ok |
+| Ensembl | release 116 GFF3, Ensembl protein sequences, `--seqid-map` (NCBI assembly report) | 190 seconds | **All ~370,000 CDSs ok** |
+| UniProt | Human reference proteome (20,652 canonical + 148,999 additional) | 2 seconds | — |
+| SIFTS | `uniprot_segments_observed` (limited to human UniProt) | 9 seconds | 240,124 ok out of 240,000 edges |
 
-**同一配列の割合**（UniProt の配列のうち、同一の Ensembl または RefSeq のタンパク質があるもの）
+**Fraction with identical sequences** (UniProt sequences that have an identical Ensembl or RefSeq protein)
 
-| UniProt | 件数 | Ensembl | RefSeq | いずれか |
+| UniProt | Count | Ensembl | RefSeq | Either |
 |---|---|---|---|---|
-| canonical、構造あり | 8,983 | 98.1% | 97.5% | **98.6%** |
-| canonical、全体 | 11,669 | 89.9% | 86.3% | 90.5% |
-| additional（アイソフォームなど） | 148,896 | 93.7% | 17.5% | 94.5% |
+| canonical, with structure | 8,983 | 98.1% | 97.5% | **98.6%** |
+| canonical, all | 11,669 | 89.9% | 86.3% | 90.5% |
+| additional (isoforms, etc.) | 148,896 | 93.7% | 17.5% | 94.5% |
 
-構造のある UniProt の98.6%は、アライメントなしで（同一配列 → CDS）ゲノムに正確に到達できる。残りには T2（自前のアライメント）が必要。
+98.6% of UniProt entries with structures can reach the genome exactly without alignment (identity → CDS). The rest need T2 (self-computed alignment).
 
-**構造との往復**（`service/bench/verify-structure.ts`、SIFTS の区間から3,000残基）
-- ゲノムに到達できたもの: 2,957件（すべて完全一致の経路。approximate は0件）。同一配列がない43件は、到達できない。
-- 変換先のコドンが UniProt の残基をコードしている: **2,957 / 2,957**
-- ゲノムから PDB の同じ残基に戻る: **2,957 / 2,957**（同じ鎖に同じ残基が2回現れる構造は、両方の位置が返る）
-- PDB の SEQRES の残基と UniProt の残基が一致: 2,944件（残りは構造での人工的な変異）
+**Round trip with structures** (`service/bench/verify-structure.ts`, 3,000 residues from SIFTS intervals)
+- Reached the genome: 2,957 (all by exact paths; 0 approximate). The 43 without identical sequences cannot be reached.
+- The target codon encodes the UniProt residue: **2,957 / 2,957**
+- Back from the genome to the same PDB residue: **2,957 / 2,957** (for structures where the same residue appears twice in the same chain, both positions are returned)
+- The PDB SEQRES residue matches the UniProt residue: 2,944 (the rest are engineered mutations in the structure)
 
-**実例**: GPX1 のセレノシステインのコドン `refseq:NC_000003.12:complement(49358132..49358134)` → Ensembl の CDS（逆方向）→ UniProt P07203（同一配列）→ SIFTS → `pdb:2F8A.A:59` と `pdb:2F8A.B:59`（2F8A は U49G 変異体）。コスト2、approximate なし。
+**Example**: the GPX1 selenocysteine codon `refseq:NC_000003.12:complement(49358132..49358134)` → Ensembl CDS (reverse) → UniProt P07203 (identity) → SIFTS → `pdb:2F8A.A:59` and `pdb:2F8A.B:59` (2F8A is the U49G mutant). Cost 2, not approximate.
 
-**速さ**: UniProt の残基 → ゲノムは p50 6.4ms、p95 25ms、p99 50ms（構造の多いタンパク質ほど標本に選ばれやすいので、厳しめの値）。層の規則（§2.1）を入れる前は p50 12.5ms、p99 175ms で、変換先と同じコストの段階にある数百〜数千の PDB 鎖をすべて展開していた。RefSeq タンパク質 → ゲノムは p50 1.3ms、p99 12ms。
+**Speed**: UniProt residue → genome is p50 6.4ms, p95 25ms, p99 50ms (proteins with many structures are more likely to be sampled, so these are conservative values). Before the layer rules (§2.1), it was p50 12.5ms, p99 175ms, expanding all of the hundreds to thousands of PDB chains at the same cost level as the target. RefSeq protein → genome is p50 1.3ms, p99 12ms.
 
-## 9. 生物種をまたぐ対応（UCSC liftOver chain、2026-09-18、ヒト ↔ マウス）
+## 9. Mapping across species (UCSC liftOver chain, 2026-09-18, human ↔ mouse)
 
-**保存先**: UCSC の `hg38ToMm39.over.chain.gz` と `mm39ToHg38.over.chain.gz` を、それぞれ別の保存先に取り込んだ（spec-ingest §14）。
+**Stores**: UCSC `hg38ToMm39.over.chain.gz` and `mm39ToHg38.over.chain.gz` were each ingested into a separate store (spec-ingest §14).
 
-| 保存先 | chain | ブロック | 大きさ | 時間 | 標本の一致率 |
+| Store | Chains | Blocks | Size | Time | Sample match rate |
 |---|---|---|---|---|---|
-| hg38 → mm39 | 80,818 | 31,772,095 | 158MB | 約31秒 | 70.3% |
-| mm39 → hg38 | 87,089 | 30,805,813 | 156MB | 約31秒 | 70.4% |
+| hg38 → mm39 | 80,818 | 31,772,095 | 158MB | about 31 seconds | 70.3% |
+| mm39 → hg38 | 87,089 | 30,805,813 | 156MB | about 31 seconds | 70.4% |
 
-- `liftover` の edge は**向きを持つ**（`directional`）。liftOver の chain は元の側だけで重複を除いてあるため、逆向きには使わず、逆の向きは逆のファイルから得る。
-- chain は、変換先の生物種を指定したとき（§2.2。例: `taxon=10090`）だけ通る。
-- コストは2（§3）。層の規則（§2.1）ではゲノム同士の edge なので、ゲノム → ゲノム → 転写産物 → タンパク質と、Uターン1回の範囲で他の種のタンパク質まで届く。
-- 結果の `approximate` は、自己検証（標本の一致率 ≥ 0.5）が ok の chain では付かない。種をまたぐ対応は相同性にもとづく位置であり、配列の同一性は保証しない。
+- `liftover` edges **are directional** (`directional`). liftOver chains are deduplicated only on the source side, so they are not used in reverse; the reverse direction comes from the reverse file.
+- A chain is followed only when a target species is specified (§2.2; for example `taxon=10090`).
+- The cost is 2 (§3). Under the layer rules (§2.1) it is a genome-to-genome edge, so genome → genome → transcript → protein reaches proteins of the other species within one U-turn.
+- Results are not marked `approximate` for chains whose self-validation (sample match rate ≥ 0.5) is ok. A cross-species correspondence is a homology-based position and does not guarantee sequence identity.
 
-**検証**（`service/bench/verify-liftover.ts`、MANE Select のヒトのタンパク質から無作為に999残基。`taxon=10090` を指定して変換）
+**Validation** (`service/bench/verify-liftover.ts`, 999 random residues from human MANE Select proteins, converted with `taxon=10090`)
 
-| 項目 | 結果 |
+| Item | Result |
 |---|---|
-| ヒトのコドン → マウスのゲノム | 974 / 999（97.5%） |
-| 　そのマウスのコドンが同じアミノ酸をコードする | 813 / 974（83.5%。位置がずれていれば5%程度になる） |
-| ヒトの残基 → マウスのタンパク質 | 941 / 999（94.2%） |
-| 　同じ遺伝子名のタンパク質 | 855 / 941（90.9%） |
-| 速さ（ゲノムへの変換とタンパク質への変換の合計、`taxon=10090`） | p50 15ms、p95 52ms、p99 100ms→ 規則5の改訂と、同一配列だけをたどる展開で edge を引かないようにした後、p50 9ms、p95 32ms、p99 59ms |
+| Human codon → mouse genome | 974 / 999 (97.5%) |
+| 　That mouse codon encodes the same amino acid | 813 / 974 (83.5%; about 5% if positions were shifted) |
+| Human residue → mouse protein | 941 / 999 (94.2%) |
+| 　Protein with the same gene name | 855 / 941 (90.9%) |
+| Speed (sum of conversion to genome and to protein, `taxon=10090`) | p50 15ms, p95 52ms, p99 100ms → after revising rule 5 and avoiding edge lookups in identity-only expansion, p50 9ms, p95 32ms, p99 59ms |
 
-遺伝子名が違う86件の多くは、オルソログの命名の違い（ZNF14 → Zfp709、CYP2F1 → Cyp2f2、REG1A → Reg1）や、多重遺伝子族（嗅覚受容体、苦味受容体、ヒストン）である。
+Most of the 86 with different gene names are differences in ortholog naming (ZNF14 → Zfp709, CYP2F1 → Cyp2f2, REG1A → Reg1) or multigene families (olfactory receptors, bitter taste receptors, histones).
 
-**実例**: `uniprot:P07203:49`（ヒト GPX1）を `to=protein&db=uniprot&taxon=10090` で変換すると、同一配列 → CDS → chain → CDS → 同一配列 の経路で `uniprot:P11352:47`（マウス Gpx1）になる（コスト4）。`refseq:NP_000572.2:49` → `refseq:NP_032186.2:47` も同じ。`refseq:NC_000075.7:106312500..106312550`（マウス9番染色体）→ `refseq:NC_000003.12:complement(join(51986735..51986765,51986769..51986774))`（途中の欠失は join になる）。
+**Example**: converting `uniprot:P07203:49` (human GPX1) with `to=protein&db=uniprot&taxon=10090` gives `uniprot:P11352:47` (mouse Gpx1) via the path identity → CDS → chain → CDS → identity (cost 4). The same holds for `refseq:NP_000572.2:49` → `refseq:NP_032186.2:47`. `refseq:NC_000075.7:106312500..106312550` (mouse chromosome 9) → `refseq:NC_000003.12:complement(join(51986735..51986765,51986769..51986774))` (a deletion in the middle becomes a join).
 
-**残る課題**: オルソログの対応（Ensembl Compara など）は、種をまたぐ edge として §2.2 の規則で加えられる。参照ゲノムと配列が違う UniProt のエントリには、同一配列がないので届かない。例: マウス Nras の Swiss-Prot `P08556` は、GRCm39 の翻訳と2残基違う（168 L/M、184 S/L）。そのため、ヒト NRAS（`uniprot:P01111`）からは、GRCm39 と同一の TrEMBL `A0A0G2JDN6` にだけ届く。置換だけの違いなら、配列長が同じもの同士の簡単な対応（T2）で扱える。chain のない種の組み合わせは、T3（GFA の持ち込み、自前の計算）で扱う。
+**Remaining issues**: ortholog correspondences (Ensembl Compara, etc.) can be added as species-crossing edges under the rules in §2.2. UniProt entries whose sequence differs from the reference genome have no identical sequence and cannot be reached. Example: mouse Nras Swiss-Prot `P08556` differs from the GRCm39 translation at 2 residues (168 L/M, 184 S/L). Therefore, from human NRAS (`uniprot:P01111`) only TrEMBL `A0A0G2JDN6`, identical to GRCm39, is reached. Differences that are only substitutions can be handled by a simple mapping between sequences of the same length (T2). Species pairs without chains are handled by T3 (importing GFA, self-computation).
 
-## 10. アセンブリ間の対応（GRCh37 ↔ GRCh38、2026-09-18）
+## 10. Mapping between assemblies (GRCh37 ↔ GRCh38, 2026-09-18)
 
-**保存先**: `grch37.sqlite`（GRCh37.p13 の assembly report と genomic.fna、297配列）、`grch38_names.sqlite`（GRCh38.p14 の配列名）、`chain_hg19ToHg38.sqlite`（1,278 chain、53,950ブロック、1.1MB）、`chain_hg38ToHg19.sqlite`（25,369 chain、185,410ブロック、9.7MB）。両方の chain とも、標本の一致率は99.6%。
+**Stores**: `grch37.sqlite` (GRCh37.p13 assembly report and genomic.fna, 297 sequences), `grch38_names.sqlite` (GRCh38.p14 sequence names), `chain_hg19ToHg38.sqlite` (1,278 chains, 53,950 blocks, 1.1MB), `chain_hg38ToHg19.sqlite` (25,369 chains, 185,410 blocks, 9.7MB). Both chains have a sample match rate of 99.6%.
 
-**検証**（`service/bench/verify-assembly.ts`、MANE Select のヒトのタンパク質から無作為に995残基）
+**Validation** (`service/bench/verify-assembly.ts`, 995 random residues from human MANE Select proteins)
 
-| 項目 | 結果 |
+| Item | Result |
 |---|---|
-| タンパク質の残基 → GRCh37 のコドン（GRCh38 と chain を経由） | 992 / 995（99.7%。届かないのは PAR の GTPBP6 などで、chain が覆っていない） |
-| 　GRCh38 のコドンと同じアミノ酸 | 992 / 992（100%） |
-| 　GRCh37 のコドン → 同じ残基に戻る（chain → GRCh38 → CDS） | 989 / 992（99.7%。`hg19ToHg38` の chain は `hg38ToHg19` より覆う範囲が狭い） |
-| 速さ（タンパク質 → GRCh37） | p50 6.0ms、p95 18ms、p99 32ms |
+| Protein residue → GRCh37 codon (via GRCh38 and chain) | 992 / 995 (99.7%; unreached ones, such as GTPBP6 in the PAR, are not covered by the chain) |
+| 　Same amino acid as the GRCh38 codon | 992 / 992 (100%) |
+| 　GRCh37 codon → back to the same residue (chain → GRCh38 → CDS) | 989 / 992 (99.7%; the `hg19ToHg38` chain covers less than `hg38ToHg19`) |
+| Speed (protein → GRCh37) | p50 6.0ms, p95 18ms, p99 32ms |
 
-**実例**: BRAF V600E の位置は、GRCh37 の `hg19:chr7:140453136` → GRCh38 の `refseq:NC_000007.14:140753336`（既知の対応と一致）。`uniprot:P15056:600` を `assembly=hg19` で変換すると `refseq:NC_000007.13:complement(140453135..140453137)`。`hg19:chr7:complement(140453135..140453137)` をタンパク質に変換すると `uniprot:P15056:600`（GRCh37 → chain → GRCh38 → CDS → 同一配列）。
+**Example**: the BRAF V600E position, GRCh37 `hg19:chr7:140453136` → GRCh38 `refseq:NC_000007.14:140753336` (matches the known mapping). Converting `uniprot:P15056:600` with `assembly=hg19` gives `refseq:NC_000007.13:complement(140453135..140453137)`. Converting `hg19:chr7:complement(140453135..140453137)` to protein gives `uniprot:P15056:600` (GRCh37 → chain → GRCh38 → CDS → identity).
 
-**マウス GRCm38 (mm10) ↔ GRCm39 (mm39)**: `grcm38.sqlite`（GRCm38.p6 の assembly report と genomic.fna、239配列）、`grcm39_names.sqlite`（GRCm39 の配列名）、`chain_mm10ToMm39.sqlite`（236 chain、279KB）、`chain_mm39ToMm10.sqlite`（910 chain、512KB）。標本の一致率は98.0%と97.7%。マウスの RefSeq タンパク質から無作為に1,000残基（`verify-assembly.ts mouse.sqlite …`）: GRCm38 のコドンに届く 1,000/1,000、同じアミノ酸 1,000/1,000、同じ残基に戻る 1,000/1,000、p50 1.5ms、p99 11ms。例: `mm10:chr9:108339451..108339453`（Gpx1）→ `uniprot:P11352:47`（chain → CDS → 同一配列）、ヒトを指定すると `uniprot:P07203:49`、`taxon=9606&assembly=hg19` なら `refseq:NC_000003.11:complement(49395565..49395567)`（mm10 → mm39 → hg38 → hg19。`uniprot:P07203:49` を hg19 に変換した結果と同じ）。
+**Mouse GRCm38 (mm10) ↔ GRCm39 (mm39)**: `grcm38.sqlite` (GRCm38.p6 assembly report and genomic.fna, 239 sequences), `grcm39_names.sqlite` (GRCm39 sequence names), `chain_mm10ToMm39.sqlite` (236 chains, 279KB), `chain_mm39ToMm10.sqlite` (910 chains, 512KB). Sample match rates are 98.0% and 97.7%. 1,000 random residues from mouse RefSeq proteins (`verify-assembly.ts mouse.sqlite …`): reach a GRCm38 codon 1,000/1,000, same amino acid 1,000/1,000, back to the same residue 1,000/1,000, p50 1.5ms, p99 11ms. Example: `mm10:chr9:108339451..108339453` (Gpx1) → `uniprot:P11352:47` (chain → CDS → identity); specifying human gives `uniprot:P07203:49`, and `taxon=9606&assembly=hg19` gives `refseq:NC_000003.11:complement(49395565..49395567)` (mm10 → mm39 → hg38 → hg19; the same as converting `uniprot:P07203:49` to hg19).
 
-**影響**: GRCh37 を読み込むと、ヒトの変換は1段深く探索する（§2.2 規則6）。構造との往復（§8）の結果は変わらず、UniProt → ゲノムは p50 5.1 → 6.6ms、p99 39 → 53ms になった。
+**Impact**: loading GRCh37 makes human conversions search one step deeper (§2.2 rule 6). The round-trip results with structures (§8) did not change; UniProt → genome went from p50 5.1 → 6.6ms and p99 39 → 53ms.
 
-## 11. chain のないアセンブリ間（ゼニゴケ v3.1 ↔ v7.1、2026-09-18）
+## 11. Between assemblies without a chain (Marchantia v3.1 ↔ v7.1, 2026-09-18)
 
-**保存先**: `marchantia.sqlite`（GCA_003032435.1 Marchanta_polymorpha_v1 = MpTak v3.1、taxon 3197。assembly report を付けて作り直した）、`marchantia_v71.sqlite`（GCA_039105155.1 MpTak_v7.1 の GenBank ファイル、taxon 1480154。染色体10本、ミトコンドリア、葉緑体。CDS 20,412件はすべて自己検証で ok）。
+**Stores**: `marchantia.sqlite` (GCA_003032435.1 Marchanta_polymorpha_v1 = MpTak v3.1, taxon 3197; rebuilt with the assembly report), `marchantia_v71.sqlite` (GenBank file of GCA_039105155.1 MpTak_v7.1, taxon 1480154; 10 chromosomes, mitochondrion, chloroplast; all 20,412 CDSs ok in self-validation).
 
-| 同一配列（refget ダイジェスト） | 件数 |
+| Identical sequences (refget digest) | Count |
 |---|---|
-| UniProt（UP000244005）のうち、v3.1 のタンパク質と同一 | 19,120 / 19,277（99.2%） |
-| UniProt のうち、v7.1 のタンパク質と同一 | 16,221 / 19,277（84.1%） |
-| v7.1 のタンパク質のうち、v3.1 のタンパク質と同一 | 18,255 / 20,412（89.4%） |
+| UniProt (UP000244005) entries identical to a v3.1 protein | 19,120 / 19,277 (99.2%) |
+| UniProt entries identical to a v7.1 protein | 16,221 / 19,277 (84.1%) |
+| v7.1 proteins identical to a v3.1 protein | 18,255 / 20,412 (89.4%) |
 
-- v3.1 と v7.1 の間の chain は配布されていない（marchantia.info にあるのは遺伝子 ID の対応表だけ）。上の89.4%の遺伝子のコード領域は、同一配列のタンパク質を介して変換できる。例: `insdc:KZ772678.1:complement(1969369..1969371)`（v3.1）→ `insdc:AP031344.1:complement(7591962..7591964)`（v7.1 の chr3。`MpTak_v7.1:chr3:...` とも書ける）。
-- 既定のアセンブリは MpTak_v7.1（新しい方）。UniProt → ゲノムは v7.1 の位置を返し、`assembly=Marchanta_polymorpha_v1` で v3.1 の位置も返す。
-- 非コード領域や配列の変わった遺伝子も変換するため、minimap2 で両方向のゲノム全体のアライメントを計算し、PAF として取り込んだ（spec-ingest §16）。
+- No chain between v3.1 and v7.1 is distributed (marchantia.info has only a gene ID mapping table). The coding regions of the 89.4% of genes above can be converted through identical proteins. Example: `insdc:KZ772678.1:complement(1969369..1969371)` (v3.1) → `insdc:AP031344.1:complement(7591962..7591964)` (chr3 of v7.1; can also be written `MpTak_v7.1:chr3:...`).
+- The default assembly is MpTak_v7.1 (the newer one). UniProt → genome returns the v7.1 position, and with `assembly=Marchanta_polymorpha_v1` also returns the v3.1 position.
+- To also convert non-coding regions and genes whose sequences changed, whole-genome alignments in both directions were computed with minimap2 and ingested as PAF (spec-ingest §16).
 
-**アライメントの検証**（`service/bench/verify-genome-pair.ts`、無作為に2,000か所ずつ）
+**Alignment validation** (`service/bench/verify-genome-pair.ts`, 2,000 random positions each)
 
-| 項目 | v3.1 → v7.1 | v7.1 → v3.1 |
+| Item | v3.1 → v7.1 | v7.1 → v3.1 |
 |---|---|---|
-| ゲノム上の21塩基の区間が移る | 1,843 / 2,000（92.2%） | 1,724 / 2,000（86.2%。v7.1 にしかない配列がある: Tak-2 由来の chrU、HiFi で読めた反復配列） |
-| 　移した先の配列が同一 | 99.5% | 97.2% |
-| 両方で同一のタンパク質の残基のコドンが、アライメントでも移る | 99.4% | 99.1% |
-| 　タンパク質を介した答えと同じコドン | 1,919 / 1,930（99.4%） | 1,948 / 1,973（98.7%） |
-| 速さ | p50 0.1ms、p99 0.9ms | p50 0.1ms、p99 0.3ms |
+| A 21-base genomic interval is moved | 1,843 / 2,000 (92.2%) | 1,724 / 2,000 (86.2%; some sequence exists only in v7.1: chrU from Tak-2, repeats resolved by HiFi) |
+| 　The sequence at the destination is identical | 99.5% | 97.2% |
+| The codon of a residue of a protein identical in both is also moved by the alignment | 99.4% | 99.1% |
+| 　Same codon as the answer via proteins | 1,919 / 1,930 (99.4%) | 1,948 / 1,973 (98.7%) |
+| Speed | p50 0.1ms, p99 0.9ms | p50 0.1ms, p99 0.3ms |
 
-**改訂された遺伝子**（`service/bench/verify-revised-genes.ts`）: v7.1 のタンパク質のうち、どのタンパク質とも同一でないもの（遺伝子モデルか残基が改訂されたもの）は1,925件ある。これらの残基から、v7.1 のゲノム → アライメント → v3.1 のゲノム → v3.1 の CDS → 同一配列の UniProt と変換すると、無作為な1,000残基のうち424（42.4%）が UniProt に届き、そのうち397（93.6%）は v3.1 のゲノム上でも同じアミノ酸をコードする。違うものは、読み枠の変わった改訂（UniProt 側の位置がコドンをまたぐ `161c3..162c2` になる）と、残基そのものの改訂（配列の誤りの訂正）。届かない残基は、v3.1 の遺伝子モデルにない部分（新しいエキソンなど）にある。例: `insdc:BFI18695.1:200` → `uniprot:A0A2R6X3H3:192`（残基番号がずれている）。
+**Revised genes** (`service/bench/verify-revised-genes.ts`): 1,925 v7.1 proteins are not identical to any protein (their gene model or residues were revised). Converting their residues via v7.1 genome → alignment → v3.1 genome → v3.1 CDS → identical UniProt, 424 of 1,000 random residues (42.4%) reach UniProt, and 397 of those (93.6%) encode the same amino acid on the v3.1 genome as well. The differing ones are revisions that changed the reading frame (the UniProt-side position spans codons, `161c3..162c2`) and revisions of the residue itself (corrections of sequence errors). Unreached residues are in parts not in the v3.1 gene model (such as new exons). Example: `insdc:BFI18695.1:200` → `uniprot:A0A2R6X3H3:192` (the residue number is shifted).
 
-答えが違う1%前後は、同じ配列のタンパク質が複数コピーある遺伝子（縦列重複、パラログ）だった。タンパク質を介した経路は別のコピーに着くことがあり、位置で対応するアライメントのほうが正しい。そこで、同じコストの経路では**段数の少ない経路**を選ぶ（コスト、優先タグの付かない中間の配列の数、段数の順。ゲノム → ゲノムでは、アライメントの1段がタンパク質経由の3段に勝つ）。この変更で、構造との往復（§8）と MANE の優先（§2）の結果は変わらなかった。
+The roughly 1% with differing answers were genes with multiple copies of proteins with the same sequence (tandem duplicates, paralogs). The path through proteins can land on a different copy, and the alignment, which maps by position, is more correct. So among paths of the same cost, **the path with fewer steps** is chosen (in order: cost, number of intermediate sequences without preferred tags, number of steps; for genome → genome, one alignment step beats three steps via proteins). This change did not alter the results of the round trip with structures (§8) or the MANE preference (§2).
 
-## 12. シス調節領域（fanta.bio CRE、2026-09-18）
+## 12. Cis-regulatory elements (fanta.bio CRE, 2026-09-18)
 
-ヒト（hg38）とマウス（mm10）の CRE（プロモーター、エンハンサー）を、ゲノムの注釈として読み込んだ（spec-ingest §17）。
+Human (hg38) and mouse (mm10) CREs (promoters, enhancers) were loaded as genome annotations (spec-ingest §17).
 
-- **CRE から**: `fanta:FCHS_301358`（cp1@SOX2）を転写産物に変換すると `refseq:NM_003106.4:365..573`。マウスの `fanta:FCMM_194523`（cp2@Gpx1、mm10）は、`assembly=GRCm39` で `refseq:NC_000075.7:108216086..108216674` に、タンパク質に変換すると `uniprot:P11352:<1..55c1`（CRE の端がコード領域の始まりに重なる）。
-- **位置から**: 注釈（UI の Annotations）で、その位置に重なる CRE が見える。マウスの CRE は mm10 にしかないが、mm39 の位置からは mm10 に移して引き、mm39 の位置に移し戻して「from GRCm38.p6」と示す。
-- UI の例: 「CRE (fanta.bio) → transcript」「mouse CRE on mm10 → mm39 protein」。
+- **From a CRE**: converting `fanta:FCHS_301358` (cp1@SOX2) to transcript gives `refseq:NM_003106.4:365..573`. Mouse `fanta:FCMM_194523` (cp2@Gpx1, mm10) gives `refseq:NC_000075.7:108216086..108216674` with `assembly=GRCm39`, and converted to protein gives `uniprot:P11352:<1..55c1` (the end of the CRE overlaps the start of the coding region).
+- **From a position**: the annotations (Annotations in the UI) show CREs overlapping that position. Mouse CREs exist only on mm10, but from an mm39 position they are looked up by moving to mm10, moved back to the mm39 position, and shown as "from GRCm38.p6".
+- UI examples: "CRE (fanta.bio) → transcript", "mouse CRE on mm10 → mm39 protein".
 
-## 13. 同一配列のないタンパク質（T2、2026-09-18）
+## 13. Proteins without identical sequences (T2, 2026-09-18)
 
-UniProt のエントリのうち同一配列のないものを、ID の関係で選んだ候補と並べてつないだ（spec-ingest §18）。
+UniProt entries without identical sequences were aligned with and linked to candidates chosen through ID relations (spec-ingest §18).
 
-- **経路**: `uniprot:P08556:50` → `alignment`（T2）→ `refseq:NP_035067.2` の CDS → `refseq:NC_000069.7:102967553..102967555`。コストは 3 + 1 = 4 で、同一配列の経路（0 + 1）より高い。
-- **残基の違い**: 並べた2つのタンパク質で残基が違う位置を通ると、結果に `differences`（例: `["168 L>M"]`。入力の側から見た残基番号と、入力 > 変換先の残基）を付け、UI に「residue differs」と示す。`uniprot:P08556:168` → ゲノムは、GRCm39 では M をコードするコドンに着く。逆に `refseq:NP_035067.2:168` → `uniprot:P08556:168` は `168 M>L`。
-- **変換先からの広がり**: 変換先の種類に合う配列に達したら、同一配列に加えて T2 のアライメントもたどる。ヒト NRAS（`uniprot:P01111:168`）をマウスの UniProt に変換すると、同一配列の TrEMBL `A0A0G2JDN6` に加えて、Swiss-Prot の `P08556`（`168 M>L`）も返る。
-- **効果**（`verify-structure.ts`、SIFTS の区間から3,000残基）: ヒトの保存先だけでゲノムに届かなかった残基が 441 → 420。届いた2,580残基は、すべて UniProt の残基をコードするコドンに着き、構造との往復も保たれた。速さは変わらない。
+- **Path**: `uniprot:P08556:50` → `alignment` (T2) → CDS of `refseq:NP_035067.2` → `refseq:NC_000069.7:102967553..102967555`. The cost is 3 + 1 = 4, higher than a path through identity (0 + 1).
+- **Residue differences**: when the path passes a position where the two aligned proteins have different residues, the result gets `differences` (for example `["168 L>M"]`: the residue number as seen from the input side, and input > target residues), and the UI shows "residue differs". `uniprot:P08556:168` → genome lands on a codon that encodes M in GRCm39. Conversely, `refseq:NP_035067.2:168` → `uniprot:P08556:168` gives `168 M>L`.
+- **Spreading from the target**: once a sequence matching the target type is reached, T2 alignments are followed in addition to identical sequences. Converting human NRAS (`uniprot:P01111:168`) to mouse UniProt returns, in addition to the identical TrEMBL `A0A0G2JDN6`, Swiss-Prot `P08556` (`168 M>L`).
+- **Effect** (`verify-structure.ts`, 3,000 residues from SIFTS intervals): residues that could not reach the genome with only the human stores went from 441 to 420. All 2,580 residues reached landed on codons encoding the UniProt residue, and the round trip with structures was preserved. Speed did not change.
 
-## 14. 入力と結果で違うもの（2026-09-19）
+## 14. What differs between input and result (2026-09-19)
 
-保存先は配列を持たないので、違いは記録した位置と座標から判断する（spec-ingest §19）。
+Stores do not hold sequences, so differences are judged from the recorded positions and coordinates (spec-ingest §19).
 
-| 結果の項目 | 内容 | 例 |
+| Result field | Content | Example |
 |---|---|---|
-| `differences` | 経路の途中で違う残基と塩基。T2 のタンパク質のアライメントの置換（入力の側から見た残基番号と、入力 > 変換先の残基）と、同じ種のアセンブリ間のアライメントで違う塩基（`base 配列:位置 変換元>変換先`） | `168 L>M`、`base insdc:AP031344.1:3696566 G>T` |
-| `cautions` | `frame differs`: 残基の境目に揃ったタンパク質の入力が、変換先のタンパク質のコドンの途中に着いた（遺伝子モデルの読み枠が違う）。`orthologous position in another species`: 種の違うゲノムのアライメント（chain）を通った。位置は相同だが、残基は違うことが多い | |
+| `differences` | Residues and bases that differ along the path. Substitutions in T2 protein alignments (residue number as seen from the input side, and input > target residues), and bases that differ in alignments between assemblies of the same species (`base sequence:position source>target`) | `168 L>M`, `base insdc:AP031344.1:3696566 G>T` |
+| `cautions` | `frame differs`: a protein input aligned on residue boundaries landed in the middle of a codon of the target protein (the gene models have different reading frames). `orthologous position in another species`: the path went through a genome alignment (chain) between different species. The position is homologous, but the residue often differs | |
 
-UI は、`differences` を「residue differs」「base differs」、`cautions` を注意の印で示す。
+The UI shows `differences` as "residue differs" or "base differs", and `cautions` as a caution marker.
 
-**実例**: ゼニゴケ v7.1 の `insdc:BFI09307.1:713`（E）→ UniProt（v3.1 由来）`A0A2R6XDE2:713`（D）は `base insdc:AP031344.1:3696566 G>T`（v3.1 の配列の誤りの訂正とみられる）。`insdc:BFI18080.1:193` → `uniprot:A0A2R6VZB3:161c3..162c2` は `frame differs`。`uniprot:P07203:49` → マウス `uniprot:P11352:47` は `orthologous position in another species`（どちらもセレノシステインだが、それは判定していない）。GRCh37 の位置からタンパク質へは、GRCh37 と GRCh38 で違う塩基を通るときだけ `base …` が付く（BRAF V600 には付かない）。
+**Examples**: Marchantia v7.1 `insdc:BFI09307.1:713` (E) → UniProt (from v3.1) `A0A2R6XDE2:713` (D) has `base insdc:AP031344.1:3696566 G>T` (likely a correction of a sequence error in v3.1). `insdc:BFI18080.1:193` → `uniprot:A0A2R6VZB3:161c3..162c2` has `frame differs`. `uniprot:P07203:49` → mouse `uniprot:P11352:47` has `orthologous position in another species` (both are selenocysteine, but this is not checked). From a GRCh37 position to a protein, `base …` is added only when the path passes a base that differs between GRCh37 and GRCh38 (not for BRAF V600).

@@ -1,85 +1,87 @@
-# ヒト規模への対応方針（フェーズ3の前提）
+# Scaling to Human Size (Prerequisite for Phase 3)
 
-2026-09-18。計測値は、この開発機（macOS、Node 24.2）でのもの。
+English | [日本語](scaling.ja.md)
+
+2026-09-18. Measurements were taken on this development machine (macOS, Node 24.2).
 
 ---
 
-## 1. 計測
+## 1. Measurements
 
-### 1.1 データの規模（NCBI RefSeq GRCh38.p14、`GCF_000001405.40_GRCh38.p14_genomic.gff.gz`）
+### 1.1 Data size (NCBI RefSeq GRCh38.p14, `GCF_000001405.40_GRCh38.p14_genomic.gff.gz`)
 
-- 圧縮時 78MB、**展開時 1.60GB、493万行**
-- 主な feature の行数: exon 232万、CDS 185万（約15万タンパク質）、match 16万、mRNA 14.5万、biological_region 13.7万、enhancer 11.5万、cDNA_match 2.7万
-- **同じ ID の行はすべて隣り合っていた**（複数行にまたがる173万件で、行の間隔の最大値は1）。一方、`###` 区切りはファイル全体で1つしかない。
+- 78MB compressed, **1.60GB and 4.93 million lines uncompressed**
+- Line counts of the main features: exon 2.32 million, CDS 1.85 million (about 150,000 proteins), match 160,000, mRNA 145,000, biological_region 137,000, enhancer 115,000, cDNA_match 27,000
+- **All lines with the same ID were adjacent** (across 1.73 million IDs spanning multiple lines, the maximum gap between lines was 1). On the other hand, there is only one `###` separator in the whole file.
 
-### 1.2 現在の実装（v0.1）で3番染色体全体を取り込んだ結果（NCBI sviewer の GFF3、91MB、30万行）
+### 1.2 Result of ingesting all of chromosome 3 with the current implementation (v0.1) (NCBI sviewer GFF3, 91MB, 300,000 lines)
 
-| 項目 | 値 |
+| Item | Value |
 |---|---|
-| 処理時間 | 1.3〜1.6 秒 |
-| メモリ（RSS） | **1.1〜1.5 GB**（ファイルサイズの約12〜17倍） |
-| 出力 | edge 2.6万件、annotation 18.5万件 |
+| Processing time | 1.3–1.6 s |
+| Memory (RSS) | **1.1–1.5 GB** (about 12–17 times the file size) |
+| Output | 26,000 edges, 185,000 annotations |
 
-- 修正前は警告が662件出ていた。原因は、逆向きの Target を持つ `match`（RefSeqGene）に対応していなかったこと。修正して0件になった。
+- Before the fix, 662 warnings were produced. The cause was that `match` (RefSeqGene) with a reverse Target was not supported. After the fix, there were 0.
 
-### 1.3 全ゲノムに当てはめた見込み
+### 1.3 Projection to the whole genome
 
-| 項目 | 見込み | 判定 |
+| Item | Projection | Assessment |
 |---|---|---|
-| CPU 時間 | 20〜30 秒 | 問題なし |
-| メモリ | 約20GB | ✗ |
-| 読み込み | 1.6GB は V8 の文字列の上限（約5.4億文字）を超える | ✗ 読み込めない |
-| 自己検証に使うゲノム配列（3.1GB） | メモリに載らない | ✗ |
+| CPU time | 20–30 s | No problem |
+| Memory | About 20GB | ✗ |
+| Reading | 1.6GB exceeds the V8 string limit (about 540 million characters) | ✗ Cannot be read |
+| Genome sequence for self-validation (3.1GB) | Does not fit in memory | ✗ |
 
-### 1.4 保存先の候補の性能（Node 組み込みの `node:sqlite`、SQLite 3.50、R*Tree あり）
+### 1.4 Performance of the candidate store (Node built-in `node:sqlite`, SQLite 3.50, with R*Tree)
 
-合成データで、ブロック400万件を src 側と tgt 側の2つの R*Tree 付きで保存して測った。
+Measured with synthetic data, storing 4 million blocks with two R*Trees, one for the src side and one for the tgt side.
 
-| 処理 | 値 |
+| Operation | Value |
 |---|---|
-| 書き込み | **76 秒** |
-| ゲノム区間の検索 | **約 0.007 ms/回** |
-| タンパク質側の検索 | 約 0.045 ms/回 |
+| Writing | **76 s** |
+| Genomic interval lookup | **about 0.007 ms/query** |
+| Protein-side lookup | about 0.045 ms/query |
 
 ---
 
-## 2. 問題と対策
+## 2. Problems and countermeasures
 
-| # | 問題 | 対策 |
+| # | Problem | Countermeasure |
 |---|---|---|
-| P1 | ファイル全体を1つの文字列として読み込んでいる | **ストリーミングで読む**（行単位。`.gz` はそのまま展開しながら読む）。GBFF はレコード（`//`）単位で処理する |
-| P2 | 全行・全 feature・全 annotation をメモリに保持している | **出力先（Sink）への逐次出力**に変える。GFF3 は「ID が変わったら feature を確定する」方式にする（§3） |
-| P3 | タンパク質の重複確認が二乗オーダーになっていた | **修正済み**（Set による O(1) の確認） |
-| P4 | 自己検証のためにゲノム配列全体をメモリに載せる必要がある | **インデックス付き FASTA（`.fai`）からのランダムアクセス**。CDS ごとに必要な区間だけ読む |
-| P5 | 問い合わせのたびに全 edge を読み込むと、400万ブロックで GB 単位のメモリと数秒の起動時間がかかる | **区間索引付きの保存先**（SQLite と R*Tree）から、問い合わせに関係するブロックだけを取り出す（§4） |
-| P6 | JSON Lines の出力が数 GB になる（annotation が大半） | 保存先に直接書く。annotation の属性は既定で必要なものに絞る |
+| P1 | The whole file is read as one string | **Read by streaming** (line by line; `.gz` is read while decompressing). GBFF is processed per record (`//`) |
+| P2 | All lines, all features and all annotations are kept in memory | Change to **sequential output to a Sink**. For GFF3, use the approach "finalize the feature when the ID changes" (§3) |
+| P3 | The duplicate check for proteins was quadratic | **Fixed** (O(1) check with a Set) |
+| P4 | The whole genome sequence has to be loaded into memory for self-validation | **Random access from an indexed FASTA (`.fai`)**. Only the intervals needed for each CDS are read |
+| P5 | Loading all edges for every query takes GB-scale memory and several seconds of startup with 4 million blocks | Retrieve only the blocks relevant to the query from a **store with an interval index** (SQLite and R*Tree) (§4) |
+| P6 | JSON Lines output reaches several GB (mostly annotations) | Write directly to the store. By default, annotation attributes are limited to the ones needed |
 
 ---
 
-## 3. 取り込みの設計
+## 3. Ingest design
 
 ```
 .gff3(.gz) / .gbff(.gz)
-  └→ 行単位で読む → パーサ（GFF3: ID 単位にまとめる / GBFF: レコード単位）
-       └→ アダプタ（feature ごとの処理。いまのロジックをそのまま使う）
-            ├→ 自己検証 ← FaiSequenceSource（.fai でゲノム FASTA にランダムアクセス）
+  └→ read line by line → parser (GFF3: group by ID / GBFF: per record)
+       └→ adapter (per-feature processing; current logic used as is)
+            ├→ self-validation ← FaiSequenceSource (random access to genome FASTA via .fai)
             └→ Sink: sequence() / edge() / annotation() / warning()
-                 ├→ MemorySink（いまの IngestResult。テストと小規模データ用）
-                 ├→ JsonlSink（いまの CLI の出力）
-                 └→ SqliteSink（大規模データ用。バッチ単位のトランザクション）
+                 ├→ MemorySink (current IngestResult; for tests and small data)
+                 ├→ JsonlSink (current CLI output)
+                 └→ SqliteSink (for large data; transactions per batch)
 ```
 
-- **GFF3 の feature のまとめ方**: 同じ ID の行は隣り合っている前提で、ID が変わった時点で確定する。一般の GFF3 に備えて、直近の N 件（例: 1000件）は確定を保留する。確定したあとに同じ ID が再び現れた場合は警告を出して件数を数え、前提が崩れていることが分かるようにする。
-- **GBFF**: `//` ごとに1レコードずつ処理する。大きな染色体レコード（1本 250Mb）の配列は、`.fai` 方式と同じく、ディスク上の位置から読めるようにする。
-- **アダプタ本体は変えない**: 出力を配列に追加している箇所を Sink の呼び出しに置き換えるだけにする。いまのテスト（フィクスチャでの一致確認）で、前後の出力が同じであることを確かめられる。
-- **ゲノム FASTA**: NCBI の `.fna.gz` は通常の gzip で、ランダムアクセスできない。最初に一度だけ展開して `.fai` を作る（`samtools faidx` と同じ形式。作成機能は自前で持つ）。
-- **R*Tree の構築**: 行を先にすべて書き込み、あとからまとめて構築して、76秒からの短縮を狙う。
+- **Grouping GFF3 features**: assuming lines with the same ID are adjacent, a feature is finalized when the ID changes. To handle general GFF3, finalization of the most recent N features (e.g. 1000) is deferred. If the same ID appears again after finalization, a warning is issued and counted, so that a broken assumption can be detected.
+- **GBFF**: processed one record at a time per `//`. The sequence of a large chromosome record (250Mb each) is made readable from its position on disk, as with the `.fai` approach.
+- **The adapters themselves are not changed**: only the places that append output to arrays are replaced with Sink calls. The current tests (matching against fixtures) confirm that the output is the same before and after.
+- **Genome FASTA**: NCBI `.fna.gz` is plain gzip and does not allow random access. It is decompressed once at the start and a `.fai` is created (the same format as `samtools faidx`; the creation function is our own).
+- **Building the R*Tree**: all rows are written first and the tree is built in bulk afterwards, aiming to shorten the 76 s.
 
-見込み（取り込み後に実測する）: ヒト全体の取り込みが1〜2分、メモリが 500MB 以下。
+Projection (to be measured after ingest): ingesting all of human in 1–2 minutes, with memory at 500MB or less.
 
 ---
 
-## 4. 保存先と問い合わせ（フェーズ3の土台）
+## 4. Store and queries (foundation for phase 3)
 
 ```sql
 sequence(id, ref UNIQUE, moltype, unit, length, topology, taxon, digest, provenance)
@@ -88,83 +90,83 @@ block(id, edge, src_seq, src, tgt_seq, tgt, len, rev)
 block_src  -- R*Tree (src_seq, src, src+len)
 block_tgt  -- R*Tree (tgt_seq, tgt, tgt+len)
 annotation(id, seq, type, location, attributes JSON)
-annotation_idx  -- R*Tree（各セグメントの範囲）
+annotation_idx  -- R*Tree (range of each segment)
 ```
 
-**問い合わせの流れ**
-1. 入力の Location ID の各セグメントについて、R*Tree で重なるブロックを取り出す（順方向は `block_src`、逆方向は `block_tgt`）。
-2. 取り出したブロックだけで小さな `Mapping` を作り、コアの `mapLocation` で変換する。コアの変更は不要。
-3. 複数の段を経由する場合は、1段ずつ取り出して変換する。経路探索では、edge の一覧（どの配列とどの配列がつながっているか）だけを使う。
+**Query flow**
+1. For each segment of the input Location ID, the overlapping blocks are retrieved with the R*Tree (`block_src` for the forward direction, `block_tgt` for the reverse direction).
+2. A small `Mapping` is built from only the retrieved blocks and converted with the core's `mapLocation`. No change to the core is needed.
+3. When going through multiple steps, blocks are retrieved and converted one step at a time. Path search uses only the list of edges (which sequences are connected to which).
 
-DB へのアクセスは1段あたり1ms以下の見込み。よく使う edge の `Mapping` は、LRU キャッシュに置く。
+DB access is projected at 1ms or less per step. The `Mapping` of frequently used edges is kept in an LRU cache.
 
-**規模の見込み（ヒト RefSeq）**
+**Projected size (human RefSeq)**
 
-| 項目 | 見込み |
+| Item | Projection |
 |---|---|
-| edge | 約40万件（CDS 15万、転写産物 20万、アライメント 19万） |
-| ブロック | 約400〜500万件 |
-| DB | 1〜2GB（annotation の属性を絞った場合） |
+| edge | About 400,000 (CDS 150,000, transcripts 200,000, alignments 190,000) |
+| Blocks | About 4–5 million |
+| DB | 1–2GB (with annotation attributes limited) |
 
 ---
 
-## 5. 実装の順序
+## 5. Implementation order
 
-1. Sink の抽象化と、ストリーミングのパーサ（`.gz` 対応）。いまのテストで、出力が変わらないことを確認する。
-2. `FaiSequenceSource` と `.fai` の作成機能。
-3. `SqliteSink` と、読み出し用の API（区間でブロックを取る、配列で edge を取る）。CLI に `--db` を追加する。
-4. **ヒト全ゲノムの GFF3 とゲノム FASTA で実測する**（取り込み時間、メモリ、DB サイズ、自己検証の結果、問い合わせの遅延）。マウスでも確認する。
-
----
-
-## 6. 決定事項（2026-09-18）
-
-- **保存先**: `node:sqlite`（Node 組み込み）に決定。追加の依存パッケージがなく、R*Tree が使え、1ファイルで配布できる。ただし Node 24 では実験的な扱い（stability 1.1）。
-- **annotation の範囲**: exon は保存しない（mRNA の edge から導けるため）。`--all-annotations` を付ければ保存する。
+1. The Sink abstraction and streaming parsers (with `.gz` support). Confirm with the current tests that the output does not change.
+2. `FaiSequenceSource` and the `.fai` creation function.
+3. `SqliteSink` and a read API (get blocks by interval, get edges by sequence). Add `--db` to the CLI.
+4. **Measure with the human whole-genome GFF3 and genome FASTA** (ingest time, memory, DB size, self-validation results, query latency). Also check with mouse.
 
 ---
 
-## 7. 実装後の実測（2026-09-18）
+## 6. Decisions (2026-09-18)
 
-コマンド: `togocoord-ingest --db OUT.sqlite --fasta genomic.fna --fasta protein.faa.gz genomic.gff.gz`
+- **Store**: `node:sqlite` (built into Node) was chosen. It requires no additional dependency packages, supports R*Tree, and can be distributed as a single file. However, it is experimental in Node 24 (stability 1.1).
+- **Annotation scope**: exons are not stored (they can be derived from mRNA edges). They are stored if `--all-annotations` is given.
 
-| | ヒト GRCh38.p14 | マウス GRCm39 |
+---
+
+## 7. Measurements after implementation (2026-09-18)
+
+Command: `togocoord-ingest --db OUT.sqlite --fasta genomic.fna --fasta protein.faa.gz genomic.gff.gz`
+
+| | Human GRCh38.p14 | Mouse GRCm39 |
 |---|---|---|
-| 入力 | GFF3 493万行（1.6GB） | GFF3 311万行 |
-| 取り込み時間（自己検証を含む） | 70〜73 秒 | 40 秒 |
-| メモリの最大値（`--max-old-space-size=512`） | 0.77〜1.1 GB（※） | 0.77 GB |
-| DB のサイズ | 1.1 GB | 0.62 GB |
-| edge / annotation | 50.5万 / 71.4万 | 27.9万 / 37.2万 |
-| CDS の自己検証 | 142,549 件一致。不一致 2,897 件はすべて NCBI の `/exception` 付き。説明のつかない不一致は **0件** | 97,327 件一致。不一致 12 件はすべて `/exception` 付き |
-| `.fai` の作成（3.3GB） | 2 秒 | — |
+| Input | GFF3, 4.93 million lines (1.6GB) | GFF3, 3.11 million lines |
+| Ingest time (including self-validation) | 70–73 s | 40 s |
+| Peak memory (`--max-old-space-size=512`) | 0.77–1.1 GB (*) | 0.77 GB |
+| DB size | 1.1 GB | 0.62 GB |
+| edge / annotation | 505,000 / 714,000 | 279,000 / 372,000 |
+| CDS self-validation | 142,549 matched. All 2,897 mismatches have an NCBI `/exception`. Unexplained mismatches: **0** | 97,327 matched. All 12 mismatches have an `/exception` |
+| Creating `.fai` (3.3GB) | 2 s | — |
 
-※ ゲノムの取り込み（ストリーミング部分）は約 0.5GB で、ピークは最後の索引構築の段階（SQLite の並べ替えと R*Tree）。タンパク質の FASTA（gzip）をメモリに展開すると、さらに増える。見込みの 500MB は達成できていないが、構築時に一度だけ使う量として実用上は許容範囲と判断した。
+(*) Genome ingest (the streaming part) takes about 0.5GB, and the peak is in the final index-building stage (SQLite sorting and R*Tree). Decompressing the protein FASTA (gzip) into memory increases it further. The projected 500MB was not achieved, but as an amount used only once at build time, it was judged acceptable in practice.
 
-**公開タンパク質配列による照合**（`ingest/bench/verify-store.ts`。タンパク質の残基をランダムに選び、ゲノム上に変換し、そのコドンを翻訳して公開配列と比べる。さらにゲノムから逆に変換して、元の残基に戻るかも調べる）
+**Check against published protein sequences** (`ingest/bench/verify-store.ts`. Protein residues are chosen at random, converted to the genome, and their codons are translated and compared with the published sequence. It also checks whether converting back from the genome returns to the original residue.)
 
-| | ヒト（2万残基、ゲノム上の対応先 21,187件） | マウス（1万残基） |
+| | Human (20,000 residues, 21,187 genomic mapped positions) | Mouse (10,000 residues) |
 |---|---|---|
-| exception のない CDS での不一致 | **0** | **0** |
-| exception 付き CDS での不一致 | 41 | 0（ゲノム上に対応先がないもの 1） |
-| 往復して元の残基に戻る割合 | **100%** | **100%** |
-| タンパク質 → ゲノム（p50 / p99） | 0.05〜0.06 ms / 0.5〜1.0 ms | 0.04 / 0.12 ms |
-| ゲノム → すべての対応先（p50 / p99） | 0.26〜0.28 ms / 1.9〜2.9 ms | 0.14 / 1.15 ms |
+| Mismatches in CDSs without an exception | **0** | **0** |
+| Mismatches in CDSs with an exception | 41 | 0 (1 with no genomic mapped position) |
+| Rate of round trips returning to the original residue | **100%** | **100%** |
+| Protein → genome (p50 / p99) | 0.05–0.06 ms / 0.5–1.0 ms | 0.04 / 0.12 ms |
+| Genome → all mapped positions (p50 / p99) | 0.26–0.28 ms / 1.9–2.9 ms | 0.14 / 1.15 ms |
 
-### 7.1 実データで見つかり、直したもの
+### 7.1 Issues found with real data and fixed
 
-| 問題 | 原因と対策 |
+| Problem | Cause and fix |
 |---|---|
-| 何も保持しない出力先でもヒープが 2.5GB まで増えた | **V8 の部分文字列が、切り出し元の 1MB の入力チャンクを保持し続けていた**（長く保持する参照キーが原因）。長く保持するキーはコピーするようにした（`ownString`）。あわせて、readline の非同期イテレータをやめ、バッファの溜まり方に上限のある行読み込みにした |
-| `match` 行で Target が `-`（染色体と逆向きの RefSeqGene）に対応していなかった（3番染色体で662件、全ゲノムで583件は Gap 付き） | 実配列で照合し、**Gap の操作は、行の鎖の向きにゲノムをたどる順に書かれている**という1つの規則で読めることを確認した（spec-ingest §4） |
-| `transl_except` の `aa:Other`（GFF3）を解釈できなかった | 大文字と小文字を区別せずに解釈するようにした（GBFF では `OTHER`） |
-| エキソン境界で分断されたコドンを往復させると、`join(127..127c2,127c3)` になった | 入力のセグメントをまたいでも、変換先で連続していればまとめるようにした（spec-core v0.1.1 §5.4） |
-| 複数の転写産物が重なる区間で、同じ変換先の断片がまとまらなかった | まとめる処理を、変換先の配列ごとに行うようにした。property テストで回帰を防ぐ |
-| 無関係な edge があると、切り詰め（`<`・`>`）の判定が変わった | 切り詰めは、変換先の配列ごとに判定するようにした（spec-core v0.1.1 §5.5） |
-| 重なり合う遺伝子（読み枠の異なる ATP8 と ATP6 など）で、`^` を変換できなかった | 変換先の配列ごとに判定するようにした（spec-core v0.1.1 §5.6） |
-| 偽遺伝子の CDS（protein_id なし）が警告になっていた | GBFF の `/pseudo` と同じく、警告なしで読み飛ばすようにした |
+| The heap grew to 2.5GB even with a Sink that keeps nothing | **V8 substrings kept holding the 1MB input chunk they were sliced from** (caused by long-lived reference keys). Long-lived keys are now copied (`ownString`). In addition, the readline async iterator was dropped in favor of line reading with a bound on buffer growth |
+| `match` lines with Target `-` (RefSeqGene reverse to the chromosome) were not supported (662 on chromosome 3; 583 in the whole genome have a Gap) | Checked against real sequences and confirmed that they can be read with one rule: **Gap operations are written in the order the genome is traversed in the strand direction of the line** (spec-ingest §4) |
+| `aa:Other` in `transl_except` (GFF3) could not be interpreted | Now interpreted case-insensitively (`OTHER` in GBFF) |
+| A round trip of a codon split at an exon boundary gave `join(127..127c2,127c3)` | Pieces are now merged if contiguous on the target, even across input segments (spec-core v0.1.1 §5.4) |
+| In intervals where multiple transcripts overlap, pieces to the same target were not merged | Merging is now done per target sequence. Property tests prevent regressions |
+| Unrelated edges changed the truncation (`<`, `>`) decision | Truncation is now determined per target sequence (spec-core v0.1.1 §5.5) |
+| `^` could not be converted for overlapping genes (ATP8 and ATP6 in different reading frames, etc.) | Now determined per target sequence (spec-core v0.1.1 §5.6) |
+| Pseudogene CDSs (without protein_id) produced warnings | Now skipped without a warning, as with `/pseudo` in GBFF |
 
-### 7.2 残る課題（フェーズ3以降）
+### 7.2 Remaining issues (phase 3 and later)
 
-- **NCBI の `/exception` 付き CDS**（ヒトで約2,900件）は、ゲノム配列とタンパク質・転写産物の間に indel があり、ゲノム上のモデルからは正確に対応づけられない。「タンパク質 → RefSeq 転写産物（NM）→ `cDNA_match` → ゲノム」の経路で扱う必要がある。そのためには、RefSeq RNA の GBFF（CDS が NM 上にあるもの）を取り込み、経路探索でこれらの edge を優先度の低いものとして扱う（フェーズ3）。
-- **転写産物と alignment の edge の自己検証**は、転写産物の配列（`rna.fna`）を与えれば実行できるが、今回は未実施（36万件が skipped）。
-- **構築時のメモリ**を 500MB 以下にするなら、SQLite の並べ替えの設定と、タンパク質 FASTA の `.fai` 化が必要。
+- **NCBI CDSs with `/exception`** (about 2,900 in human) have indels between the genome sequence and the protein or transcript, and cannot be mapped accurately from the genomic model. They need to be handled through the path "protein → RefSeq transcript (NM) → `cDNA_match` → genome". This requires ingesting RefSeq RNA GBFF (with CDSs on NM) and treating these edges as lower priority in path search (phase 3).
+- **Self-validation of transcript and alignment edges** can be run if the transcript sequences (`rna.fna`) are given, but was not done this time (360,000 skipped).
+- To bring **build-time memory** to 500MB or less, SQLite sort settings and a `.fai` for the protein FASTA are needed.
