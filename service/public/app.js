@@ -268,15 +268,22 @@ function updateControls() {
   const oneDb = dbs?.length === 1;
   if (oneDb) dbSelect.value = "";
   setUsable(dbSelect, !oneDb, `${to} results are all in ${dbs?.[0]}`);
-  // Species: those reached by liftOver chains from the input's species, others by identical sequences only.
+  // Species: only those a genome alignment (liftOver chain) leads to from the input's species. Others could be reached
+  // only by the rare protein identical across species, which would suggest a conversion that mostly does not exist
+  // (the API still takes any taxon). Before an input is known, every species can be chosen.
+  const sourceName = meta.species.find((x) => x.taxon === sourceTaxon)?.organism ?? "the input's species";
   for (const o of taxonSelect.options) {
     if (!o.value) continue;
     const t = Number(o.value);
-    const chain = sourceTaxon === undefined || t === sourceTaxon || meta.crossings.some((c) => c.fromTaxon === sourceTaxon && c.toTaxon === t);
-    o.textContent = `${o.dataset.name}${chain ? "" : " (identical sequences only)"}`;
+    const reachable = sourceTaxon === undefined || t === sourceTaxon || meta.crossings.some((c) => c.fromTaxon === sourceTaxon && c.toTaxon === t);
+    o.disabled = !reachable;
+    o.textContent = o.dataset.name;
+    o.title = reachable ? "" : `no genome alignment from ${sourceName}`;
     o.hidden = t === sourceTaxon; // that is "same species"
   }
-  if (taxonSelect.selectedOptions[0]?.hidden) taxonSelect.value = "";
+  const noOther = [...taxonSelect.options].every((o) => !o.value || o.hidden || o.disabled);
+  if (taxonSelect.selectedOptions[0]?.hidden || taxonSelect.selectedOptions[0]?.disabled) taxonSelect.value = "";
+  setUsable(taxonSelect, !noOther, `no genome alignment from ${sourceName} to another species`);
   // Assembly: of genome results, for a target species with several assemblies; only that species' assemblies.
   const targetTaxon = taxonSelect.value ? Number(taxonSelect.value) : sourceTaxon;
   const own = targetTaxon === undefined ? null : meta.species.find((s) => s.taxon === targetTaxon)?.assemblies ?? [];
