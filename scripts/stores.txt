@@ -10,6 +10,7 @@ human_uniprot
 human_mane
 grch38_names
 grch37
+chm13
 
 # Mouse (GRCm39, then GRCm38)
 mouse
@@ -42,6 +43,8 @@ chain_hg38ToMm39
 chain_mm39ToHg38
 chain_hg19ToHg38
 chain_hg38ToHg19
+chain_hs1ToHg38
+chain_hg38ToHs1
 chain_mm10ToMm39
 chain_mm39ToMm10
 mp_v31_to_v71

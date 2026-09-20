@@ -39,6 +39,7 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | | `human_uniprot_alignments` | Alignments of UniProt entries without an identical sequence to RefSeq and Ensembl proteins (T2; UniProt `HUMAN_9606_idmapping_selected.tab.gz`) | 5MB |
 | grch37 | `grch37` | GRCh37.p13 (GCF_000001405.25) assembly report and genome sequence | 0.3MB |
 | | `chain_hg19ToHg38`, `chain_hg38ToHg19` | UCSC liftOver chain | 1MB, 10MB |
+| chm13 | `chm13`, `chain_hs1ToHg38`, `chain_hg38ToHs1` | The RefSeq annotation of T2T-CHM13v2.0 (GCF_009914755.1) and the UCSC chains both ways | 1.6GB, 119MB, 128MB |
 | mouse | `mouse`, `mouse_rna`, `mouse_uniprot`, `grcm39_names`, `mouse_uniprot_alignments` | RefSeq GRCm39 (GCF_000001635.27), UniProt UP000000589 | 930MB, 390MB, 21MB, 0.1MB |
 | grcm38 | `grcm38`, `chain_mm10ToMm39`, `chain_mm39ToMm10` | GRCm38.p6 (GCF_000001635.26), UCSC liftOver chain | 0.2MB, 0.3MB, 0.5MB |
 | human_mouse | `chain_hg38ToMm39`, `chain_mm39ToHg38` | UCSC liftOver chain | 158MB, 156MB |

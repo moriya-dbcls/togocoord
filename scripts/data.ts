@@ -27,6 +27,7 @@ const assembly = (acc: string, name: string) => {
 };
 const GRCH38 = assembly("GCF_000001405.40", "GRCh38.p14");
 const GRCH37 = assembly("GCF_000001405.25", "GRCh37.p13");
+const CHM13 = assembly("GCF_009914755.1", "T2T-CHM13v2.0");
 const GRCM39 = assembly("GCF_000001635.27", "GRCm39");
 const GRCM38 = assembly("GCF_000001635.26", "GRCm38.p6");
 const TAIR = assembly("GCF_000001735.4", "TAIR10.1");
@@ -87,6 +88,8 @@ const rMp31 = ncbi(MP31, "assembly_report.txt");
 const rMp71 = ncbi(MP71, "assembly_report.txt");
 const g38 = ncbi(GRCH38, "genomic.fna.gz");
 const g37 = ncbi(GRCH37, "genomic.fna.gz");
+const rChm13 = ncbi(CHM13, "assembly_report.txt");
+const gChm13 = ncbi(CHM13, "genomic.fna.gz");
 const gm39 = ncbi(GRCM39, "genomic.fna.gz");
 const gm38 = ncbi(GRCM38, "genomic.fna.gz");
 const gMp31 = ncbi(MP31, "genomic.fna.gz");
@@ -154,6 +157,10 @@ const STORE_LIST: Store[] = [
   { name: "grch37", group: "grch37", args: ["--label", "GRCh37.p13 genome (NCBI assembly report and sequences)", "--assembly-report", r37, r37, g37] },
   { name: "chain_hg19ToHg38", group: "grch37", args: ["--label", "UCSC liftOver chains hg19 → hg38 (GRCh37 to GRCh38)", "--from-report", r37, "--to-report", r38, "--fasta", g37, "--fasta", g38, raw(`${UCSC}/hg19/liftOver/hg19ToHg38.over.chain.gz`)] },
   { name: "chain_hg38ToHg19", group: "grch37", args: ["--label", "UCSC liftOver chains hg38 → hg19 (GRCh38 to GRCh37)", "--from-report", r38, "--to-report", r37, "--fasta", g38, "--fasta", g37, raw(`${UCSC}/hg38/liftOver/hg38ToHg19.over.chain.gz`)] },
+  // Human, T2T-CHM13 (a complete assembly of another individual, annotated) and UCSC chains to / from GRCh38
+  { name: "chm13", group: "chm13", args: ["--label", "T2T-CHM13v2.0 RefSeq annotation (GCF_009914755.1)", "--assembly-report", rChm13, "--fasta", gChm13, "--fasta", ncbi(CHM13, "rna.fna.gz"), "--fasta", ncbi(CHM13, "protein.faa.gz"), ncbi(CHM13, "genomic.gff.gz")] },
+  { name: "chain_hs1ToHg38", group: "chm13", args: ["--label", "UCSC liftOver chains hs1 → hg38 (T2T-CHM13v2.0 to GRCh38)", "--from-report", rChm13, "--to-report", r38, "--fasta", gChm13, "--fasta", g38, raw(`${UCSC}/hs1/liftOver/hs1ToHg38.over.chain.gz`)] },
+  { name: "chain_hg38ToHs1", group: "chm13", args: ["--label", "UCSC liftOver chains hg38 → hs1 (GRCh38 to T2T-CHM13v2.0)", "--from-report", r38, "--to-report", rChm13, "--fasta", g38, "--fasta", gChm13, raw(`${UCSC}/hg38/liftOver/hg38ToHs1.over.chain.gz`)] },
   // Mouse, GRCm39 (annotated)
   { name: "mouse", group: "mouse", args: ["--label", "Mouse RefSeq annotation (GRCm39)", "--assembly-report", rm39, "--fasta", gm39, "--fasta", ncbi(GRCM39, "rna.fna.gz"), "--fasta", ncbi(GRCM39, "protein.faa.gz"), ncbi(GRCM39, "genomic.gff.gz")] },
   { name: "mouse_rna", group: "mouse", args: ["--label", "Mouse RefSeq RNA", ncbi(GRCM39, "rna.gbff.gz")] },

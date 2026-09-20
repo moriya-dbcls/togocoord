@@ -39,6 +39,7 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | | `human_uniprot_alignments` | 同一配列のない UniProt のエントリと、RefSeq・Ensembl のタンパク質のアライメント（T2。UniProt の `HUMAN_9606_idmapping_selected.tab.gz`） | 5MB |
 | grch37 | `grch37` | GRCh37.p13（GCF_000001405.25）の assembly report とゲノム配列 | 0.3MB |
 | | `chain_hg19ToHg38`、`chain_hg38ToHg19` | UCSC liftOver chain | 1MB、10MB |
+| chm13 | `chm13`、`chain_hs1ToHg38`、`chain_hg38ToHs1` | T2T-CHM13v2.0（GCF_009914755.1）の RefSeq 注釈と、UCSC の chain 両方向 | 1.6GB、119MB、128MB |
 | mouse | `mouse`、`mouse_rna`、`mouse_uniprot`、`grcm39_names`、`mouse_uniprot_alignments` | RefSeq GRCm39（GCF_000001635.27）、UniProt UP000000589 | 930MB、390MB、21MB、0.1MB |
 | grcm38 | `grcm38`、`chain_mm10ToMm39`、`chain_mm39ToMm10` | GRCm38.p6（GCF_000001635.26）、UCSC liftOver chain | 0.2MB、0.3MB、0.5MB |
 | human_mouse | `chain_hg38ToMm39`、`chain_mm39ToHg38` | UCSC liftOver chain | 158MB、156MB |

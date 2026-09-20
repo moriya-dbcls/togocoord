@@ -116,7 +116,13 @@ export function assemblyReportSeqids(text: string): Map<string, string> {
  * UCSC database names of GRC assemblies (the assembly report does not carry them), so that input such as
  * `hg19:chr7:140453136` can name the assembly.
  */
-export const UCSC_DATABASES: Record<string, string> = { GRCh38: "hg38", GRCh37: "hg19", GRCm39: "mm39", GRCm38: "mm10" };
+export const UCSC_DATABASES: Record<string, string> = {
+  GRCh38: "hg38",
+  GRCh37: "hg19",
+  GRCm39: "mm39",
+  GRCm38: "mm10",
+  "T2T-CHM13v2.0": "hs1",
+};
 
 /** Assembly name without its patch level (`GRCh37.p13` -> `GRCh37`). */
 export function assemblyBaseName(name: string): string {
