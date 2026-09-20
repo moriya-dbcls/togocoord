@@ -2,24 +2,27 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 
 // Without `to`, an example keeps the current selectors; with it, it sets them all (unset ones to their default).
+// `featured` examples are shown; the rest, which show the range of what can be converted, are folded away.
 const EXAMPLES = [
-  { label: "UniProt residue", loc: "uniprot:P07203:49" },
-  { label: "genome codon", loc: "refseq:NC_000003.12:complement(49358132..49358134)" },
-  { label: "structure residue", loc: "pdb:2F8A.A:59" },
+  { label: "UniProt residue", loc: "uniprot:P07203:49", featured: true },
+  { label: "genome codon", loc: "refseq:NC_000003.12:complement(49358132..49358134)", featured: true },
+  { label: "structure residue", loc: "pdb:2F8A.A:59", featured: true },
   { label: "Ensembl protein range", loc: "ensembl:ENSP00000407375.1:40..60" },
   { label: "RefSeq protein", loc: "refseq:NP_036366.3:20" },
   { label: "whole protein", loc: "refseq:NP_000572.2" },
   { label: "overlapping genes (mtDNA)", loc: "refseq:NC_012920.1:8527..8529" },
-  { label: "hg19 → GRCh38 (BRAF V600E)", loc: "hg19:chr7:140453136", to: "genome", assembly: "GRCh38", needs: "GRCh37" },
+  { label: "hg19 → GRCh38 (BRAF V600E)", loc: "hg19:chr7:140453136", to: "genome", assembly: "GRCh38", needs: "GRCh37", featured: true },
+  { label: "T2T-CHM13 → GRCh38", loc: "hs1:chr7:142067515", to: "genome", assembly: "GRCh38", needs: "T2T-CHM13v2.0" },
+  { label: "T2T-CHM13 → UniProt", loc: "hs1:chr7:142067514..142067516", to: "protein", db: "uniprot", needs: "T2T-CHM13v2.0" },
   { label: "hg19 → protein", loc: "hg19:chr7:complement(140453135..140453137)", to: "protein", db: "refseq", needs: "GRCh37" },
   { label: "protein → hg19", loc: "uniprot:P15056:600", to: "genome", assembly: "GRCh37", needs: "GRCh37" },
   { label: "revised gene → UniProt (Marchantia v7.1 → v3.1)", loc: "insdc:BFI18695.1:200", to: "protein", db: "uniprot", needs: "MpTak_v7.1" },
   { label: "Marchantia v3.1 → v7.1", loc: "insdc:KZ772678.1:1969300..1969400", to: "genome", assembly: "MpTak_v7.1", needs: "MpTak_v7.1" },
   { label: "mm10 → human hg19", loc: "mm10:chr9:108339451..108339453", to: "genome", taxon: "9606", assembly: "GRCh37", needs: "GRCm38" },
-  { label: "CRE (fanta.bio) → transcript", loc: "fanta:FCHS_301358", to: "transcript", db: "refseq", needs: "fanta" },
+  { label: "CRE (fanta.bio) → transcript", loc: "fanta:FCHS_301358", to: "transcript", db: "refseq", needs: "fanta", featured: true },
   { label: "mouse CRE on mm10 → mm39 protein", loc: "fanta:FCMM_194523", to: "protein", db: "uniprot", needs: "fanta" },
   { label: "UniProt without an identical protein → genome", loc: "uniprot:P08556:168", to: "genome", needs: "GRCm39" },
-  { label: "human → mouse UniProt", loc: "uniprot:P07203:49", to: "protein", taxon: "10090", db: "uniprot" },
+  { label: "human → mouse UniProt", loc: "uniprot:P07203:49", to: "protein", taxon: "10090", db: "uniprot", featured: true },
   { label: "mouse → human genome", loc: "refseq:NC_000075.7:106312500..106312550", to: "genome", taxon: "9606" },
 ];
 
@@ -367,24 +370,30 @@ $("#input .card").addEventListener("click", (e) => {
   const action = e.target.dataset?.action;
   if (action) toggleExtra($("#input .card"), action, $("#input-id").textContent);
 });
+function exampleButton(x) {
+  const b = el("button", {
+    type: "button",
+    class: "small",
+    title: x.loc,
+    onclick: () =>
+      x.to
+        ? run(x.loc, x.to, true, x.taxon ?? "", x.assembly ?? "", x.db ?? "")
+        : run(x.loc, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value),
+  }, x.label);
+  if (x.needs) {
+    b.dataset.needs = x.needs;
+    b.hidden = true;
+  }
+  return b;
+}
+
+// A few representative examples; the others, which show what else can be converted, are behind "more examples".
 $("#examples").append(
   "Examples: ",
-  ...EXAMPLES.map((x) => {
-    const b = el("button", {
-      type: "button",
-      class: "small",
-      title: x.loc,
-      onclick: () =>
-        x.to
-          ? run(x.loc, x.to, true, x.taxon ?? "", x.assembly ?? "", x.db ?? "")
-          : run(x.loc, toSelect.value, true, taxonSelect.value, assemblySelect.value, dbSelect.value),
-    }, x.label);
-    if (x.needs) {
-      b.dataset.needs = x.needs;
-      b.hidden = true;
-    }
-    return b;
-  }),
+  ...EXAMPLES.filter((x) => x.featured).map(exampleButton),
+  el("details", { class: "more-examples" },
+    el("summary", {}, "more examples"),
+    el("div", {}, ...EXAMPLES.filter((x) => !x.featured).map(exampleButton))),
 );
 
 // ---- Loaded data view ------------------------------------------------------------------------------------------
