@@ -112,6 +112,12 @@ select:disabled, .option.unusable { opacity: 0.45; cursor: not-allowed; }
 .option.unusable input { cursor: not-allowed; }
 .store .md5 { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
 .badge.caution { background: #fff4d6; color: #7a5a00; }
-.more-examples { display: inline-block; text-align: left; }
+/* The representative examples stay on one line, wider than the rest of the page if need be (scrolling when narrow). */
+#examples .examples-row {
+  display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 6px;
+  width: max-content; max-width: calc(100vw - 24px); margin: 0 auto; padding: 2px 4px; overflow-x: auto;
+}
+#examples .examples-row button { flex: 0 0 auto; }
+.more-examples { display: inline-block; text-align: left; margin-top: 6px; }
 .more-examples summary { display: inline-block; cursor: pointer; color: var(--accent-dark); text-decoration: underline dotted; padding: 2px 6px; }
 .more-examples > div { margin: 4px 0 0; }

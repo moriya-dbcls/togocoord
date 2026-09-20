@@ -389,8 +389,7 @@ function exampleButton(x) {
 
 // A few representative examples; the others, which show what else can be converted, are behind "more examples".
 $("#examples").append(
-  "Examples: ",
-  ...EXAMPLES.filter((x) => x.featured).map(exampleButton),
+  el("div", { class: "examples-row" }, "Examples: ", ...EXAMPLES.filter((x) => x.featured).map(exampleButton)),
   el("details", { class: "more-examples" },
     el("summary", {}, "more examples"),
     el("div", {}, ...EXAMPLES.filter((x) => !x.featured).map(exampleButton))),
