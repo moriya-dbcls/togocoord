@@ -77,6 +77,11 @@ export class NamespaceRegistry {
     return this.#defs.get(prefix.toLowerCase());
   }
 
+  /** Registered prefixes, in registration order. */
+  prefixes(): string[] {
+    return [...this.#defs.keys()];
+  }
+
   /** Validate and normalise `namespace:accession` into the internal sequence key. */
   refKey(namespace: string, accession: string): string {
     const def = this.get(namespace);

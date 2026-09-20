@@ -217,6 +217,18 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("hg38:chrM:8527")}&to=genome&assembly=hg19`)).status, 400);
   });
 
+  it("takes an ID without its database (NM_000581.4:1, P07203:49) and reports how it was read", async () => {
+    const { body } = await get(`/v1/location?loc=${encodeURIComponent("NM_000581.4:1..3")}`);
+    assert.deepEqual([body.id, body.written], ["refseq:NM_000581.4:1..3", { namespace: "refseq" }]);
+    assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("P07203:49")}&to=transcript`)).body.results.length, 1);
+    assert.equal((await get("/v1/location?loc=P07203")).body.sequence, "uniprot:P07203"); // not insdc:P07203, which we lack
+    // A form of two databases, neither of them loaded: the input has to say which.
+    const ambiguous = await get("/v1/location?loc=P12345");
+    assert.equal(ambiguous.status, 400);
+    assert.deepEqual(ambiguous.body.candidates, ["insdc:P12345", "uniprot:P12345"]);
+    assert.equal((await get("/v1/location?loc=TP53")).status, 400); // no database has that ID syntax
+  });
+
   it("serves the web UI", async () => {
     const index = await get("/", "text/html");
     assert.equal(index.status, 200);

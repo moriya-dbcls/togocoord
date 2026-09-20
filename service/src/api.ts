@@ -17,6 +17,7 @@ import {
   type Segment,
 } from "@togocoord/core";
 import { CATEGORIES, type Category } from "./category.ts";
+import { inferNamespace } from "./infer.ts";
 import { convert, type Conversion, type Target } from "./search.ts";
 import type { StoreSet, StoredAnnotation } from "./stores.ts";
 
@@ -68,12 +69,32 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     text: string;
     assembly?: string;
     name?: string;
+    /** The database guessed for an input written without one (`NP_000572.2:49` -> refseq). */
+    namespace?: string;
     /** An annotation given by its ID (fanta:FCHS_1), with its type and name. */
     annotation?: { id: string; type: string; name?: string; link?: string };
   }
+
+  /**
+   * An input written without a database (`NP_000572.2:49`, `P07203`) gets one from its accession syntax (spec-service
+   * §6). Left as written when nothing matches, so the usual syntax error is reported instead.
+   */
+  const addNamespace = (text: string): Written => {
+    const m = /^([^\s:]+)(:.*)?$/.exec(text);
+    if (!m) return { text };
+    const { ref, namespace, ambiguous } = inferNamespace(m[1]!, stores.registry, (r) => stores.sequence(r) !== undefined);
+    if (ambiguous) {
+      throw new HttpError(400, `'${m[1]}' could be ${ambiguous.join(" or ")}; write the database in the input`, { candidates: ambiguous });
+    }
+    if (!ref) return { text };
+    return { text: `${ref}${m[2] ?? ""}`, namespace };
+  };
+
   const resolveAssemblyName = (text: string): Written => {
-    const m = /^([A-Za-z][\w.-]*):([^:\s]+)(:.*)?$/.exec(text.trim());
-    if (!m || stores.registry.get(m[1]!)) return { text };
+    text = text.trim();
+    const m = /^([A-Za-z][\w.-]*):([^:\s]+)(:.*)?$/.exec(text);
+    if (!m) return addNamespace(text);
+    if (stores.registry.get(m[1]!)) return { text };
     // An annotation ID (e.g. the fanta.bio CRE fanta:FCHS_1) stands for the annotation's location.
     if (!m[3] && stores.annotationNamespaces().some((n) => n.toLowerCase() === m[1]!.toLowerCase())) {
       const a = stores.annotationById(m[1]!, m[2]!);
@@ -82,7 +103,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
       return { text: a.location, annotation: { id: a.id ?? `${m[1]}:${m[2]}`, type: a.type, ...(name && { name }), ...(a.link && { link: a.link }) } };
     }
     const assembly = stores.assembly(m[1]!);
-    if (!assembly) return { text };
+    if (!assembly) return addNamespace(text); // not a database or an assembly: maybe an accession such as NP_000572.2:49
     const name = m[2]!;
     const ref =
       assembly.aliases[name] ??
@@ -280,6 +301,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
           ...(assembly && { assembly }),
           // The sequence as written with the assembly's own name (e.g. chr7 of GRCh37.p13).
           ...(written.name && { written: { assembly: written.assembly, name: written.name } }),
+          ...(written.namespace && { written: { namespace: written.namespace } }),
           ...(written.annotation && { written: { annotation: written.annotation } }),
           segments: loc.segments.map((s) => segmentJson(s, ctx)),
         };

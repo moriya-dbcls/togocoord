@@ -91,3 +91,12 @@ To serve under a subdirectory, see spec-service §6. Passing `*.sqlite` all at o
 ## Adding a new dataset
 
 Add the name, group and `togocoord-ingest` arguments to `STORE_LIST` in `scripts/data.ts`. Files written as `raw(URL)` (for NCBI assemblies, `ncbi(assembly(accession, name), suffix)`) become targets of `download`. To serve the store, add its name at the appropriate position in `scripts/stores.txt`.
+
+## ID syntax from TogoID
+
+`service/src/togoid-patterns.ts` holds the ID syntax of each database, so that an input written without a database can be read (spec-service §6). It is generated from [TogoID](https://togoid.dbcls.jp/)'s `config/dataset.yaml`; regenerate it when TogoID adds or changes a pattern:
+
+```sh
+node scripts/togoid-patterns.ts
+npm test -w service   # the cases in service/test/infer.test.ts guard the table
+```

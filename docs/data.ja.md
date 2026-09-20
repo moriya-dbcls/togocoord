@@ -91,3 +91,12 @@ node --no-warnings service/src/serve.ts --host 127.0.0.1 --port 8080 --base http
 ## 新しいデータセットを加える
 
 `scripts/data.ts` の `STORE_LIST` に、名前、グループ、`togocoord-ingest` の引数を加える。取得するファイルは `raw(URL)`（NCBI のアセンブリは `ncbi(assembly(accession, name), suffix)`）で書くと、`download` の対象になる。配信するなら `scripts/stores.txt` の適切な位置に名前を加える。
+
+## TogoID からの ID 書式
+
+`service/src/togoid-patterns.ts` は、データベースを省いた入力を読み取る（spec-service §6）ための、各データベースの ID の書式を持つ。[TogoID](https://togoid.dbcls.jp/) の `config/dataset.yaml` から生成しているので、TogoID の書式が増えたり変わったりしたら作り直す。
+
+```sh
+node scripts/togoid-patterns.ts
+npm test -w service   # service/test/infer.test.ts の事例が、この表を守る
+```

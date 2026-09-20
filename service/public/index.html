@@ -27,7 +27,7 @@
       <form id="query">
         <label for="loc" class="visually-hidden">Location ID</label>
         <input id="loc" name="loc" type="text" autocomplete="off" spellcheck="false"
-               placeholder="namespace:accession[:location], e.g. uniprot:P07203:49 or uniprot:P07203 (whole)" />
+               placeholder="[namespace:]accession[:location], e.g. uniprot:P07203:49, P07203:49 or NM_000581.4 (whole)" />
         <div class="targets">
           <label for="to" class="visually-hidden">Convert to</label>
           <select id="to" name="to" title="kind of target sequence">
@@ -90,7 +90,8 @@
 
     <footer>
       <a href="v1/meta">stores</a> · REST API: <code>/v1/convert?loc=…&amp;to=…</code> ·
-      coordinates are Location IDs (INSDC location syntax, codon positions as <code>60c2</code>)
+      coordinates are Location IDs (INSDC location syntax, codon positions as <code>60c2</code>);
+      the database may be left out when the accession says which one it is
     </footer>
   </body>
 </html>

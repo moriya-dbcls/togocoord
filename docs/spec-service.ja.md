@@ -69,6 +69,8 @@
 
 **入力のアセンブリ名**: `<アセンブリ>:<配列名>[:<位置>]`（例: `hg19:chr7:140453136`、`GRCh37:7:140453136`）も受け付ける。配列名は、assembly report の Sequence-Name、UCSC 名、GenBank の accession のどれでもよい。API が `refseq:NC_000007.13:140453136` に読み替え、応答では正規形を返す。`/v1/location` は、書かれた名前（`written`）と、生物種、アセンブリを返す。
 
+**データベースを省いた入力**: accession の書式からどのデータベースのものか分かる場合は、名前空間を省いてよい。`NP_000572.2:49` は `refseq:NP_000572.2:49`、`P07203` は `uniprot:P07203` と読む。候補は、[TogoID](https://togoid.dbcls.jp/) が `config/dataset.yaml` で整備している ID の書式から取る（`scripts/togoid-patterns.ts` が `service/src/togoid-patterns.ts` に書き出すので、変換時に問い合わせはしない）。TogoID にない分（UniParc、`4HHB.A` のような PDB の鎖）は、名前空間レジストリの書式で補う。二つのデータベースにまたがる書式もあり（`P07203` は UniProt の accession であり INSDC の accession でもある）、その場合は読み込んでいる配列のほうを採る。両方ある、またはどちらも無いときは400にして候補（`candidates`）を返し、データベースを書いてもらう。`/v1/location` は、読み取ったデータベースを `written.namespace` に返す。
+
 種をまたぐ edge の種類は、今は `liftover` だけ。オーソログの対応を加えるときは、同じ種類の edge として扱う。
 
 **向き（orientation）**: ヌクレオチドの結果では、その結果の区間の鎖。タンパク質の結果（常に N 末端から C 末端へ書く）では、入力がコード配列の逆鎖に対応するときに `reverse` になる。経路の各段は出力の鎖をそのまま返すので、段ごとの向きを掛け合わせてはいけない。以前はそうしていたため、「タンパク質 → マイナス鎖のゲノム → 同じ遺伝子の別のタンパク質」が `reverse` と表示されていた（2026-09-18 修正）。
@@ -171,9 +173,9 @@
 
 | メソッド | パス | 内容 |
 |---|---|---|
-| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&maxHops=&codon=never&tag=` | 変換。`db`（名前空間。例: `uniprot`、複数可）は、結果をそのデータベースのものに絞る（知らない名前空間は400）。`taxon`（NCBI taxon の番号、`taxon:10090`、読み込んだ生物種の学名や一般名。例: `Mus musculus`、`mouse`）と `assembly`（ゲノムの結果のアセンブリ。例: `GRCh37`、`hg19`）で、変換先の範囲を指定する（§2.2）。`loc` はアセンブリの配列名でも書ける（`hg19:chr7:140453136`）。ID で引ける注釈の ID でもよい（`fanta:FCHS_301358` は、その CRE の領域 `refseq:NC_000003.12:181712289..181712497`。`/v1/location` の `written.annotation` に ID、種類、名前、リンクを返す）。知らない種やアセンブリは400。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す。`tag`（例: `MANE Select`）を指定すると、そのタグを持つ変換先だけを返す。結果には、変換先のタグ（`tags`）、生物種（`taxon`、`organism`）、ゲノムならアセンブリ（`assembly`）が付き、応答には入力の生物種とアセンブリ（`inputTaxon`、`inputAssembly`）が付く。UI は、入力と違う生物種の結果に生物種名を表示する |
+| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&maxHops=&codon=never&tag=` | 変換。`db`（名前空間。例: `uniprot`、複数可）は、結果をそのデータベースのものに絞る（知らない名前空間は400）。`taxon`（NCBI taxon の番号、`taxon:10090`、読み込んだ生物種の学名や一般名。例: `Mus musculus`、`mouse`）と `assembly`（ゲノムの結果のアセンブリ。例: `GRCh37`、`hg19`）で、変換先の範囲を指定する（§2.2）。`loc` はアセンブリの配列名でも書ける（`hg19:chr7:140453136`）。accession からデータベースが分かる場合は、データベースを省いてもよい（`NP_000572.2:49`。どちらとも決まらないものは400で `candidates` を返す）。ID で引ける注釈の ID でもよい（`fanta:FCHS_301358` は、その CRE の領域 `refseq:NC_000003.12:181712289..181712497`。`/v1/location` の `written.annotation` に ID、種類、名前、リンクを返す）。知らない種やアセンブリは400。`to` は、種類（`genome` など）、名前空間（`uniprot` など）、配列（`refseq:NC_000001.11`）のいずれかで、複数指定できる。省略すると、直接つながる配列をすべて返す。`tag`（例: `MANE Select`）を指定すると、そのタグを持つ変換先だけを返す。結果には、変換先のタグ（`tags`）、生物種（`taxon`、`organism`）、ゲノムならアセンブリ（`assembly`）が付き、応答には入力の生物種とアセンブリ（`inputTaxon`、`inputAssembly`）が付く。UI は、入力と違う生物種の結果に生物種名を表示する |
 | POST | `/v1/convert` | 一括変換。`{"locations": [...], "to": ..., "db": ..., "taxon": ..., "assembly": ..., "maxHops": ..., "codon": ...}`。最大1000件。個々の入力の誤りは、その要素に `error` として返す |
-| GET | `/v1/location?loc=` | 正規形の ID、IRI、セグメント（1始まり。タンパク質は残基番号とコドン内の位置）、生物種とアセンブリ、アセンブリの配列名で書かれていればその名前（`written`） |
+| GET | `/v1/location?loc=` | 正規形の ID、IRI、セグメント（1始まり。タンパク質は残基番号とコドン内の位置）、生物種とアセンブリ、アセンブリの配列名で書かれていたり、データベースを省いて書かれていた場合は、読み取った内容（`written`） |
 | GET | `/v1/location/faldo?loc=` | FALDO JSON-LD（`application/ld+json`） |
 | GET | `/v1/sequences/{ref}` | 配列の情報（全保存先の情報をまとめたもの）と、同一配列の一覧 |
 | GET | `/v1/sequences/{ref}/edges` | その配列から出る edge と入る edge |
