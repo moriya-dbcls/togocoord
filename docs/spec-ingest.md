@@ -279,3 +279,20 @@ Stores do not hold the sequences themselves (because of size, synchronization wi
 | `mp_v31_to_v71` / `mp_v71_to_v31` | 42,516 / 336,134 | / 15MB |
 
 Schema 6 readers accept 4–6 (a store without a `mismatch` table simply has not recorded differences).
+
+## 20. Alignments towards the annotated assembly (a star, 2026-09-20)
+
+As a species gains assemblies, aligning every pair takes N(N-1) alignments. Instead, **the assembly with the most annotation (the species' default assembly) is the hub, and every other assembly is aligned to it in both directions** (2(N-1) alignments). Other pairs are converted through the hub (spec-service §2.2: a path crosses at most two assemblies of one species).
+
+- The hub is chosen like the default assembly (annotated, the newest release, then the most annotation). For Marchantia it is MpTak_v7.1 (the autosomes of Tak-1 with chrU from Tak-2, chrV from Tak-1 and the organelles, so it can take assemblies of either sex).
+- A direct alignment (a chord) can be added later for a pair that needs one; that costs fewer alignments and shorter paths than a second hub.
+- The minimap2 preset follows the divergence: `asm5` (under 1%, assemblies of one strain), `asm10` (1-5%), `asm20` (5-10%, another accession).
+
+**Marchantia (2026-09-20)**: hub MpTak_v7.1; spokes v3.1, MpTak2_v7.1 (Tak-2), ASM993635v2 (v5.1) and cmMarPoly1.2 (no annotation).
+
+| Spoke | Preset | Alignments kept (to hub / from hub) | Sampled identity |
+|---|---|---|---|
+| v3.1 (GCA_003032435.1) | asm5 | 4,342 / 5,843 | 99.5% / 98.5% |
+| MpTak2_v7.1 (GCA_037833965.1) | asm5 | 1,461 / 1,538 | 98.7% / 98.6% |
+| ASM993635v2 (GCA_009936355.2, v5.1) | asm5 | 1,344 / 1,283 | 99.6% / 99.1% |
+| cmMarPoly1.2 (GCA_965642975.2) | asm20 | | |

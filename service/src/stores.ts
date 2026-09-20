@@ -203,6 +203,19 @@ export class StoreSet {
   }
 
   /**
+   * Species a store's genome alignments convert from and to (a sample). A chain store holds the sequences of both
+   * assemblies, so its content alone would put a mouse-to-human chain under human; between assemblies of one species
+   * both are the same species. Not part of meta(), which the species lookup itself uses.
+   */
+  alignmentSpecies(store: number): { alignsFrom?: number; alignsTo?: number } {
+    const ends = this.stores[store]?.edgeEnds("liftover", 1)[0];
+    if (!ends) return {};
+    const from = this.taxonOf(ends.from);
+    const to = this.taxonOf(ends.to);
+    return { ...(from !== undefined && { alignsFrom: from }), ...(to !== undefined && { alignsTo: to }) };
+  }
+
+  /**
    * Species of a sequence: its own record, else the recorded taxon of a store holding it (e.g. an Ensembl store built
    * with --taxon), else an identical sequence of a single species.
    */

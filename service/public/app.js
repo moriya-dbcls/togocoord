@@ -396,6 +396,10 @@ const counts = (o) =>
 
 /** Organism a store belongs to: its recorded organism, else the organism most of its sequences carry. */
 function storeOrganism(s) {
+  // Genome alignments: between assemblies of one species they belong to that species; between species they belong to
+  // no single one (a chain store holds the sequences of both, so its content alone would put them under the first).
+  if (s.alignsFrom !== undefined && s.alignsFrom === s.alignsTo) return { name: `taxon ${s.alignsFrom}`, taxon: s.alignsFrom };
+  if (s.alignsFrom !== undefined) return { name: "Cross-species / structures", taxon: undefined };
   if (s.organism) return { name: s.organism, taxon: s.taxon };
   const t = s.summary?.taxa?.[0];
   return t ? { name: t.organism ?? `taxon ${t.taxon}`, taxon: t.taxon } : { name: "Cross-species / structures", taxon: undefined };

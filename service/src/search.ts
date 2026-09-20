@@ -142,9 +142,10 @@ interface State {
   /** Species and genome assembly the path is in (undefined until known). */
   taxon: number | undefined;
   assembly: string | undefined;
-  /** The path has stepped into another species (once) / another assembly of the current species (once per species). */
+  /** The path has stepped into another species (once). */
   crossedSpecies: boolean;
-  crossedAssembly: boolean;
+  /** Steps into another assembly of the current species (at most MAX_ASSEMBLY_CROSSINGS; reset on a species step). */
+  crossedAssembly: number;
   /** Insertion order, for deterministic tie-breaking. */
   seq: number;
 }
@@ -155,6 +156,12 @@ interface State {
  * (spec-service §2.2). A species with several assemblies adds one hop for the liftOver between them.
  */
 export const CROSSING_HOPS = 2;
+
+/**
+ * Assemblies of one species that a path may cross. Two, because alignments are computed towards the annotated
+ * assembly of the species (a star): another assembly is reached through it (MpTak v3.1 -> v7.1 -> Tak-2 v7.1).
+ */
+export const MAX_ASSEMBLY_CROSSINGS = 2;
 
 /** Edge kinds whose ends are in different species or assemblies. */
 const CROSSING_KINDS = new Set<Step["kind"]>(["liftover"]);
@@ -175,7 +182,8 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
   const targetAssembly = options.assembly ?? (!targets ? undefined : !crossSpecies && inputAssembly ? inputAssembly : stores.defaultAssembly(targetTaxon));
   const assembliesOf = (taxon: number | undefined) => stores.species().find((s) => s.taxon === taxon)?.assemblies.length ?? 0;
   const multiAssembly = targets !== undefined && (assembliesOf(inputTaxon) > 1 || assembliesOf(targetTaxon) > 1);
-  const maxHops = options.maxHops ?? (targets ? 4 : 1) + (crossSpecies ? CROSSING_HOPS : 0) + (multiAssembly ? 1 : 0);
+  const assemblyHops = multiAssembly ? Math.min(MAX_ASSEMBLY_CROSSINGS, Math.max(assembliesOf(inputTaxon), assembliesOf(targetTaxon)) - 1) : 0;
+  const maxHops = options.maxHops ?? (targets ? 4 : 1) + (crossSpecies ? CROSSING_HOPS : 0) + assemblyHops;
   const inScope = (s: State) =>
     (targetTaxon === undefined || s.taxon === targetTaxon || (s.taxon === undefined && !crossSpecies)) &&
     (targetAssembly === undefined ||
@@ -209,7 +217,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     taxon: inputTaxon,
     assembly: inputAssembly,
     crossedSpecies: false,
-    crossedAssembly: false,
+    crossedAssembly: 0,
     seq: 0,
   };
   // Order: cost, then fewer non-preferred intermediates, then fewer steps (a genome alignment between two assemblies
@@ -302,7 +310,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       // next to TrEMBL A0A0G2JDN6, identical to RefSeq NP_035067), are other records of the same protein.
       const last = next.path.at(-1)!;
       const identity = last.kind === "identity" || last.provenance?.adapter === "protein-alignment";
-      const crosses = (scope.crossedSpecies && !state.crossedSpecies) || (scope.crossedAssembly && !state.crossedAssembly);
+      const crosses = (scope.crossedSpecies && !state.crossedSpecies) || scope.crossedAssembly > state.crossedAssembly;
       if (inScopeTarget && !(identity && scope.crossedSpecies === state.crossedSpecies)) continue;
       if (outOfScope && !identity && !crosses && !(dir === -1 && turns === state.turns)) continue;
       // The sequence being left becomes an intermediate node of the path (the source is not counted).
@@ -327,13 +335,13 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     if (toTaxon !== undefined && state.taxon !== undefined && toTaxon !== state.taxon) {
       // Into another species: only into the requested one, once.
       if (!crossSpecies || state.crossedSpecies || toTaxon !== options.taxon) return undefined;
-      // Each species may be crossed between its assemblies once: mm10 -> mm39 -> hg38 -> hg19.
-      return { taxon: toTaxon, assembly, crossedSpecies: true, crossedAssembly: false };
+      // The assembly crossings are counted per species: mm10 -> mm39 -> hg38 -> hg19.
+      return { taxon: toTaxon, assembly, crossedSpecies: true, crossedAssembly: 0 };
     }
     if (lift || (assembly !== undefined && state.assembly !== undefined && assembly !== state.assembly)) {
       // Into another assembly of the species: whenever a path needs it, once.
-      if (state.crossedAssembly) return undefined;
-      return { taxon: state.taxon ?? toTaxon, assembly: assembly ?? state.assembly, ...same, crossedAssembly: true };
+      if (state.crossedAssembly >= MAX_ASSEMBLY_CROSSINGS) return undefined;
+      return { taxon: state.taxon ?? toTaxon, assembly: assembly ?? state.assembly, ...same, crossedAssembly: state.crossedAssembly + 1 };
     }
     return { taxon: state.taxon ?? taxon, assembly: assembly ?? state.assembly, ...same };
   }

@@ -211,7 +211,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
       "GET",
       /^\/v1\/meta$/,
       () => ({
-        stores: stores.meta(),
+        stores: stores.meta().map((m, i) => ({ ...m, ...stores.alignmentSpecies(i) })),
         species: stores.species(),
         assemblies: stores.assemblies().map(({ aliases: _aliases, refs: _refs, ...a }) => a),
         crossings: stores.crossings(),

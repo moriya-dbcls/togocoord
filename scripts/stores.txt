@@ -27,6 +27,9 @@ tair10
 # Marchantia (MpTak v7.1, then v3.1)
 marchantia_v71
 marchantia
+marchantia_tak2
+marchantia_v51
+marchantia_cmv12
 marchantia_uniprot
 
 # Structures, regulatory elements
@@ -43,6 +46,12 @@ chain_mm10ToMm39
 chain_mm39ToMm10
 mp_v31_to_v71
 mp_v71_to_v31
+mp_tak2_to_hub
+mp_hub_to_tak2
+mp_v51_to_hub
+mp_hub_to_v51
+mp_cmv12_to_hub
+mp_hub_to_cmv12
 
 # Protein alignments computed by TogoCoord (T2)
 human_uniprot_alignments
