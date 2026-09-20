@@ -296,3 +296,13 @@ As a species gains assemblies, aligning every pair takes N(N-1) alignments. Inst
 | MpTak2_v7.1 (GCA_037833965.1) | asm5 | 1,461 / 1,538 | 98.7% / 98.6% |
 | ASM993635v2 (GCA_009936355.2, v5.1) | asm5 | 1,344 / 1,283 | 99.6% / 99.1% |
 | cmMarPoly1.2 (GCA_965642975.2) | asm20 | | |
+
+**Marchantia assemblies deliberately not loaded** (2026-09-20)
+
+| Assembly | Reason |
+|---|---|
+| MpTak1_v7.1 (GCA_037833805.1) | Its sequences are the standard genome's (the hub) under the same accessions (AP031342-AP031350); it would add no conversion |
+| Col-CEN v1.2 (Arabidopsis) | No INSDC accession, so its sequences have no key |
+| The other assemblies without annotation (Marpolrud_CA_v1, the two subspecies, ASM1997375v1) | No annotation, and each would need its own alignment; cmMarPoly1.2 stands as the example of that case |
+
+Of MpTak2_v7.1 (Tak-2), 81.8% of the proteins (16,641 / 20,354) are identical to one of the standard genome's and the rest are its own. Its chrU is the standard genome's chrU. It is loaded so that positions written on the Tak-2 assembly can be converted.
