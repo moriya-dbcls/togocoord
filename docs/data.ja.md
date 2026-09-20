@@ -51,7 +51,9 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | | `mp_v31_to_v71`、`mp_v71_to_v31` | 両方のゲノム配列を minimap2 でアライメントした PAF（`work/` に作る） | 3MB、3MB |
 | | `marchantia_tak2`、`marchantia_v51` | INSDC MpTak2_v7.1（GCA_037833965.1、Tak-2）、ASM993635v2（GCA_009936355.2、v5.1）の GenBank | |
 | | `marchantia_cmv12` | cmMarPoly1.2（GCA_965642975.2）の assembly report とゲノム配列（注釈なし） | |
-| | `mp_tak2_to_hub`、`mp_hub_to_tak2`、`mp_v51_to_hub`、`mp_hub_to_v51`、`mp_cmv12_to_hub`、`mp_hub_to_cmv12` | 中心（MpTak_v7.1）との minimap2 のアライメント（spec-ingest §20）。cmMarPoly1.2 だけ `asm20` | |
+| | `marchantia_mpv4` | INSDC Mp_v4（GCA_001641455.1）の GenBank。UniProt の UP000077202 はこのアセンブリに基づく | 66MB |
+| | `marchantia_uniprot_v4` | UniProt UP000077202（Mp_v4 のプロテオーム） | 7MB |
+| | `mp_tak2_to_hub`、`mp_hub_to_tak2`、`mp_v51_to_hub`、`mp_hub_to_v51`、`mp_cmv12_to_hub`、`mp_hub_to_cmv12`、`mp_v4_to_hub`、`mp_hub_to_v4` | 中心（MpTak_v7.1）との minimap2 のアライメント（spec-ingest §20）。cmMarPoly1.2 だけ `asm20` | |
 | sifts | `sifts` | SIFTS `uniprot_segments_observed.tsv.gz`（PDBe）、`pdb_seqres.txt.gz`（wwPDB）、上の UniProt すべて | 180MB |
 | fanta | `fanta_human_hg38`、`fanta_mouse_mm10` | fanta.bio CRE v1.2.1 の BED | 197MB、116MB |
 

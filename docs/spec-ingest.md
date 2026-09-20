@@ -288,7 +288,7 @@ As a species gains assemblies, aligning every pair takes N(N-1) alignments. Inst
 - A direct alignment (a chord) can be added later for a pair that needs one; that costs fewer alignments and shorter paths than a second hub.
 - The minimap2 preset follows the sequence divergence (minimap2's own guidance): `asm5` (~0.1%, versions of one strain), `asm10` (~1%, another strain of the species), `asm20` (~5%, a divergent accession or subspecies). Well beyond 5% (another species) none of them fits, and a distributed chain is used instead (UCSC builds those with lastz).
 
-**Marchantia (2026-09-20)**: hub MpTak_v7.1; spokes v3.1, MpTak2_v7.1 (Tak-2), ASM993635v2 (v5.1) and cmMarPoly1.2 (no annotation).
+**Marchantia (2026-09-20)**: hub MpTak_v7.1; spokes v3.1, MpTak2_v7.1 (Tak-2), ASM993635v2 (v5.1), cmMarPoly1.2 (no annotation) and Mp_v4.
 
 | Spoke | Preset | Alignments kept (to hub / from hub) | Sampled identity |
 |---|---|---|---|
@@ -296,8 +296,11 @@ As a species gains assemblies, aligning every pair takes N(N-1) alignments. Inst
 | MpTak2_v7.1 (GCA_037833965.1) | asm5 | 1,461 / 1,538 | 98.7% / 98.6% |
 | ASM993635v2 (GCA_009936355.2, v5.1) | asm5 | 1,344 / 1,283 | 99.6% / 99.1% |
 | cmMarPoly1.2 (GCA_965642975.2) | asm20 | 13,501 / 11,314 | 93.4% / 93.7% |
+| Mp_v4 (GCA_001641455.1) | asm5 | 7,346 / 11,640 | 98.7% / 98.2% |
 
-**Share of a spoke that reaches the hub** (`verify-genome-pair.ts`, 1,500 random windows of the spoke's genome): v5.1 97.9%, MpTak2_v7.1 91.6%, cmMarPoly1.2 63.9%. cmMarPoly1.2 is another accession, 2-3% divergent, and its genome is larger (265 Mb against the hub's 248 Mb). A higher preset lifts more of it (asm5 39.6% → asm10 54.7% → asm20 63.9%). The alignment itself covers 60.3% of it with asm10 and 71.5% with asm20, so the limit is the alignment, not the one-to-one filtering.
+**Share of a spoke that reaches the hub** (`verify-genome-pair.ts`, 1,500 random windows of the spoke's genome): v5.1 97.9%, MpTak2_v7.1 91.6%, Mp_v4 82.9%, cmMarPoly1.2 63.9%. cmMarPoly1.2 is another accession, 2-3% divergent, and its genome is larger (265 Mb against the hub's 248 Mb). A higher preset lifts more of it (asm5 39.6% → asm10 54.7% → asm20 63.9%). The alignment itself covers 60.3% of it with asm10 and 71.5% with asm20, so the limit is the alignment, not the one-to-one filtering.
+
+**Why Mp_v4 (2026-09-20)**: it is a scaffold-level assembly from 2016 (Oxford, pooled Tak-1 and Tak-2, 205.7 Mb), superseded as a genome — but UniProt's UP000077202 (17,951 entries) is built on it, and those were the largest set of Marchantia proteins nothing could reach. Only 20.1% of them were identical to a protein we held, so 80% would have been isolated nodes. With Mp_v4 loaded, every one of them (17,950 / 17,951) is identical to one of its CDS proteins and 96% reach a genome position on the hub (`uniprot:A0A176VNS3:10` -> `insdc:OAE22043.1:10` -> the Mp_v4 scaffold -> `insdc:AP031346.1:complement(22320360..22320362)`). Its gene models are old, so only 18.8% of its proteins (3,373 / 17,956) are identical to one of the hub's; the rest reach the hub through the genome alignment. `asm10` adds 0.6% to the alignment (179.2 Mb against 178.2 Mb of query bases), so `asm5` is kept.
 
 **Limit on recording differences**: where the differing bases exceed 1% of the aligned bases (`MAX_MISMATCH_RATE`), the positions are not recorded and only the share is kept (the `mismatchRate` attribute). The record exists to point out where two nearly identical sequences differ; between divergent ones the differences are the rule, not the exception. For cmMarPoly1.2 this took the store from 291 MB to 11.6 MB (what remains is the few regions that differ little).
 
@@ -305,7 +308,7 @@ As a species gains assemblies, aligning every pair takes N(N-1) alignments. Inst
 
 | Assembly | Reason |
 |---|---|
-| MpTak1_v7.1 (GCA_037833805.1) | Its sequences are the standard genome's (the hub) under the same accessions (AP031342-AP031350); it would add no conversion |
+| MpTak1_v7.1 (GCA_037833805.1) | Its sequences are the standard genome's (the hub) under the same accessions (AP031342-AP031350), and so are its 20,184 CDS proteins (BFI03036.1 and the rest, all of them in the hub's 20,412); it would add no sequence, no ID and no conversion. Its proteome UP001452901 holds no sequence in UniProtKB either |
 | Col-CEN v1.2 (Arabidopsis) | No INSDC accession, so its sequences have no key |
 | The other assemblies without annotation (Marpolrud_CA_v1, the two subspecies, ASM1997375v1) | No annotation, and each would need its own alignment; cmMarPoly1.2 stands as the example of that case |
 

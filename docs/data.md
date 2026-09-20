@@ -51,7 +51,9 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | | `mp_v31_to_v71`, `mp_v71_to_v31` | PAF from a minimap2 alignment of the two genome sequences (created in `work/`) | 3MB, 3MB |
 | | `marchantia_tak2`, `marchantia_v51` | GenBank of INSDC MpTak2_v7.1 (GCA_037833965.1, Tak-2) and ASM993635v2 (GCA_009936355.2, v5.1) | |
 | | `marchantia_cmv12` | Assembly report and genome of cmMarPoly1.2 (GCA_965642975.2; no annotation) | |
-| | `mp_tak2_to_hub`, `mp_hub_to_tak2`, `mp_v51_to_hub`, `mp_hub_to_v51`, `mp_cmv12_to_hub`, `mp_hub_to_cmv12` | minimap2 alignments with the hub MpTak_v7.1 (spec-ingest §20); `asm20` for cmMarPoly1.2 only | |
+| | `marchantia_mpv4` | GenBank of INSDC Mp_v4 (GCA_001641455.1), the assembly UniProt's UP000077202 is built on | 66MB |
+| | `marchantia_uniprot_v4` | UniProt UP000077202 (the Mp_v4 proteome) | 7MB |
+| | `mp_tak2_to_hub`, `mp_hub_to_tak2`, `mp_v51_to_hub`, `mp_hub_to_v51`, `mp_cmv12_to_hub`, `mp_hub_to_cmv12`, `mp_v4_to_hub`, `mp_hub_to_v4` | minimap2 alignments with the hub MpTak_v7.1 (spec-ingest §20); `asm20` for cmMarPoly1.2 only | |
 | sifts | `sifts` | SIFTS `uniprot_segments_observed.tsv.gz` (PDBe), `pdb_seqres.txt.gz` (wwPDB), all of the UniProt data above | 180MB |
 | fanta | `fanta_human_hg38`, `fanta_mouse_mm10` | fanta.bio CRE v1.2.1 BED | 197MB, 116MB |
 

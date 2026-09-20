@@ -31,7 +31,9 @@ marchantia
 marchantia_tak2
 marchantia_v51
 marchantia_cmv12
+marchantia_mpv4
 marchantia_uniprot
+marchantia_uniprot_v4
 
 # Structures, regulatory elements
 sifts
@@ -55,6 +57,8 @@ mp_v51_to_hub
 mp_hub_to_v51
 mp_cmv12_to_hub
 mp_hub_to_cmv12
+mp_v4_to_hub
+mp_hub_to_v4
 
 # Protein alignments computed by TogoCoord (T2)
 human_uniprot_alignments

@@ -37,6 +37,7 @@ const MP71 = assembly("GCA_039105155.1", "MpTak_v7.1");
 const MPTAK2 = assembly("GCA_037833965.1", "MpTak2_v7.1");
 const MP51 = assembly("GCA_009936355.2", "ASM993635v2");
 const MPCM = assembly("GCA_965642975.2", "cmMarPoly1.2");
+const MPV4 = assembly("GCA_001641455.1", "Mp_v4");
 const UNIPROT = "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Eukaryota";
 const ENSEMBL = "https://ftp.ensembl.org/pub/release-116";
 const MANE = "https://ftp.ncbi.nlm.nih.gov/refseq/MANE/MANE_human/release_1.5";
@@ -98,12 +99,15 @@ const upHuman = [uniprot("UP000005640", 9606), uniprot("UP000005640", 9606, true
 const upMouse = [uniprot("UP000000589", 10090), uniprot("UP000000589", 10090, true)];
 const upArab = [uniprot("UP000006548", 3702), uniprot("UP000006548", 3702, true)];
 const upMarchantia = [uniprot("UP000244005", 3197)];
+const upMarchantiaV4 = [uniprot("UP000077202", 1480154)];
 const rMpTak2 = ncbi(MPTAK2, "assembly_report.txt");
 const rMp51 = ncbi(MP51, "assembly_report.txt");
 const rMpCm = ncbi(MPCM, "assembly_report.txt");
+const rMpV4 = ncbi(MPV4, "assembly_report.txt");
 const gMpTak2 = ncbi(MPTAK2, "genomic.fna.gz");
 const gMp51 = ncbi(MP51, "genomic.fna.gz");
 const gMpCm = ncbi(MPCM, "genomic.fna.gz");
+const gMpV4 = ncbi(MPV4, "genomic.fna.gz");
 const paf31to71 = work("MpTak_v3.1_to_v7.1.paf");
 const paf71to31 = work("MpTak_v7.1_to_v3.1.paf");
 const cre = ["--bed-type", "CRE", "--bed-columns", "Name,attributes", "--id-namespace", "fanta", "--link", "https://fanta.bio/cre/{id}"];
@@ -225,12 +229,16 @@ const STORE_LIST: Store[] = [
   { name: "marchantia_tak2", group: "marchantia", args: ["--label", "Marchantia polymorpha MpTak2_v7.1 (Tak-2) INSDC annotation (GCA_037833965.1)", "--assembly-report", rMpTak2, ncbi(MPTAK2, "genomic.gbff.gz")] },
   { name: "marchantia_v51", group: "marchantia", args: ["--label", "Marchantia polymorpha v5.1 INSDC annotation (GCA_009936355.2)", "--assembly-report", rMp51, ncbi(MP51, "genomic.gbff.gz")] },
   { name: "marchantia_cmv12", group: "marchantia", args: ["--label", "Marchantia polymorpha cmMarPoly1.2 genome, no annotation (GCA_965642975.2)", "--assembly-report", rMpCm, rMpCm, gMpCm] },
+  { name: "marchantia_mpv4", group: "marchantia", args: ["--label", "Marchantia polymorpha Mp_v4 INSDC annotation (GCA_001641455.1)", "--assembly-report", rMpV4, ncbi(MPV4, "genomic.gbff.gz")] },
+  { name: "marchantia_uniprot_v4", group: "marchantia", args: ["--label", "Marchantia UniProt proteome of Mp_v4 (UP000077202)", ...upMarchantiaV4] },
   ...starAlignments("marchantia", "MpTak_v7.1", rMp71, gMp71, [
     { name: "tak2", label: "MpTak2_v7.1 (Tak-2)", report: rMpTak2, genome: gMpTak2 },
     { name: "v51", label: "v5.1", report: rMp51, genome: gMp51 },
     // Another accession, 2-3% divergent and structurally different: with asm5 (~0.1%) only 40% of it is lifted,
     // with asm10 (~1%) 55%; asm20 (~5%) is the fitting preset (the alignment covers 60% / 71% of the genome).
     { name: "cmv12", label: "cmMarPoly1.2", report: rMpCm, genome: gMpCm, preset: "asm20" },
+    // Scaffold-level assembly of pooled Tak-1 and Tak-2 (Oxford 2016); UniProt's UP000077202 is built on it.
+    { name: "v4", label: "Mp_v4", report: rMpV4, genome: gMpV4 },
   ]),
   // Structures of the loaded proteomes
   {
@@ -238,7 +246,7 @@ const STORE_LIST: Store[] = [
     group: "sifts",
     args: [
       "--label", "SIFTS: UniProt to PDB chains (loaded proteomes)", "--sifts-known-only",
-      ...[...upHuman, ...upMouse, ...upArab, ...upMarchantia].flatMap((f) => ["--fasta", f]),
+      ...[...upHuman, ...upMouse, ...upArab, ...upMarchantia, ...upMarchantiaV4].flatMap((f) => ["--fasta", f]),
       "--fasta", raw("https://files.wwpdb.org/pub/pdb/derived_data/pdb_seqres.txt.gz"),
       raw("https://ftp.ebi.ac.uk/pub/databases/msd/sifts/flatfiles/tsv/uniprot_segments_observed.tsv.gz"),
     ],
