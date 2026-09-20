@@ -295,7 +295,11 @@ As a species gains assemblies, aligning every pair takes N(N-1) alignments. Inst
 | v3.1 (GCA_003032435.1) | asm5 | 4,342 / 5,843 | 99.5% / 98.5% |
 | MpTak2_v7.1 (GCA_037833965.1) | asm5 | 1,461 / 1,538 | 98.7% / 98.6% |
 | ASM993635v2 (GCA_009936355.2, v5.1) | asm5 | 1,344 / 1,283 | 99.6% / 99.1% |
-| cmMarPoly1.2 (GCA_965642975.2) | asm20 | | |
+| cmMarPoly1.2 (GCA_965642975.2) | asm20 | 13,501 / 11,314 | 93.4% / 93.7% |
+
+**Share of a spoke that reaches the hub** (`verify-genome-pair.ts`, 1,500 random windows of the spoke's genome): v5.1 97.9%, MpTak2_v7.1 91.6%, cmMarPoly1.2 63.9%. cmMarPoly1.2 is another accession, 2-3% divergent, and its genome is larger (265 Mb against the hub's 248 Mb). A higher preset lifts more of it (asm5 39.6% → asm10 54.7% → asm20 63.9%). The alignment itself covers 60.3% of it with asm10 and 71.5% with asm20, so the limit is the alignment, not the one-to-one filtering.
+
+**Limit on recording differences**: where the differing bases exceed 1% of the aligned bases (`MAX_MISMATCH_RATE`), the positions are not recorded and only the share is kept (the `mismatchRate` attribute). The record exists to point out where two nearly identical sequences differ; between divergent ones the differences are the rule, not the exception. For cmMarPoly1.2 this took the store from 291 MB to 11.6 MB (what remains is the few regions that differ little).
 
 **Marchantia assemblies deliberately not loaded** (2026-09-20)
 

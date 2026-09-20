@@ -5,7 +5,7 @@
 // Coordinates are 0-based half-open; on a '-' strand the CIGAR runs along the target forward and the query backward.
 import type { Block } from "@togocoord/core";
 import { NamespaceRegistry } from "@togocoord/core";
-import { blockMismatches, validateAlignedBlocks } from "./adapter-chain.ts";
+import { blockMismatches, MAX_MISMATCH_RATE, validateAlignedBlocks } from "./adapter-chain.ts";
 import { ownString } from "./common.ts";
 import type { Edge, Provenance, Sink } from "./model.ts";
 import type { SequenceSource } from "./sequence.ts";
@@ -218,9 +218,13 @@ export async function ingestPafFile(path: string, sink: Sink, options: PafOption
     };
     if (options.recordMismatches && options.source) {
       const m = blockMismatches(blocks, options.source);
-      if (m?.length) {
-        edge.mismatches = m;
-        edge.attributes.mismatches = String(m.length);
+      const aligned = blocks.reduce((n, b) => n + b.len, 0);
+      if (m?.length && aligned > 0) {
+        edge.attributes.mismatchRate = (m.length / aligned).toFixed(4);
+        if (m.length <= MAX_MISMATCH_RATE * aligned) {
+          edge.mismatches = m;
+          edge.attributes.mismatches = String(m.length);
+        }
       }
     }
     sink.edge(edge);

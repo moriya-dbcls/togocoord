@@ -167,9 +167,13 @@ export async function ingestChainFile(path: string, sink: Sink, options: ChainOp
     };
     if (options.recordMismatches && options.source) {
       const m = blockMismatches(blocks, options.source);
-      if (m?.length) {
-        edge.mismatches = m;
-        edge.attributes.mismatches = String(m.length);
+      const aligned = blocks.reduce((n, b) => n + b.len, 0);
+      if (m?.length && aligned > 0) {
+        edge.attributes.mismatchRate = (m.length / aligned).toFixed(4);
+        if (m.length <= MAX_MISMATCH_RATE * aligned) {
+          edge.mismatches = m;
+          edge.attributes.mismatches = String(m.length);
+        }
       }
     }
     sink.edge(edge);
@@ -178,6 +182,12 @@ export async function ingestChainFile(path: string, sink: Sink, options: ChainOp
   }
   return stats;
 }
+
+/**
+ * Above this share of differing bases, the positions are not recorded: they are no longer the exception but the rule
+ * (7.8 M rows and 290 MB for a Marchantia accession 4% divergent, against 0.5 M and 17 MB for two strains).
+ */
+export const MAX_MISMATCH_RATE = 0.01;
 
 /**
  * Aligned bases that differ over whole blocks: [0-based source position, source base, target base in the source's
