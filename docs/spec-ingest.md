@@ -286,7 +286,7 @@ As a species gains assemblies, aligning every pair takes N(N-1) alignments. Inst
 
 - The hub is chosen like the default assembly (annotated, the newest release, then the most annotation). For Marchantia it is MpTak_v7.1 (the autosomes of Tak-1 with chrU from Tak-2, chrV from Tak-1 and the organelles, so it can take assemblies of either sex).
 - A direct alignment (a chord) can be added later for a pair that needs one; that costs fewer alignments and shorter paths than a second hub.
-- The minimap2 preset follows the divergence: `asm5` (under 1%, assemblies of one strain), `asm10` (1-5%), `asm20` (5-10%, another accession).
+- The minimap2 preset follows the sequence divergence (minimap2's own guidance): `asm5` (~0.1%, versions of one strain), `asm10` (~1%, another strain of the species), `asm20` (~5%, a divergent accession or subspecies). Well beyond 5% (another species) none of them fits, and a distributed chain is used instead (UCSC builds those with lastz).
 
 **Marchantia (2026-09-20)**: hub MpTak_v7.1; spokes v3.1, MpTak2_v7.1 (Tak-2), ASM993635v2 (v5.1) and cmMarPoly1.2 (no annotation).
 

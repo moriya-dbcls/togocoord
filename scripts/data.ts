@@ -67,7 +67,7 @@ interface Store {
 
 const minimap2 = (preset: string) => `minimap2 2.31-r1302 -c --eqx -x ${preset} -t 8`;
 const pafFilter = "PAF filtered by TogoCoord: secondary (tp:A:S) and alignments < 1 kb dropped; one-to-one on the query, best AS first";
-/** asm5 for assemblies of one strain (under 1% divergence), asm10 for more divergent ones (up to ~5%). */
+/** minimap2 presets by sequence divergence: asm5 ~0.1% (versions of one strain), asm10 ~1%, asm20 ~5%. */
 const align = (target: string, query: string, out: string, preset = "asm5") => ({
   file: out,
   command: ["sh", "-c", `minimap2 -c --eqx -x "$3" -t 8 "$0" "$1" > "$2.tmp" && mv "$2.tmp" "$2"`, target, query, out, preset],
@@ -221,8 +221,8 @@ const STORE_LIST: Store[] = [
   ...starAlignments("marchantia", "MpTak_v7.1", rMp71, gMp71, [
     { name: "tak2", label: "MpTak2_v7.1 (Tak-2)", report: rMpTak2, genome: gMpTak2 },
     { name: "v51", label: "v5.1", report: rMp51, genome: gMp51 },
-    // Another accession, divergent and structurally different: with asm5 (under 1% divergence) only 40% of it is
-    // lifted, asm10 55%, asm20 (5-10%) about 65% (the alignment itself covers 60% / 71% of the genome).
+    // Another accession, 2-3% divergent and structurally different: with asm5 (~0.1%) only 40% of it is lifted,
+    // with asm10 (~1%) 55%; asm20 (~5%) is the fitting preset (the alignment covers 60% / 71% of the genome).
     { name: "cmv12", label: "cmMarPoly1.2", report: rMpCm, genome: gMpCm, preset: "asm20" },
   ]),
   // Structures of the loaded proteomes
