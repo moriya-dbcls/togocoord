@@ -170,3 +170,7 @@ Command: `togocoord-ingest --db OUT.sqlite --fasta genomic.fna --fasta protein.f
 - **NCBI CDSs with `/exception`** (about 2,900 in human) have indels between the genome sequence and the protein or transcript, and cannot be mapped accurately from the genomic model. They need to be handled through the path "protein → RefSeq transcript (NM) → `cDNA_match` → genome". This requires ingesting RefSeq RNA GBFF (with CDSs on NM) and treating these edges as lower priority in path search (phase 3).
 - **Self-validation of transcript and alignment edges** can be run if the transcript sequences (`rna.fna`) are given, but was not done this time (360,000 skipped).
 - To bring **build-time memory** to 500MB or less, SQLite sort settings and a `.fai` for the protein FASTA are needed.
+
+## 8. `/v1/meta` with many stores (2026-09-24)
+
+With 51 stores the response took 10.2 s, and the UI waits for it before the first conversion. The cost was not in the data but in asking each store for a sample of its `liftover` edges: `edge` has no index on `kind`, so a store with no alignment scanned its whole edge table (3.5 s for the Ensembl store alone). The service now reads the summary recorded at build time (`summary.edges`) and only queries stores that hold edges of that kind, which takes the response to under 10 ms with the same content (20 crossings, the same tags and species). Should other kinds need the same lookup on the fly, the fix is an index on `edge(kind)` at ingest, which costs a schema version and a rebuild.

@@ -208,6 +208,7 @@ export class StoreSet {
    * both are the same species. Not part of meta(), which the species lookup itself uses.
    */
   alignmentSpecies(store: number): { alignsFrom?: number; alignsTo?: number } {
+    if (!this.#holds(store, "liftover")) return {};
     const ends = this.stores[store]?.edgeEnds("liftover", 1)[0];
     if (!ends) return {};
     const from = this.taxonOf(ends.from);
@@ -381,7 +382,8 @@ export class StoreSet {
    * tell which species can be reached beyond identical sequences.
    */
   crossings(): Array<{ fromTaxon?: number; toTaxon?: number; fromAssembly?: string; toAssembly?: string }> {
-    this.#crossings ??= this.stores.flatMap((s) => {
+    this.#crossings ??= this.stores.flatMap((s, i) => {
+      if (!this.#holds(i, "liftover")) return [];
       const seen = new Set<string>();
       return s.edgeEnds("liftover").flatMap(({ from, to }) => {
         const c = {
@@ -397,6 +399,16 @@ export class StoreSet {
       });
     });
     return this.#crossings;
+  }
+
+  /**
+   * Whether a store holds edges of a kind, from the summary recorded at build time. Asking the store instead means a
+   * query that scans its whole edge table when the kind is absent (`edge` has no index on `kind`): on the demo set
+   * that cost ten seconds per `/v1/meta`, most of it in stores with no alignment at all.
+   */
+  #holds(store: number, kind: string): boolean {
+    const edges = (this.meta()[store]?.summary as { edges?: Record<string, number> } | undefined)?.edges;
+    return edges ? (edges[kind] ?? 0) > 0 : true;
   }
 
   /** Tags (e.g. MANE Select) and the species whose sequences carry them. */
