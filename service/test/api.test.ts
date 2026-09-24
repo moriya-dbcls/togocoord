@@ -234,6 +234,7 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.equal(index.status, 200);
     assert.match(index.type!, /text\/html/);
     assert.match(index.body, /<script type="module" src="ui\/app.js">/); // relative: works under a subdirectory
+    assert.match(index.body, /<a id="json"/); // the link to this search's /v1/convert result
     assert.match((await get("/ui/app.js")).type!, /javascript/);
     assert.match((await get("/ui/style.css")).type!, /text\/css/);
     assert.equal((await get("/ui/../src/api.ts")).status, 404);

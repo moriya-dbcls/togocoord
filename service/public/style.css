@@ -37,8 +37,10 @@ select, button {
 }
 select { border: 2px solid var(--line); background: #fff; }
 button { border: 2px solid var(--accent-dark); background: linear-gradient(180deg, var(--accent-light), var(--accent)); color: #fff; font-weight: 600; }
-button.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; background: var(--paper); color: var(--accent-dark); border-width: 1px; }
-button.small:hover { background: var(--accent-light); color: #fff; }
+button.small, a.small { padding: 4px 10px; font-size: 13px; border-radius: 8px; background: var(--paper); color: var(--accent-dark); border-width: 1px; }
+button.small:hover, a.small:hover { background: var(--accent-light); color: #fff; }
+/* The link to this search's API result, next to the Results heading. */
+a.small { border: 1px solid var(--line); font-weight: 400; text-decoration: none; vertical-align: middle; }
 .option { color: var(--muted); font-size: 14px; }
 form#query .targets {
   flex: 1 1 0; min-width: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

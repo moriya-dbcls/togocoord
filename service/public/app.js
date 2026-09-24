@@ -327,8 +327,9 @@ async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
     updateControls();
     [to, taxon, assembly, db] = [toSelect.value, taxonSelect.value, assemblySelect.value, dbSelect.value];
     const tag = maneBox.checked ? "MANE Select" : "";
-    if (push) history.pushState(null, "", `?${qs({ loc, to, db, taxon, assembly, codon, tag })}`);
-    const conv = await api(`/v1/convert?${qs({ loc, to, db, taxon, assembly, codon, tag })}`);
+    const query = qs({ loc, to, db, taxon, assembly, codon, tag });
+    if (push) history.pushState(null, "", `?${query}`);
+    const conv = await api(`/v1/convert?${query}`);
     $("#input-id").textContent = info.id;
     $("#input-kind").textContent = `${info.unit === "aa" ? "protein" : "nucleotide"}${info.kind === "order" ? " · order" : ""}`;
     // Species and assembly of the input; the name as written (hg19:chr7:...) when it was given that way.
@@ -347,6 +348,11 @@ async function run(loc, to, push = true, taxon = "", assembly = "", db = "") {
     $("#count").textContent = conv.results.length
       ? `(${conv.results.length}${conv.truncated ? ", truncated — narrow the target or the input" : ""})`
       : tag || db ? "— none matching the filters" : taxon || assembly ? "— none reachable in the selected species / assembly" : "— none reachable";
+    // The same conversion as this page shows, from the API (design §9): the link is what a script would call.
+    const json = $("#json");
+    json.href = endpoint(`/v1/convert?${query}`);
+    json.title = `GET /v1/convert?${query}`;
+    json.hidden = false;
     $("#output").hidden = false;
   } catch (err) {
     $("#input").hidden = true;
