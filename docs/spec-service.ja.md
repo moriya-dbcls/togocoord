@@ -85,6 +85,73 @@ GRCh37 → GRCh38 での実測: アライメントが覆う位置のうち 1.7% 
 
 **向き（orientation）**: ヌクレオチドの結果では、その結果の区間の鎖。タンパク質の結果（常に N 末端から C 末端へ書く）では、入力がコード配列の逆鎖に対応するときに `reverse` になる。経路の各段は出力の鎖をそのまま返すので、段ごとの向きを掛け合わせてはいけない。以前はそうしていたため、「タンパク質 → マイナス鎖のゲノム → 同じ遺伝子の別のタンパク質」が `reverse` と表示されていた（2026-09-18 修正）。
 
+### 2.3 経路がどうつながるか（実例、2026-09-25）
+
+各段は、1本の edge のブロックで区間を写す。そのため1残基はコドンの3塩基に広がり、1塩基はコドン内の位置（`640c2`）になる。角括弧の数字はその段のコスト（§3）。
+
+**最も短い形 — 同一配列、そして CDS。** `uniprot:P07203:49` からゲノムへ:
+
+```mermaid
+flowchart TB
+  A["uniprot:P07203:49"] -->|"identity [0]"| B["refseq:NP_000572.2:49"]
+  B -->|"CDS, annotation [1]"| C["refseq:NC_000003.12:complement(49358132..49358134)"]
+```
+
+identity の段は保存された edge ではない。ダイジェストが同じ配列どうしを、問い合わせ時に結ぶ（§3.1）。1残基が3塩基に広がり、向きはマイナス鎖。
+
+**アセンブリをまたぐ。** `hg19:chr7:140453136`（BRAF V600E。アセンブリ自身の配列名で書いた入力）からタンパク質へ:
+
+```mermaid
+flowchart TB
+  A["hg19:chr7:140453136"] -->|"アセンブリ名の読み替え"| B["refseq:NC_000007.13:140453136"]
+  B -->|"liftover, UCSC chain [2]"| C["refseq:NC_000007.14:140753336"]
+  C -->|"CDS, annotation, 逆向き [1]"| D["refseq:NP_001361187.1:640c2"]
+```
+
+返るのは1件ではなく44件。変換先の種類に達したあとは同一配列をたどり、同じ残基の他のデータベースのレコード（別のアイソフォーム、`ensembl:ENSP…`、`uniprot:P15056`）も集めるため。
+
+**種をまたぐ。** `refseq:NP_000572.2:49` を `taxon=10090` で:
+
+```mermaid
+flowchart TB
+  A["refseq:NP_000572.2:49（ヒト GPX1）"] -->|"CDS [1]"| B["refseq:NC_000003.12:complement(49358132..49358134)"]
+  B -->|"liftover, hg38 から mm39 [2]"| C["refseq:NC_000075.7（マウス chr9）"]
+  C -->|"CDS, 逆向き [1]"| D["refseq:NP_001316456.1:47"]
+  D -.->|"caution"| E["orthologous position in another species"]
+```
+
+**タンパク質のためだけに入れたアセンブリを経由する。** UP000077202 のエントリ `uniprot:A0A176VNS3:10` から、ゼニゴケの中心のアセンブリへ（spec-ingest §20）:
+
+```mermaid
+flowchart TB
+  A["uniprot:A0A176VNS3:10"] -->|"identity [0]"| B["insdc:OAE22043.1:10（Mp_v4 の CDS タンパク質）"]
+  B -->|"CDS, GenBank [1]"| C["insdc:LVLJ01003285.1（Mp_v4 の scaffold）"]
+  C -->|"liftover, minimap2 の PAF [2]"| D["insdc:AP031346.1:complement(22320360..22320362)（MpTak_v7.1 chr5）"]
+```
+
+**グラフの形。** 横の辺は同じものの別の呼び名・別の版、縦の辺は層の移動。
+
+```mermaid
+flowchart TB
+  subgraph 構造
+    PDB["pdb:4HHB.A"]
+  end
+  subgraph タンパク質
+    UP["uniprot:P07203"] === NP["refseq:NP_000572.2"] === ENSP["ensembl:ENSP…"]
+  end
+  subgraph 転写産物
+    NM["refseq:NM_000581.4"] === ENST["ensembl:ENST…（MANE）"]
+  end
+  subgraph ゲノム
+    H38["GRCh38 NC_000003.12"] --- H37["GRCh37 NC_000007.13"]
+    H38 --- T2T["T2T-CHM13"]
+    H38 --- MM["マウス NC_000075.7"]
+  end
+  PDB -->|"SIFTS [1]"| UP
+  NP -->|"CDS [1]"| NM
+  NM -->|"exon [1]"| H38
+```
+
 ## 3. edge のコストと優先順位
 
 完全一致する経路があれば、必ずそれを選ぶ。どのデータベースを経由するか（UniProt なら Ensembl 経由、など）を個別に決めるコードは持たず、次のコストの順序だけで決める。

@@ -85,6 +85,73 @@ The only kind of species-crossing edge today is `liftover`. When ortholog corres
 
 **Orientation**: for nucleotide results, it is the strand of the result's interval. For protein results (always written from N-terminus to C-terminus), it is `reverse` when the input corresponds to the reverse strand of the coding sequence. Each path step returns the output strand as is, so orientations must not be multiplied across steps. This used to be done, so "protein → minus-strand genome → another protein of the same gene" was shown as `reverse` (fixed 2026-09-18).
 
+### 2.3 How a path is built (worked examples, 2026-09-25)
+
+Each step maps an interval through the blocks of one edge, so a residue becomes the three bases of its codon, and a base becomes a position inside a codon (`640c2`). The numbers in brackets are the cost of the step (§3).
+
+**The shortest shape — an identical sequence, then the CDS.** `uniprot:P07203:49` to the genome:
+
+```mermaid
+flowchart TB
+  A["uniprot:P07203:49"] -->|"identity [0]"| B["refseq:NP_000572.2:49"]
+  B -->|"CDS, annotation [1]"| C["refseq:NC_000003.12:complement(49358132..49358134)"]
+```
+
+The identity step is not a stored edge: sequences with the same digest are joined when the query runs (§3.1). One residue widens into three bases, on the minus strand.
+
+**Across assemblies.** `hg19:chr7:140453136` (BRAF V600E, written with the assembly's own name) to a protein:
+
+```mermaid
+flowchart TB
+  A["hg19:chr7:140453136"] -->|"assembly name"| B["refseq:NC_000007.13:140453136"]
+  B -->|"liftover, UCSC chain [2]"| C["refseq:NC_000007.14:140753336"]
+  C -->|"CDS, annotation, inverse [1]"| D["refseq:NP_001361187.1:640c2"]
+```
+
+44 results come back, not one: once a sequence of the target kind is reached, the search follows identical sequences to collect the other databases' records of the same residue (other isoforms, `ensembl:ENSP…`, `uniprot:P15056`).
+
+**Across species.** `refseq:NP_000572.2:49` with `taxon=10090`:
+
+```mermaid
+flowchart TB
+  A["refseq:NP_000572.2:49 (human GPX1)"] -->|"CDS [1]"| B["refseq:NC_000003.12:complement(49358132..49358134)"]
+  B -->|"liftover, hg38 to mm39 [2]"| C["refseq:NC_000075.7 (mouse chr9)"]
+  C -->|"CDS, inverse [1]"| D["refseq:NP_001316456.1:47"]
+  D -.->|"caution"| E["orthologous position in another species"]
+```
+
+**Through an assembly that only the proteins needed.** `uniprot:A0A176VNS3:10`, an entry of UP000077202, to the Marchantia hub (§spec-ingest 20):
+
+```mermaid
+flowchart TB
+  A["uniprot:A0A176VNS3:10"] -->|"identity [0]"| B["insdc:OAE22043.1:10 (Mp_v4 CDS protein)"]
+  B -->|"CDS, GenBank [1]"| C["insdc:LVLJ01003285.1 (Mp_v4 scaffold)"]
+  C -->|"liftover, minimap2 PAF [2]"| D["insdc:AP031346.1:complement(22320360..22320362) (MpTak_v7.1 chr5)"]
+```
+
+**The shape of the graph.** Horizontal edges are other names or other versions of the same thing; vertical edges move between layers.
+
+```mermaid
+flowchart TB
+  subgraph structure
+    PDB["pdb:4HHB.A"]
+  end
+  subgraph protein
+    UP["uniprot:P07203"] === NP["refseq:NP_000572.2"] === ENSP["ensembl:ENSP…"]
+  end
+  subgraph transcript
+    NM["refseq:NM_000581.4"] === ENST["ensembl:ENST… (MANE)"]
+  end
+  subgraph genome
+    H38["GRCh38 NC_000003.12"] --- H37["GRCh37 NC_000007.13"]
+    H38 --- T2T["T2T-CHM13"]
+    H38 --- MM["mouse NC_000075.7"]
+  end
+  PDB -->|"SIFTS [1]"| UP
+  NP -->|"CDS [1]"| NM
+  NM -->|"exon [1]"| H38
+```
+
 ## 3. Edge costs and priority
 
 If an exact path exists, it is always chosen. There is no code that decides which database to go through case by case (such as via Ensembl for UniProt); it is decided only by the following cost order.
