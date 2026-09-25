@@ -187,6 +187,7 @@ CDS の検証では、次の特殊ケースを考慮する（Ensembl GRCh38 rele
 
 - 入力: UCSC の chain 形式（`*.over.chain(.gz)`）。ファイル名が `.chain` または `.chain.gz` で終わるものを、このアダプタで取り込む。chain の配列名（`chr1` など）は UCSC の名前なので、CLI では `--from-report`（変換元のアセンブリ）と `--to-report`（変換先）に NCBI の assembly report を指定して、RefSeq の accession に読み替える（`UCSC-style-name` の列を使う）。対応のない配列（alt、未配置の scaffold など）の chain は、警告を出して飛ばす。
 - 1本の chain を、`kind: "liftover"`、`directional: true` の edge 1本にする。属性は chain の id、スコア、変換先の向き（`qStrand`）。変換先が `-` の chain は、座標を順方向に直し（`qSize - q - size`）、ブロックを `rev` にする。
+- **チェーンはそのまま残す**: PAF の取り込み（§16）と違い、source 側を一対一に絞らない。UCSC のファイルは net 済みのため。重複領域などで1つの元位置が複数のチェーンに覆われる場合（GRCh37 → GRCh38 で、覆われた位置の 1.7%）も、すべて別々の edge として残る。そこから service が何を返すかは spec-service §2。
 - **自己検証**: `--fasta` で両方のゲノム配列を与えると、chain ごとに等間隔に最大20ブロック（各200塩基まで）を取り出して比べる。一致率が0.5以上なら ok（`basis: "partial"`）。整列した相同配列では0.6〜0.9、位置がずれていれば0.25前後になる。hg38 ↔ mm39 では全体で約70%だった。
 - **保存（スキーマ5）**: 向きを持つ edge のブロックは、`block` 表ではなく、256ブロックごとの `chunk` 表に入れる。chunk には、両方の配列、元の側の範囲（`lo`、`hi`）、最初のブロックの位置、ブロックの数と、各ブロックを「前のブロックからの差分（元の側、先の側）と長さ」の zigzag LEB128 で並べたバイト列を持つ。元の側の範囲を R*Tree（`chunk_src`）で引き、該当する chunk だけを展開する。ブロック1個あたり約5バイトで、hg38 → mm39 の3,177万ブロックは158MB になる（`block` 表では約7GB を見込んでいた）。読み手はスキーマ4と5を受け付ける。
 - 集計（§12）の例には、chain の範囲から30塩基を選ぶ。

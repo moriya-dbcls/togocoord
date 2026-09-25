@@ -36,6 +36,16 @@ Input: a Location, `to` (the target), and `maxHops`.
 - The default `maxHops` is 4 when a target is given and 1 when not.
 - There is no early cutoff (the search continues until the neighborhood up to the maximum number of hops is fully explored). Therefore, the search scope is narrowed by the layer rules in §2.1.
 
+**One position mapping to several places (2026-09-25)**: a genome alignment can cover one source position with more than one chain — duplications, repeats and paralogous regions. The chain adapter keeps every chain as its own edge (§spec-ingest 14; only the PAF adapter reduces to one-to-one on the source side), so the store holds all of them, but "each sequence is reached only once" then decides what comes out:
+
+- Mappings to **different sequences** (another chromosome, an alt scaffold) are returned as separate results.
+- Mappings to the **same sequence** at different positions collapse into one, and the response says nothing about the others.
+- All `liftover` edges cost the same, so paths through two chains tie on (cost, detours, path length). The winner is the one whose state was queued first, which follows the order of the edges in the store, which follows the order in the chain file. UCSC sorts chains by score, so the best-scoring chain usually wins — but by accident: the `score` attribute recorded on the edge is not used in the cost.
+
+Measured on GRCh37 → GRCh38: 1.7% of the positions the alignment covers lie under more than one chain (chunk bounding boxes, so an upper bound), and 15 of those 19 sampled cases map to a single target sequence — the case that collapses. In 1,500 random position conversions, exactly one result came back every time.
+
+**Decided (2026-09-25): the several mappings of one position are not returned.** One best mapping per target sequence is the answer; there is no equivalent of UCSC liftOver's `-multiple` (liftOver's own default is the same single answer; Ensembl's assembly converter differs, returning every segment). A position in a duplicated region therefore converts to one place, and the reader is not asked to choose.
+
 ### 2.1 Layer rules (limiting the search scope)
 
 Sequence types have a loose hierarchy: **genome(0) − gene region(1) − transcript(2) − protein(3) − structure(4)**. A conversion between conceptually distant layers only needs one U-turn at some layer, so paths that go deep up and down are not searched. The rules are set, arbitrarily, as follows.
