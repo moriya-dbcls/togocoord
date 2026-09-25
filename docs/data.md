@@ -40,21 +40,21 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 | grch37 | `grch37` | GRCh37.p13 (GCF_000001405.25) assembly report and genome sequence | 0.3MB |
 | | `chain_hg19ToHg38`, `chain_hg38ToHg19` | UCSC liftOver chain | 1MB, 10MB |
 | chm13 | `chm13`, `chain_hs1ToHg38`, `chain_hg38ToHs1` | The RefSeq annotation of T2T-CHM13v2.0 (GCF_009914755.1) and the UCSC chains both ways | 1.6GB, 119MB, 128MB |
-| mouse | `mouse`, `mouse_rna`, `mouse_uniprot`, `grcm39_names`, `mouse_uniprot_alignments` | RefSeq GRCm39 (GCF_000001635.27), UniProt UP000000589 | 930MB, 390MB, 21MB, 0.1MB |
-| grcm38 | `grcm38`, `chain_mm10ToMm39`, `chain_mm39ToMm10` | GRCm38.p6 (GCF_000001635.26), UCSC liftOver chain | 0.2MB, 0.3MB, 0.5MB |
-| human_mouse | `chain_hg38ToMm39`, `chain_mm39ToHg38` | UCSC liftOver chain | 158MB, 156MB |
-| arabidopsis | `arabidopsis`, `arabidopsis_rna`, `arabidopsis_uniprot`, `arabidopsis_uniprot_alignments` | RefSeq TAIR10.1 (GCF_000001735.4), UniProt UP000006548 | 300MB, 174MB, 14MB |
+| mouse | `mouse`, `mouse_rna`, `mouse_uniprot`, `grcm39_names`, `mouse_uniprot_alignments` | RefSeq GRCm39 (GCF_000001635.27), UniProt UP000000589 | 955MB, 408MB, 22MB, 0.1MB, 24MB |
+| grcm38 | `grcm38`, `chain_mm10ToMm39`, `chain_mm39ToMm10` | GRCm38.p6 (GCF_000001635.26), UCSC liftOver chain | 0.2MB, 1.1MB, 1.9MB |
+| human_mouse | `chain_hg38ToMm39`, `chain_mm39ToHg38` | UCSC liftOver chain | 159MB, 157MB |
+| arabidopsis | `arabidopsis`, `arabidopsis_rna`, `arabidopsis_uniprot`, `arabidopsis_uniprot_alignments` | RefSeq TAIR10.1 (GCF_000001735.4), UniProt UP000006548 | 311MB, 180MB, 14MB, 0.9MB |
 | tair10 | `tair10`, `chain_tair10.1ToTair10`, `tair10_to_tair10.1` | Assembly report and genome sequence of the previous RefSeq version TAIR10 (GCF_000001735.3), UCSC GenArk chain (TAIR10.1 → TAIR10 only), minimap2 alignment for the reverse direction | 0.1MB, 0.1MB, 0.1MB |
-| marchantia | `marchantia_v71` | INSDC MpTak_v7.1 (GCA_039105155.1) GenBank | 72MB |
-| | `marchantia` | INSDC MpTak v3.1 (GCA_003032435.1) GenBank | 80MB |
+| marchantia | `marchantia_v71` | INSDC MpTak_v7.1 (GCA_039105155.1) GenBank | 75MB |
+| | `marchantia` | INSDC MpTak v3.1 (GCA_003032435.1) GenBank | 85MB |
 | | `marchantia_uniprot` | UniProt UP000244005 | 7MB |
-| | `mp_v31_to_v71`, `mp_v71_to_v31` | PAF from a minimap2 alignment of the two genome sequences (created in `work/`) | 3MB, 3MB |
-| | `marchantia_tak2`, `marchantia_v51` | GenBank of INSDC MpTak2_v7.1 (GCA_037833965.1, Tak-2) and ASM993635v2 (GCA_009936355.2, v5.1) | |
-| | `marchantia_cmv12` | Assembly report and genome of cmMarPoly1.2 (GCA_965642975.2; no annotation) | |
+| | `mp_v31_to_v71`, `mp_v71_to_v31` | PAF from a minimap2 alignment of the two genome sequences (created in `work/`) | 4.2MB, 15MB |
+| | `marchantia_tak2`, `marchantia_v51` | GenBank of INSDC MpTak2_v7.1 (GCA_037833965.1, Tak-2) and ASM993635v2 (GCA_009936355.2, v5.1) | 75MB, 85MB |
+| | `marchantia_cmv12` | Assembly report and genome of cmMarPoly1.2 (GCA_965642975.2; no annotation) | 0.6MB |
 | | `marchantia_mpv4` | GenBank of INSDC Mp_v4 (GCA_001641455.1), the assembly UniProt's UP000077202 is built on | 66MB |
 | | `marchantia_uniprot_v4` | UniProt UP000077202 (the Mp_v4 proteome) | 7MB |
-| | `mp_tak2_to_hub`, `mp_hub_to_tak2`, `mp_v51_to_hub`, `mp_hub_to_v51`, `mp_cmv12_to_hub`, `mp_hub_to_cmv12`, `mp_v4_to_hub`, `mp_hub_to_v4` | minimap2 alignments with the hub MpTak_v7.1 (spec-ingest §20); `asm20` for cmMarPoly1.2 only | |
-| sifts | `sifts` | SIFTS `uniprot_segments_observed.tsv.gz` (PDBe), `pdb_seqres.txt.gz` (wwPDB), all of the UniProt data above | 180MB |
+| | `mp_tak2_to_hub`, `mp_hub_to_tak2`, `mp_v51_to_hub`, `mp_hub_to_v51`, `mp_cmv12_to_hub`, `mp_hub_to_cmv12`, `mp_v4_to_hub`, `mp_hub_to_v4` | minimap2 alignments with the hub MpTak_v7.1 (spec-ingest §20); `asm20` for cmMarPoly1.2 only | 17MB, 17MB, 1.6MB, 2.4MB, 12MB, 10MB, 10MB, 12MB |
+| sifts | `sifts` | SIFTS `uniprot_segments_observed.tsv.gz` (PDBe), `pdb_seqres.txt.gz` (wwPDB), all of the UniProt data above | 186MB |
 | fanta | `fanta_human_hg38`, `fanta_mouse_mm10` | fanta.bio CRE v1.2.1 BED | 197MB, 116MB |
 
 The results for each group (counts, self-validation, conversion checks) are in spec-ingest and spec-service.
@@ -63,7 +63,7 @@ The results for each group (counts, self-validation, conversion checks) are in s
 
 **TAIR10 and TAIR10.1**: The nuclear chromosomes and the chloroplast have the same accessions and the same sequences; only the mitochondrial genome differs (TAIR10 `NC_001284.2`, TAIR10.1 `NC_037304.1`). A nuclear position is a valid answer as is in either assembly (spec-service §2.2).
 
-**Not included**: Col-CEN v1.2 (a Col-0 assembly contiguous through the centromeres; UCSC GenArk has a chain with TAIR10.1) has no INSDC accession and is distributed only on GitHub (schatzlab/Col-CEN), so its sequence keys cannot be determined, and it is not included.
+**Not included**: Col-CEN v1.2 (a Col-0 assembly contiguous through the centromeres; UCSC GenArk has a chain with TAIR10.1) has no INSDC accession and is distributed only on GitHub (schatzlab/Col-CEN), so its sequence keys cannot be determined, and it is not included. MpTak1_v7.1 (GCA_037833805.1) carries the same accessions as the hub MpTak_v7.1, for its sequences and for its CDS proteins alike, so loading it would add nothing (spec-ingest §20).
 
 **On versions**: NCBI assemblies, Ensembl (release-116), MANE (release_1.5) and fanta.bio (v1.2.1) are downloaded from version-pinned URLs. UniProt (current_release), SIFTS and PDB sequences are updated by their sources at the same URL, so their content depends on when they were downloaded.
 
