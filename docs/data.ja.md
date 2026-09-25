@@ -6,7 +6,7 @@
 
 ## 必要なもの
 
-- Node.js 23.6 以上（リポジトリの `npm install` 済み）
+- Node.js 24 以上（リポジトリの `npm install` 済み）
 - 自前のアライメント11本（ゼニゴケの v3.1 ↔ v7.1 と spoke 4つの両方向、TAIR10 への逆向き）に [minimap2](https://github.com/lh3/minimap2)（2.31 で作成。`brew install minimap2`）
 - ディスク約 36GB（取得したファイル 7.6GB、取り込みで展開したゲノムと `.fai` が 18GB、保存先で 10GB）。メモリ 8GB 程度（取り込みの最大は約 2.5GB。minimap2 が別に最大約 3.9GB — ゼニゴケの 250Mb 同士、8スレッドで実測）
 

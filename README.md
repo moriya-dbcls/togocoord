@@ -23,7 +23,7 @@ TogoCoord converts sequence coordinates between the layers of life-science data:
 
 ## Usage
 
-Node.js 23.6 or later (TypeScript runs directly through type stripping).
+Node.js 24 or later (TypeScript runs directly through type stripping).
 
 ```sh
 npm install

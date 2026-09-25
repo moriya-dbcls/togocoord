@@ -43,7 +43,7 @@ mapLocation(parseLocationId("refseq:NC_045512.2:13468", ctx), toGenome.inverse()
 
 ## 開発
 
-Node.js 23.6 以上（TypeScript を型の除去だけで直接実行する）。
+Node.js 24 以上（TypeScript を型の除去だけで直接実行する）。
 
 ```sh
 npm install

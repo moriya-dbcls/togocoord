@@ -6,7 +6,7 @@ How to rebuild the demo stores (SQLite) from the primary data. The definitions a
 
 ## Requirements
 
-- Node.js 23.6 or later (with `npm install` run in the repository)
+- Node.js 24 or later (with `npm install` run in the repository)
 - For the Marchantia v3.1 ↔ v7.1 alignment only: [minimap2](https://github.com/lh3/minimap2) (built with 2.31; `brew install minimap2`)
 - About 30GB of disk (about 18GB for downloaded files and uncompressed genomes, about 9GB for the stores). About 8GB of memory (up to about 6GB for the human build)
 

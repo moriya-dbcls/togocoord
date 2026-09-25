@@ -23,7 +23,7 @@ TogoCoord は、ゲノム・転写産物・タンパク質・立体構造など�
 
 ## 使い方
 
-Node.js 23.6 以上（TypeScript を型の除去だけで直接実行します）。
+Node.js 24 以上（TypeScript を型の除去だけで直接実行します）。
 
 ```sh
 npm install

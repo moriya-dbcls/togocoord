@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "bin": { "togocoord-ingest": "./src/cli.ts" },
-  "engines": { "node": ">=23.6" },
+  "engines": { "node": ">=24" },
   "scripts": {
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"

@@ -43,7 +43,7 @@ mapLocation(parseLocationId("refseq:NC_045512.2:13468", ctx), toGenome.inverse()
 
 ## Development
 
-Node.js 23.6 or later (TypeScript is run directly with type stripping only).
+Node.js 24 or later (TypeScript is run directly with type stripping only).
 
 ```sh
 npm install
