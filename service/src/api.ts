@@ -193,7 +193,22 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     assembly?: string;
     /** Namespaces the results must be in (e.g. uniprot): a filter on the results, not a separate target. */
     db?: string[];
+    /** Least share of the input a result must carry (0-1), as UCSC liftOver's `-minMatch`. */
+    minMatch?: number;
   }
+
+  /**
+   * `minMatch`: drop results that carry less than this share of the input (0-1), as UCSC liftOver's `-minMatch` does.
+   * Unlike liftOver we have no default: partial results are normal here (a genomic interval converted to a transcript
+   * keeps only its exonic part), so filtering is the caller's choice. For lifting an interval between assemblies or
+   * species, liftOver's own 0.95 is the sensible value.
+   */
+  const minMatchParam = (v: unknown): number | undefined => {
+    if (v === undefined || v === null || v === "") return undefined;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 1) throw new HttpError(400, `minMatch must be a number between 0 and 1 (got '${String(v)}')`);
+    return n;
+  };
 
   const dbParam = (values: unknown[]): string[] | undefined => {
     const list = values.flat().filter((v) => v !== undefined && v !== null && v !== "").map((v) => String(v).toLowerCase());
@@ -201,7 +216,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     return list.length ? list : undefined;
   };
 
-  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode, tags: string[] = [], { db, ...scope }: Scope = {}) => {
+  const convertOne = (text: string, to: string[], maxHops: number | undefined, codon: CodonMode, tags: string[] = [], { db, minMatch, ...scope }: Scope = {}) => {
     const loc = parse(text);
     const length = loc.segments.reduce((n, s) => n + (s.end - s.start) / (ctx.unitOf(s.ref) === "aa" ? 3 : 1), 0);
     if (length > maxInputLength) {
@@ -211,13 +226,17 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     const found = convert(
       stores,
       loc,
-      { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && !db && { maxResults: maxResults + 1 }), ...scope },
+      { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && !db && minMatch === undefined && { maxResults: maxResults + 1 }), ...scope },
       ctx,
     );
     // `tag` keeps only targets carrying one of the tags (e.g. tag=MANE Select).
     // `db` keeps only targets in those namespaces (e.g. db=uniprot).
+    // `minMatch` keeps only results that carry enough of the input (§4).
     const results = found.filter(
-      (r) => (!tags.length || r.tags.some((x) => tags.includes(x))) && (!db || db.includes(splitRef(r.location.outer).namespace)),
+      (r) =>
+        (!tags.length || r.tags.some((x) => tags.includes(x))) &&
+        (!db || db.includes(splitRef(r.location.outer).namespace)) &&
+        (minMatch === undefined || r.coverage >= minMatch),
     );
     return {
       input: formatLocationId(loc, ctx, codon),
@@ -250,13 +269,14 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
           taxon: taxonParam(q.get("taxon")),
           assembly: assemblyParam(q.get("assembly")),
           db: dbParam(q.getAll("db")),
+          minMatch: minMatchParam(q.get("minMatch")),
         }),
     ],
     [
       "POST",
       /^\/v1\/convert$/,
       (_m, q, body) => {
-        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown; tag?: unknown; taxon?: unknown; assembly?: unknown; db?: unknown };
+        const b = (body ?? {}) as { locations?: unknown; to?: unknown; maxHops?: unknown; codon?: unknown; tag?: unknown; taxon?: unknown; assembly?: unknown; db?: unknown; minMatch?: unknown };
         if (!Array.isArray(b.locations) || !b.locations.every((x) => typeof x === "string")) {
           throw new HttpError(400, "body must be {\"locations\": [\"<Location ID>\", ...], \"to\"?: string | string[]}");
         }
@@ -268,6 +288,7 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
           taxon: taxonParam(b.taxon ?? q.get("taxon")),
           assembly: assemblyParam(b.assembly ?? q.get("assembly")),
           db: dbParam(b.db !== undefined ? [b.db] : q.getAll("db")),
+          minMatch: minMatchParam(b.minMatch ?? q.get("minMatch")),
         };
         return {
           results: (b.locations as string[]).map((text) => {
@@ -486,6 +507,7 @@ function conversionJson(r: Conversion, ctx: CoordContext, base: string, codon: C
     ...(organism && { organism }),
     ...(r.assembly && { assembly: r.assembly }),
     cost: r.cost,
+    coverage: r.coverage,
     approximate: r.approximate,
     ...(r.differences && { differences: r.differences }),
     ...(r.cautions && { cautions: r.cautions }),

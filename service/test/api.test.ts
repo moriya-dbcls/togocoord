@@ -217,6 +217,21 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("hg38:chrM:8527")}&to=genome&assembly=hg19`)).status, 400);
   });
 
+  it("reports how much of the input a result carries, and minMatch drops the partial ones", async () => {
+    // The CDS of ND3 starts at 10059; bases before it have nowhere to go on the protein.
+    const partial = await get(`/v1/convert?loc=${encodeURIComponent("refseq:NC_012920.1:10050..10070")}&to=protein`);
+    const nd3 = partial.body.results.find((r: { sequence: string }) => r.sequence === "refseq:YP_003024033.1");
+    assert.ok(nd3, "expected the ND3 protein among the results");
+    assert.ok(nd3.coverage > 0 && nd3.coverage < 1, `expected a partial result, got ${nd3.coverage}`);
+    // A residue and its codon are the same span, whichever way it is converted.
+    const whole = await get(`/v1/convert?loc=${encodeURIComponent("uniprot:P07203:49")}&to=transcript`);
+    assert.equal(whole.body.results[0].coverage, 1);
+    const strict = await get(`/v1/convert?loc=${encodeURIComponent("refseq:NC_012920.1:10050..10070")}&to=protein&minMatch=0.95`);
+    assert.ok(!strict.body.results.some((r: { sequence: string }) => r.sequence === "refseq:YP_003024033.1"));
+    assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("uniprot:P07203:49")}&to=transcript&minMatch=1`)).body.results.length, 1);
+    assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("uniprot:P07203:49")}&to=transcript&minMatch=2`)).status, 400);
+  });
+
   it("takes an ID without its database (NM_000581.4:1, P07203:49) and reports how it was read", async () => {
     const { body } = await get(`/v1/location?loc=${encodeURIComponent("NM_000581.4:1..3")}`);
     assert.deepEqual([body.id, body.written], ["refseq:NM_000581.4:1..3", { namespace: "refseq" }]);

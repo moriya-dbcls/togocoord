@@ -77,6 +77,11 @@ export interface Conversion {
    * when the input corresponds to the antisense strand of the coding sequence.
    */
   orientation: "forward" | "reverse" | "mixed";
+  /**
+   * Share of the input that reached this target (1 = all of it). A step maps only the positions its blocks cover, so
+   * an interval crossing an intron, or a region with a patchy genome alignment, arrives partially (spec-service §4).
+   */
+  coverage: number;
   path: Step[];
   /**
    * What differs between the input and the target along the path: residues of protein alignments (`168 L>M`) and bases
@@ -206,6 +211,9 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     `${s.location.outer}|${s.trend}|${s.turns}|${s.crossedSpecies}|${s.crossedAssembly}`;
   const prefer = new Set(options.prefer ?? []);
   const preferred = (ref: string) => prefer.size > 0 && stores.tags(ref).some((t) => prefer.has(t));
+  // How much of the input a result carries. Units are comparable across layers (a residue is 3, like its codon).
+  const inputUnits = unitLength(input);
+  const coverageOf = (loc: Location) => (inputUnits > 0 ? Math.min(1, Math.round((unitLength(loc) / inputUnits) * 1000) / 1000) : 1);
   const start: State = {
     location: input,
     cost: 0,
@@ -247,6 +255,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
       ...(inputTaxon !== undefined && { taxon: inputTaxon }),
       assembly: targetAssembly,
       cost: 0,
+      coverage: 1,
       approximate: false,
       orientation: start.orientation,
       path: [],
@@ -273,6 +282,7 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
           assembly: targetAssembly !== undefined && stores.inAssembly(ref, targetAssembly) ? targetAssembly : stores.assemblyOf(ref),
         }),
         cost: state.cost,
+        coverage: coverageOf(state.location),
         approximate: state.path.some(isApproximate),
         ...(state.path.some((s) => s.differences) && { differences: state.path.flatMap((s) => s.differences ?? []) }),
         ...((c) => (c.length ? { cautions: c } : {}))(cautionsOf(state, input, ctx, stores)),
@@ -346,9 +356,16 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     return { taxon: state.taxon ?? taxon, assembly: assembly ?? state.assembly, ...same };
   }
 
-  // Equal-cost results: preferred targets first (stable otherwise).
-  if (prefer.size > 0) results.sort((a, b) => a.cost - b.cost || Number(preferred(b.location.outer)) - Number(preferred(a.location.outer)));
+  // Equal-cost results: preferred targets first, then whichever carries more of the input (stable otherwise). Costs
+  // do not separate two chains of one alignment, so without this the order would be the order the store enumerates
+  // them: a paralogous region could come before the syntenic one (spec-service §4).
+  results.sort((a, b) => a.cost - b.cost || Number(preferred(b.location.outer)) - Number(preferred(a.location.outer)) || b.coverage - a.coverage);
   return results;
+}
+
+/** Length of a location in internal units (core §4.1: a protein residue is 3 units, like its codon). */
+function unitLength(loc: Location): number {
+  return loc.segments.reduce((n, seg) => n + (seg.end - seg.start), 0);
 }
 
 /** At most one U-turn through the layers (up towards the genome and back down, or the reverse). */

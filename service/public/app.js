@@ -186,6 +186,10 @@ function renderResult(r) {
         : null,
       r.assembly && multiAssembly.has(r.taxon) ? el("span", { class: "badge species", title: "genome assembly" }, r.assembly) : null,
       el("span", { class: "badge", title: "path cost" }, `cost ${r.cost}`),
+      // A result can carry only part of the input (an interval across an intron, a patchy genome alignment).
+      r.coverage !== undefined && r.coverage < 1
+        ? el("span", { class: "badge warn", title: "share of the input that reached this target; the rest had nowhere to go" }, `${Math.round(r.coverage * 100)}% of input`)
+        : null,
       r.approximate ? el("span", { class: "badge warn", title: "the path uses an edge not verified against the sequences; positions may be shifted" }, "approximate") : null,
       // Residues (protein alignments) or bases (genome alignments between assemblies) that differ along the path.
       r.differences?.length

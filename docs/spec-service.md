@@ -44,7 +44,7 @@ Input: a Location, `to` (the target), and `maxHops`.
 
 Measured on GRCh37 → GRCh38: 1.7% of the positions the alignment covers lie under more than one chain (chunk bounding boxes, so an upper bound), and 15 of those 19 sampled cases map to a single target sequence — the case that collapses. In 1,500 random position conversions, exactly one result came back every time.
 
-**Decided (2026-09-25): the several mappings of one position are not returned.** One best mapping per target sequence is the answer; there is no equivalent of UCSC liftOver's `-multiple` (liftOver's own default is the same single answer; Ensembl's assembly converter differs, returning every segment). A position in a duplicated region therefore converts to one place, and the reader is not asked to choose.
+**Decided (2026-09-25): the several mappings of one position are not returned.** One best mapping per target sequence is the answer; there is no equivalent of UCSC liftOver's `-multiple` (liftOver's own default is the same single answer; Ensembl's assembly converter differs, returning every segment). A position in a duplicated region therefore converts to one place, and the reader is not asked to choose. Mappings to *different* sequences do come back as separate results, and among them `results[0]` is not guaranteed to be the syntenic one (§4).
 
 ### 2.1 Layer rules (limiting the search scope)
 
@@ -183,9 +183,16 @@ Each result has the following.
 - The target Location and its ID
 - The target type (category)
 - The cost
+- `coverage`: the share of the input this result carries, 0 to 1 (see below)
 - `approximate`
 - The orientation
 - The path (`path`)
+
+**Results can be partial (2026-09-25).** A step maps only the positions its blocks cover, so a result may carry a fraction of the input: a genomic interval converted to a transcript keeps its exonic part, and an interval lifted to another species keeps whatever the alignment covers. `coverage` reports that share (a residue counts as its three bases, so a residue and its codon are 1). `minMatch` on `/v1/convert` drops results below a share, as UCSC liftOver's `-minMatch` does; unlike liftOver there is no default, because here partial results are ordinary rather than a failure.
+
+Equal-cost results are ordered by preferred tags first, then by `coverage`. **`results[0]` is the cheapest, not necessarily the right one**: costs do not separate two chains of one alignment, and neither the chain score nor the coverage says which locus is syntenic.
+
+The case that prompted this: `fanta:FCHS_174178`, a 621 bp CRE 45 kb from BRCA1, converted to mouse returns two results — mouse chr8 at 20.8% of the input (chain score 21,959) and mouse chr11, the syntenic Brca1 locus, at 17.9% (chain score 3,323). A caller taking the first result attached the CRE to a paralogous region. Neither ordering by chain score nor by coverage would have chosen chr11; what does hold is that both are fragments of a 621 bp element, and `minMatch=0.95` returns neither, which is also what liftOver does by default. Of the 76 CREs around BRCA1, 64 map to mouse chr11 as expected, 66 convert at all, and 24 survive `minMatch=0.95`.
 
 Each path step has the following.
 
@@ -250,8 +257,8 @@ Each path step has the following.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&maxHops=&codon=never&tag=` | Conversion. `db` (namespace, for example `uniprot`; multiple allowed) filters results to that database (unknown namespace is 400). `taxon` (NCBI taxon number, `taxon:10090`, or the scientific or common name of a loaded species, for example `Mus musculus`, `mouse`) and `assembly` (assembly for genome results, for example `GRCh37`, `hg19`) specify the target scope (§2.2). `loc` can also be written with an assembly sequence name (`hg19:chr7:140453136`), or without a database when the accession says which one it is (`NP_000572.2:49`; ambiguous ones are 400 with `candidates`). It can also be the ID of an annotation that can be looked up by ID (`fanta:FCHS_301358` is the region of that CRE, `refseq:NC_000003.12:181712289..181712497`; `/v1/location` returns the ID, type, name and link in `written.annotation`). Unknown species or assemblies are 400. `to` is a type (such as `genome`), a namespace (such as `uniprot`) or a sequence (`refseq:NC_000001.11`), and can be given multiple times. If omitted, all directly connected sequences are returned. With `tag` (for example `MANE Select`), only targets with that tag are returned. Results carry the target's tags (`tags`), species (`taxon`, `organism`) and, for genomes, the assembly (`assembly`); the response carries the input's species and assembly (`inputTaxon`, `inputAssembly`). The UI shows the species name on results whose species differs from the input |
-| POST | `/v1/convert` | Batch conversion. `{"locations": [...], "to": ..., "db": ..., "taxon": ..., "assembly": ..., "maxHops": ..., "codon": ...}`. Up to 1000 items. Errors in individual inputs are returned as `error` on that element |
+| GET | `/v1/convert?loc=&to=&db=&taxon=&assembly=&minMatch=&maxHops=&codon=never&tag=` | Conversion. `minMatch` (0-1) drops results that carry less than that share of the input (§4; no default). `db` (namespace, for example `uniprot`; multiple allowed) filters results to that database (unknown namespace is 400). `taxon` (NCBI taxon number, `taxon:10090`, or the scientific or common name of a loaded species, for example `Mus musculus`, `mouse`) and `assembly` (assembly for genome results, for example `GRCh37`, `hg19`) specify the target scope (§2.2). `loc` can also be written with an assembly sequence name (`hg19:chr7:140453136`), or without a database when the accession says which one it is (`NP_000572.2:49`; ambiguous ones are 400 with `candidates`). It can also be the ID of an annotation that can be looked up by ID (`fanta:FCHS_301358` is the region of that CRE, `refseq:NC_000003.12:181712289..181712497`; `/v1/location` returns the ID, type, name and link in `written.annotation`). Unknown species or assemblies are 400. `to` is a type (such as `genome`), a namespace (such as `uniprot`) or a sequence (`refseq:NC_000001.11`), and can be given multiple times. If omitted, all directly connected sequences are returned. With `tag` (for example `MANE Select`), only targets with that tag are returned. Results carry the target's tags (`tags`), species (`taxon`, `organism`) and, for genomes, the assembly (`assembly`); the response carries the input's species and assembly (`inputTaxon`, `inputAssembly`). The UI shows the species name on results whose species differs from the input |
+| POST | `/v1/convert` | Batch conversion. `{"locations": [...], "to": ..., "db": ..., "taxon": ..., "assembly": ..., "minMatch": ..., "maxHops": ..., "codon": ...}`. Up to 1000 items. Errors in individual inputs are returned as `error` on that element |
 | GET | `/v1/location?loc=` | Canonical ID, IRI, segments (1-based; for proteins, the residue number and the position within the codon), species and assembly, and, if written with an assembly sequence name or without a database, what was read (`written`) |
 | GET | `/v1/location/faldo?loc=` | FALDO JSON-LD (`application/ld+json`) |
 | GET | `/v1/sequences/{ref}` | Sequence information (merged from all stores) and the list of identical sequences |
