@@ -41,6 +41,7 @@ const UI_FILES: Record<string, { type: string; path: URL }> = {
   "index.html": { type: "text/html; charset=utf-8", path: new URL("../public/index.html", import.meta.url) },
   "app.js": { type: "text/javascript; charset=utf-8", path: new URL("../public/app.js", import.meta.url) },
   "style.css": { type: "text/css; charset=utf-8", path: new URL("../public/style.css", import.meta.url) },
+  "favicon.ico": { type: "image/x-icon", path: new URL("../public/favicon.ico", import.meta.url) },
 };
 
 class HttpError extends Error {
@@ -362,8 +363,9 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     try {
       if (req.method === "OPTIONS") return send(res, 204, undefined);
-      if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/ui/"))) {
-        const file = UI_FILES[url.pathname === "/" ? "index.html" : url.pathname.slice(4)];
+      // `/favicon.ico` is asked for by the browser itself, at the root of wherever the service is mounted.
+      if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/favicon.ico" || url.pathname.startsWith("/ui/"))) {
+        const file = UI_FILES[url.pathname === "/" ? "index.html" : url.pathname.replace(/^\/(ui\/)?/, "")];
         if (!file) throw new HttpError(404, `no such UI file ${url.pathname}`);
         res.writeHead(200, { "Content-Type": file.type, "Cache-Control": "no-cache" });
         return void res.end(readFileSync(file.path));

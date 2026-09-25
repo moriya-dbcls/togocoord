@@ -237,6 +237,7 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.match(index.body, /<a id="json"/); // the link to this search's /v1/convert result
     assert.match((await get("/ui/app.js")).type!, /javascript/);
     assert.match((await get("/ui/style.css")).type!, /text\/css/);
+    assert.equal((await get("/favicon.ico", "image/x-icon")).status, 200); // the browser asks for it at the root too
     assert.equal((await get("/ui/../src/api.ts")).status, 404);
   });
 
