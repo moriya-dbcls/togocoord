@@ -37,7 +37,8 @@ for (let i = 0; i < args.length; i++) {
   else if (a === "--skip-missing") skipMissing = true;
   // SQLite reads are synchronous, so one process answers one request at a time: a slow conversion delays every other
   // request behind it (spec-service §15). Workers are separate processes sharing the (read-only) stores.
-  else if (a === "--workers") workers = args[++i] === "auto" ? Math.max(1, Math.min(8, availableParallelism())) : Number(args[i]);
+  // `auto` takes half the cores (8 workers on 8 cores measured slower than 4, and the host is usually shared).
+  else if (a === "--workers") workers = args[++i] === "auto" ? Math.max(1, Math.min(8, availableParallelism() >> 1)) : Number(args[i]);
   else if (a === "--log") log = true;
   else if (a === "--budget") limits.searchBudgetMs = Number(args[++i]);
   else if (a === "--max-input-length") limits.maxInputLength = Number(args[++i]);

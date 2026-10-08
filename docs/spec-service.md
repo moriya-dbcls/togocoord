@@ -478,6 +478,17 @@ What the service now does about it:
 - **Warm-up before listening**: the species, assembly and crossing caches are built at startup (about 8 s on the demo set), so they are not paid by the first request each worker answers — which, after a restart, is when several arrive at once.
 - **`--log`** writes one line per request with its duration, which is how a blocking request is identified. The listener is prepended, otherwise it would run after the synchronous handler and report 0 ms.
 
+**How many workers.** Measured on an 8-core machine, 8 concurrent clients, a mix of conversions over the demo set:
+
+| `--workers` | req/s | p50 | p95 | resident memory (all processes) |
+|---|---|---|---|---|
+| 1 | 174 | 44 ms | 67 ms | 554 MB |
+| 2 | 320 | 24 ms | 40 ms | 1.0 GB |
+| 4 | **532** | 14 ms | 28 ms | 1.9 GB |
+| 8 | 454 | 16 ms | 37 ms | 2.5 GB |
+
+Throughput scales until the cores run out and then falls: eight workers on eight cores were 15% slower than four, because the work is CPU-bound and the host also has other things to do. About 400 MB resident per worker under load (the caches are LRU-bounded at 100,000 entries each); the stores themselves are in the OS page cache, shared between workers. So: as many workers as cores the service may have, halved on a shared host, and no more than memory allows — `--workers auto` takes half the cores, at most 8. Two already remove most of the risk; what bounds the worst case is the search budget, not the worker count.
+
 All the limits are options of the CLI as well: `--budget`, `--max-input-length`, `--max-results`, `--max-batch`, `--max-annotations`.
 
 Deployment: run with `--workers 4 --log`, and keep nginx's `proxy_read_timeout` as it is — a request that takes longer than a minute is a bug on this side, not a timeout to raise.
