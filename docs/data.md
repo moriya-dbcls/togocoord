@@ -85,8 +85,10 @@ To deploy on another server, copy the repository and `data/stores/` (the stores 
 
 ```sh
 node --no-warnings service/src/serve.ts --host 127.0.0.1 --port 8080 --base https://example.org/togocoord/ \
-  --stores scripts/stores.txt --store-dir /path/to/stores
+  --workers 4 --log --stores scripts/stores.txt --store-dir /path/to/stores
 ```
+
+`--workers` matters behind a reverse proxy: SQLite reads are synchronous, so one process answers one request at a time and a slow conversion delays everything behind it until the proxy times out (spec-service §15). `--log` writes one line per request with its duration.
 
 To serve under a subdirectory, see spec-service §6. Passing `*.sqlite` all at once also loads unneeded files and uses alphabetical order, so use `--stores`.
 

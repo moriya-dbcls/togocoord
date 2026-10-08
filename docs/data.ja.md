@@ -85,8 +85,10 @@ node scripts/data.ts serve [--port 8080] [--base URL] [--host 0.0.0.0]
 
 ```sh
 node --no-warnings service/src/serve.ts --host 127.0.0.1 --port 8080 --base https://example.org/togocoord/ \
-  --stores scripts/stores.txt --store-dir /path/to/stores
+  --workers 4 --log --stores scripts/stores.txt --store-dir /path/to/stores
 ```
+
+リバースプロキシの後ろに置くなら `--workers` が要る。SQLite の読み出しは同期的なので、1プロセスは一度に1要求しか answer できず、遅い変換が後続を全部待たせ、プロキシ側がタイムアウトする（spec-service §15）。`--log` は1要求1行、所要時間付きで記録する。
 
 サブディレクトリに置く場合は spec-service §6 を参照。`*.sqlite` をまとめて渡すと、余計なファイルも読み込み、順番もアルファベット順になるので、`--stores` を使う。
 

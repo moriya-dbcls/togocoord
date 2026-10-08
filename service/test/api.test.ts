@@ -217,6 +217,27 @@ describe("REST API (GPX1 mRNA + UniProt P07203 + human mtDNA, real data)", () =>
     assert.equal((await get(`/v1/convert?loc=${encodeURIComponent("hg38:chrM:8527")}&to=genome&assembly=hg19`)).status, 400);
   });
 
+  it("caps how long one conversion searches, and how many annotations one request returns", async () => {
+    // A budget already spent: the search stops before its first step and says so, rather than blocking the process.
+    const mt = new StoreSet().add(new TogoCoordStore(join(dir, "mt.sqlite")));
+    const server = createApi(mt, { searchBudgetMs: 0.0001, maxAnnotations: 1 });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      const stopped = await (await fetch(`${url}/v1/convert?loc=${encodeURIComponent("refseq:NC_012920.1:8528")}&to=protein`)).json();
+      assert.match(stopped.incomplete, /stopped after/);
+      const capped = await (await fetch(`${url}/v1/annotations?loc=${encodeURIComponent("refseq:NC_012920.1:8528")}`)).json();
+      assert.equal(capped.annotations.length, 1);
+      assert.equal(capped.truncated, true);
+    } finally {
+      server.close();
+      mt.close();
+    }
+    // Without a budget nothing is reported.
+    const normal = await get(`/v1/convert?loc=${encodeURIComponent("uniprot:P07203:49")}&to=transcript`);
+    assert.equal(normal.body.incomplete, undefined);
+  });
+
   it("reports how much of the input a result carries, and minMatch drops the partial ones", async () => {
     // The CDS of ND3 starts at 10059; bases before it have nowhere to go on the protein.
     const partial = await get(`/v1/convert?loc=${encodeURIComponent("refseq:NC_012920.1:10050..10070")}&to=protein`);

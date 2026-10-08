@@ -30,6 +30,12 @@ export interface ConvertOptions {
    * it (e.g. GRCh37 -> GRCh38 -> protein); this only chooses the assembly of genome results.
    */
   assembly?: string;
+  /**
+   * Stop searching after this many milliseconds and return what has been found. The service is one process with
+   * synchronous SQLite reads, so a long search blocks every other request (spec-service §15); a budget keeps one
+   * request from taking the server down with it. `budget.exceeded` is set when the search stopped early.
+   */
+  budget?: { ms: number; exceeded?: boolean };
 }
 
 export interface Step {
@@ -262,7 +268,14 @@ export function convert(stores: StoreSet, input: Location, options: ConvertOptio
     });
   }
 
+  const deadline = options.budget ? performance.now() + options.budget.ms : undefined;
+  let sinceCheck = 0;
   while (queue.size) {
+    // Checking the clock on every state would cost more than the search itself; every 64th (and the first) is enough.
+    if (deadline !== undefined && (sinceCheck++ & 63) === 0 && performance.now() > deadline) {
+      options.budget!.exceeded = true;
+      break;
+    }
     const state = queue.pop()!;
     const ref = state.location.outer;
     const recorded = best.get(key(state));

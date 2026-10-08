@@ -26,12 +26,20 @@ export interface ApiOptions {
   base?: string;
   /** Maximum number of locations in one POST /v1/convert (default 1000). */
   maxBatch?: number;
-  /** Maximum total length of an input location, in bases or residues (default 5,000,000). */
+  /**
+   * Maximum total length of an input location, in bases or residues (default 1,000,000). Mapping an interval is
+   * synchronous work proportional to its length and to the blocks it meets: 5,000,000 bases converted to another
+   * species took 48 s in one process, during which nothing else was answered (spec-service §15).
+   */
   maxInputLength?: number;
   /** Maximum number of results per conversion (default 1000); `truncated` reports a cut. */
   maxResults?: number;
   /** Tags of preferred sequences for equal-cost choices (default: MANE Select, MANE Plus Clinical). */
   prefer?: string[];
+  /** Milliseconds one conversion may search before returning what it has (default 5000; 0 disables the budget). */
+  searchBudgetMs?: number;
+  /** Maximum annotations returned by /v1/annotations (default 1000). */
+  maxAnnotations?: number;
 }
 
 export const DEFAULT_PREFER = ["MANE Select", "MANE Plus Clinical"];
@@ -57,9 +65,11 @@ class HttpError extends Error {
 export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
   const base = options.base ?? DEFAULT_BASE;
   const maxBatch = options.maxBatch ?? 1000;
-  const maxInputLength = options.maxInputLength ?? 5_000_000;
+  const maxInputLength = options.maxInputLength ?? 1_000_000;
   const maxResults = options.maxResults ?? 1000;
   const prefer = options.prefer ?? DEFAULT_PREFER;
+  const searchBudgetMs = options.searchBudgetMs ?? 5000;
+  const maxAnnotations = options.maxAnnotations ?? 1000;
   const ctx = stores.context();
 
   /**
@@ -223,10 +233,11 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
       throw new HttpError(413, `input location spans ${length} bases/residues; at most ${maxInputLength} are converted per request`);
     }
     const t = targets(to);
+    const budget: { ms: number; exceeded?: boolean } | undefined = searchBudgetMs > 0 ? { ms: searchBudgetMs } : undefined;
     const found = convert(
       stores,
       loc,
-      { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && !db && minMatch === undefined && { maxResults: maxResults + 1 }), ...scope },
+      { ...(t && { to: t }), ...(maxHops !== undefined && { maxHops }), prefer, ...(tags.length === 0 && !db && minMatch === undefined && { maxResults: maxResults + 1 }), ...(budget && { budget }), ...scope },
       ctx,
     );
     // `tag` keeps only targets carrying one of the tags (e.g. tag=MANE Select).
@@ -244,6 +255,8 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
       ...(stores.assemblyOf(loc.outer) !== undefined && { inputAssembly: stores.assemblyOf(loc.outer) }),
       results: results.slice(0, maxResults).map((r) => conversionJson(r, ctx, base, codon, stores)),
       ...(results.length > maxResults && { truncated: true }),
+      // The search stopped at its time budget: there may be more, and what is here is still correct.
+      ...(budget?.exceeded && { incomplete: `the search stopped after ${searchBudgetMs} ms` }),
     };
   };
 
@@ -361,9 +374,11 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
         const taxon = stores.taxonOf(loc.outer);
         const others = inputAssembly ? (stores.species().find((s) => s.taxon === taxon)?.assemblies ?? []).filter((a) => a !== inputAssembly) : [];
         for (const assembly of others) {
+          if (out.length >= maxAnnotations) break;
           const there = convert(stores, loc, { to: { category: "genome" }, assembly, maxHops: 1 }, ctx)[0];
           if (!there) continue;
           for (const a of annotationsAt(there.location)) {
+            if (out.length >= maxAnnotations) break;
             let back: string | undefined;
             try {
               back = convert(stores, parseLocationId(a.location, ctx), { to: { category: "genome" }, assembly: inputAssembly!, maxHops: 1 }, ctx)[0]?.id;
@@ -373,7 +388,13 @@ export function createApi(stores: StoreSet, options: ApiOptions = {}): Server {
             out.push({ ...a, assembly, via: there.id, ...(back && { lifted: back }) });
           }
         }
-        return { input: formatLocationId(loc, ctx), ...(inputAssembly && { assembly: inputAssembly }), annotations: out };
+        // A wide input can overlap tens of thousands of features; the response is capped like a conversion's results.
+        return {
+          input: formatLocationId(loc, ctx),
+          ...(inputAssembly && { assembly: inputAssembly }),
+          annotations: out.slice(0, maxAnnotations),
+          ...(out.length > maxAnnotations && { truncated: true }),
+        };
       },
     ],
   ];

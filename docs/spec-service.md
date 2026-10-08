@@ -452,3 +452,32 @@ Stores do not hold sequences, so differences are judged from the recorded positi
 The UI shows `differences` as "residue differs" or "base differs", and `cautions` as a caution marker.
 
 **Examples**: Marchantia v7.1 `insdc:BFI09307.1:713` (E) → UniProt (from v3.1) `A0A2R6XDE2:713` (D) has `base insdc:AP031344.1:3696566 G>T` (likely a correction of a sequence error in v3.1). `insdc:BFI18080.1:193` → `uniprot:A0A2R6VZB3:161c3..162c2` has `frame differs`. `uniprot:P07203:49` → mouse `uniprot:P11352:47` has `orthologous position in another species` (both are selenocysteine, but this is not checked). From a GRCh37 position to a protein, `base …` is added only when the path passes a base that differs between GRCh37 and GRCh38 (not for BRAF V600).
+
+## 15. Serving: one request at a time (2026-10-08)
+
+**A deployment behind nginx returned 504s.** Responses were either milliseconds or exactly 60 s (nginx's default `proxy_read_timeout`), with nothing in between, and one `/v1/convert` came back at 59,658 ms. That shape is not load and not the network: it is head-of-line blocking.
+
+The service is one process, and `node:sqlite` reads are synchronous, so the event loop is held for the whole of a conversion. Measured on the demo set (51 stores):
+
+| Request | Time |
+|---|---|
+| `uniprot:P07203:49` → genome | 1.5 ms |
+| `NC_000001.11:1..100000` → transcript | 0.73 s |
+| `NC_000001.11:1..1000000` → protein | 4.5 s |
+| `NC_000001.11:1..5000000` → genome, `taxon=10090` | **47.9 s** |
+| `/v1/annotations` over 1 Mb | 2.0 s (1.1 MB) |
+| `/v1/meta` on a cold process | 7.7 s |
+
+A single request of the fourth kind — inside the documented input limit at the time — blocked everything: during it, a 1.5 ms conversion took 33.9 s. Two of them in flight put every other request past 60 s, while requests arriving in a gap still answered instantly.
+
+What the service now does about it:
+
+- **`--workers N`** runs N processes (`node:cluster`) sharing the read-only stores, so one slow request costs one worker instead of the service. With four workers, the same trivial request answered in 18-76 ms while the 5 Mb conversion ran. A worker that dies is replaced.
+- **A search budget** (`--budget MS`, default 5000; 0 disables it) stops the search when it runs out and answers with what it has, adding `incomplete` to the response. The 48 s conversion returns in about 6 s.
+- **Defaults sized to the measurements**: `maxInputLength` is 1,000,000 bases or residues (was 5,000,000, which cost 48 s), and `/v1/annotations` returns at most 1,000 features (`truncated` when cut).
+- **Warm-up before listening**: the species, assembly and crossing caches are built at startup (about 8 s on the demo set), so they are not paid by the first request each worker answers — which, after a restart, is when several arrive at once.
+- **`--log`** writes one line per request with its duration, which is how a blocking request is identified. The listener is prepended, otherwise it would run after the synchronous handler and report 0 ms.
+
+All the limits are options of the CLI as well: `--budget`, `--max-input-length`, `--max-results`, `--max-batch`, `--max-annotations`.
+
+Deployment: run with `--workers 4 --log`, and keep nginx's `proxy_read_timeout` as it is — a request that takes longer than a minute is a bug on this side, not a timeout to raise.
