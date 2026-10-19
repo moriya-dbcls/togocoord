@@ -17,7 +17,7 @@ TogoCoord は、ゲノム・転写産物・タンパク質・立体構造など�
 | `core/` | Location ID のパース・正規形・FALDO JSON-LD、ブロック列による写像（依存なし） |
 | `ingest/` | GenBank / GFF3 / FASTA / SIFTS / MANE / UCSC chain / PAF / BED / NCBI assembly report のアダプタ、自己検証、SQLite（R*Tree）の保存先、CLI `togocoord-ingest` |
 | `service/` | 複数の保存先をまたぐ経路探索、REST API、Web UI（`togocoord-serve`） |
-| `docs/` | 設計書、仕様、データ（[design.md](docs/design.ja.md)、[data.md](docs/data.ja.md)、[spec-core.md](docs/spec-core.ja.md)、[spec-ingest.md](docs/spec-ingest.ja.md)、[spec-service.md](docs/spec-service.ja.md)、[scaling.md](docs/scaling.ja.md)） |
+| `docs/` | 設計書、仕様、データ（[design.md](docs/design.ja.md)、[data.md](docs/data.ja.md)、[spec-core.md](docs/spec-core.ja.md)、[spec-ingest.md](docs/spec-ingest.ja.md)、[spec-service.md](docs/spec-service.ja.md)、[scaling.md](docs/scaling.ja.md)）と、[status.md](docs/status.ja.md): 何がデプロイ済みで、何が判断待ちか |
 | `scripts/` | データの取得・構築・配信（[data.md](docs/data.ja.md)） |
 | `poc/` | コンセプト検証版の実装（Web UI と SPARQList。参考） |
 

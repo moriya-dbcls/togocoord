@@ -17,7 +17,7 @@ TogoCoord converts sequence coordinates between the layers of life-science data:
 | `core/` | Location ID parsing, canonical form and FALDO JSON-LD; mappings as block lists (no dependencies) |
 | `ingest/` | Adapters for GenBank / GFF3 / FASTA / SIFTS / MANE / UCSC chain / PAF / BED / NCBI assembly reports, self-validation, SQLite (R*Tree) stores, CLI `togocoord-ingest` |
 | `service/` | Path search across stores, REST API and web UI (`togocoord-serve`) |
-| `docs/` | Design, specifications and data; Japanese versions as `*.ja.md` ([design.md](docs/design.md), [data.md](docs/data.md), [spec-core.md](docs/spec-core.md), [spec-ingest.md](docs/spec-ingest.md), [spec-service.md](docs/spec-service.md), [scaling.md](docs/scaling.md)) |
+| `docs/` | Design, specifications and data; Japanese versions as `*.ja.md` ([design.md](docs/design.md), [data.md](docs/data.md), [spec-core.md](docs/spec-core.md), [spec-ingest.md](docs/spec-ingest.md), [spec-service.md](docs/spec-service.md), [scaling.md](docs/scaling.md)), and [status.md](docs/status.md): what is deployed, what is waiting on a decision |
 | `scripts/` | Downloading, building and serving the data ([data.md](docs/data.md)) |
 | `poc/` | Proof-of-concept implementation (web UI and SPARQList; for reference) |
 
